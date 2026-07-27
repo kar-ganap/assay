@@ -113,6 +113,25 @@ else has: does the diagnostic work equally well when the reviewer cannot judge t
 
 `endurance` is deliberately **out of scope for this project** (`CLAUDE.md` §15). It is the sequel.
 
+**Decided in advance, so it is not relitigated when project #2 starts:**
+
+- **The domain is reliability/qualification engineering, not circuit design.** Analog circuit sizing
+  is crowded as of mid-2026 — AutoSizer, SABLE, VLM-CAD, AnalogAgent, LEDRO, and **AMS-SizingBench**
+  (24 circuits, SKY130 PDK, ngspice) — and an ngspice-as-verifiable-reward RLVR/GRPO environment
+  *including a reward-hacking audit* appears to already exist. Verilog/RTL generation is likewise
+  covered. **Verify first-hand before building, but plan around it.**
+- **Public sources only.** JEDEC endurance/retention specs, published NAND reliability literature,
+  textbook channel models — cited in the repo, with an explicit statement that the model is
+  pedagogical and contains nothing proprietary.
+- **Structurally right, not calibrated.** Correct mechanisms, signs and interactions; *not* matched
+  to a real part. Stated in the README as a design decision, not a limitation.
+
+**Project #3, if the diversity question stays open: `monoculture`.** Hold total training tasks fixed,
+vary how many distinct environment *families* they come from, measure OOD transfer. Robotics has
+clean diversity-≫-quantity scaling laws; agentic LLM RL does not. Directly actionable — *"buy 1,000
+tasks from one vendor or 200 from five?"* Also the pre-registered pivot target if the literature gate
+kills this project's novelty claim (`pre-registration.md` §6).
+
 ## 5. Claim limits (write these into the paper)
 
 - `assay_score`'s weighting is **fitted on the constructed family**, not derived from theory.

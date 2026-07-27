@@ -91,6 +91,23 @@ pathology · `bisect` · performance or reusability of this code.
 
 ---
 
+## Prep reading (mechanics tier — do this before writing the loop)
+
+Distinct from `../../literature-review/`, which is the *research* reading that positions the novelty
+claim. This is the **pedagogical** tier: what you need in your hands to write the loop.
+
+1. **DeepSeekMath**, the GRPO section — the group-baseline derivation, first-hand.
+2. **A GRPO practitioner digest** (Cameron Wolfe's "GRPO++: Tricks for Making RL Actually Work" is a
+   good one) — the tricks that separate a loop that runs from a loop that learns: advantage
+   normalization, clipping, KL placement, off-policy staleness.
+3. **`trl`'s `GRPOTrainer` source** — read it *after* writing your own, as the diff against your
+   implementation. What they do that you didn't is the lesson.
+4. **Rollout Pass-Rate Control** (2605.05112) — read only §"why p=0.5", for ablation D's mechanism.
+   The full read belongs to the literature gate.
+
+**Order matters:** 1 → write the loop → 3. Reading `trl` first collapses the phase into
+transcription and forfeits the intuition the phase exists to build.
+
 ## Risks
 
 - **Base policy has zero pass rate on the chosen task** → no gradient on step 1 and the phase stalls.

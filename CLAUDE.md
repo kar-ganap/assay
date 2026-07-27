@@ -244,6 +244,12 @@ mandatory to consider) · conceptual-doc cleanup proposed · tool/permission all
 - **Framing path-dependence** (inherited from epibench). Once a framing is established, reasoning
   accumulates support rather than scrutinizing it. Counter: the framing-stress reviewer at stage
   boundaries.
+- **The window is narrow and closing.** Prime Sprints is running a reward-hacking track *now*; the
+  fuzzing-verifiers paper landed June 2026; Apollo's Science-of-Scheming stream starts Sept 2026 and
+  targets adjacent territory. **Speed is a design constraint, not a preference.** Concretely: do not
+  let the literature gate expand past the five Block-A papers, and do not let Walk expand past the
+  8-variant core grid on a first pass. If the field publishes the zero-step prediction question
+  before Run lands, the fallback is the η leg (`endemic`), which is less contested.
 
 ## 16. Key references (in-repo)
 
