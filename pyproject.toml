@@ -17,6 +17,11 @@ dependencies = [
 # Heavy training/inference stack — pulled only when you run the RL loop.
 # Crawl runs GRPO by hand (torch + transformers); Walk/Run go through verifiers + prime-rl or trl.
 # See CLAUDE.md §6 for backend policy.
+#
+# DO NOT install this extra on the dev machine. It is a 2019 Intel MacBook Pro (no MPS, no CUDA) and
+# `vllm` publishes no macOS x86_64 wheel, so `uv sync --extra train` fails outright. The heavy deps
+# are declared in the Modal image instead (src/assay/modal_app.py::_image); this extra documents the
+# remote contract. Locally, sync `--extra dev` and `--extra modal` only.
 train = ["torch", "transformers", "peft", "accelerate", "datasets", "trl", "vllm"]
 envs = ["verifiers", "reasoning-gym"]
 modal = ["modal>=0.63"]

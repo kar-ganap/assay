@@ -7,7 +7,8 @@
 ## STATUS (as of 2026-07-26)
 
 - **Scaffold complete.** Repo initialised at `random_projects/assay`, `main`, no remote yet.
-- `make check` **not yet run** — `uv sync` hasn't happened. First action of the first working session.
+- `make check` **green** (ruff clean · mypy --strict clean on 10 files · 20 tests pass). Branch renamed
+  `master` → `main` to match `CLAUDE.md` §13.
 - `src/assay/` is **typed stubs** (`NotImplementedError`). No compute path implemented.
 - `docs/pre-registration.md` = **DRAFT, not locked.**
 - `docs/related-work.md` = **UNVERIFIED** — one LLM-assisted research pass, 0/12 papers read
@@ -18,11 +19,11 @@
 
 ## NEXT ACTION (the one thing to do)
 
-**`uv sync --extra dev && make check`** — confirm the scaffold is green.
-
-Then **Phase 0.1** (`docs/phases/phase-0.1-grpo-by-hand-plan.md`): pick the task, measure the base
+**Phase 0.1** (`docs/phases/phase-0.1-grpo-by-hand-plan.md`): pick the task, measure the base
 policy's pass rate (require ≥5% at k=8 before committing), cut `phase-0.1-grpo-by-hand`, and write the
 loop.
+
+*(Scaffold is green — `make check` passes as of 2026-07-26. No longer a blocker.)*
 
 **In parallel, cheap and unblocking:** apply for **Tinker credits** ($150 on waitlist clearance) and
 **check whether the Prime Sprints free queue is live and on what terms** — that second one moves $28
