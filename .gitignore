@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# envs / tooling
+.venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# Raw data + model artifacts — never commit; regenerate from committed code + seeds.
+# House convention: raw rollouts/generations live in experiments/<phase>/raw/ (+ *.jsonl anywhere)
+# and are IGNORED; derived metrics live in experiments/<phase>/results/*.json|csv and
+# ARE committed (figures + paper numbers regenerate from them).
+data/
+outputs/
+checkpoints/
+adapters/
+experiments/*/raw/
+reproductions/*/raw/
+*.parquet
+*.jsonl
+*.npy
+*.npz
+*.safetensors
+wandb/
+.modal/
+
+# assay report cards are derived artifacts — regenerate from results/
+reports/*.html
+
+# secrets
+.env

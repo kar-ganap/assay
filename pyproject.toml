@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "assay"
+version = "0.1.0"
+description = "A zero-GPU-hour diagnostic battery for RL environments, validated against GRPO outcomes — does an environment teach the skill or teach the exploit?"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "scikit-learn>=1.3",
+]
+
+[project.optional-dependencies]
+# Heavy training/inference stack — pulled only when you run the RL loop.
+# Crawl runs GRPO by hand (torch + transformers); Walk/Run go through verifiers + prime-rl or trl.
+# See CLAUDE.md §6 for backend policy.
+train = ["torch", "transformers", "peft", "accelerate", "datasets", "trl", "vllm"]
+envs = ["verifiers", "reasoning-gym"]
+modal = ["modal>=0.63"]
+api = ["anthropic>=0.40", "python-dotenv>=1.0"]
+dev = ["pytest>=8", "ruff", "mypy"]
+
+[project.scripts]
+assay = "assay.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/assay"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+strict = true
+# modal_app.py is a stub guarded on an optional import; type-check it once the modal extra is wired.
+exclude = ["src/assay/modal_app\\.py$"]
+
+[[tool.mypy.overrides]]
+module = ["torch.*", "transformers.*", "peft.*", "accelerate.*", "datasets.*", "trl.*",
+          "vllm.*", "verifiers.*", "reasoning_gym.*", "modal.*", "sklearn.*", "scipy.*",
+          "anthropic.*"]
+ignore_missing_imports = true
