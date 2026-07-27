@@ -14,9 +14,14 @@ re-runs.
 
 | Date | Stage | Phase | Run | Backend | Duration | Cost | Running total | Notes |
 |---|---|---|---|---|---|---|---|---|
-| — | — | — | — | — | — | $0.00 | $0.00 | no runs yet |
+| 2026-07-27 | 0 · Crawl | 0.1 | Calibration sweep — 5 runs (n=4/16/16/64/200, k=4–8) | Modal L4 | ~45 min GPU | **~$0.60 (est.)** | ~$0.60 | ~19,000 completions ≤256 tok, Llama-3.2-1B. **Estimate — confirm against the Modal dashboard and replace.** Pinned Phase 0.1's task. |
 
-**Running total: $0.00**
+**Running total: ~$0.60 (estimated, unconfirmed)** of Crawl's authorised $17.
+
+> ⚠️ **This figure is an estimate, not a reading.** Modal's L4 rate is not in the verified-pricing
+> table below, and the cost was not captured at the time of the runs. Confirm from the Modal
+> dashboard and replace this row — logging an estimate as if it were a measurement is the failure
+> mode desideratum 17 exists to prevent.
 
 ---
 
@@ -39,6 +44,7 @@ re-runs.
 |---|---|---|
 | Modal H100 | $3.95/h | 2026-07-12 (via `../waterline/tasks/spend.md`) — **re-verify** |
 | Modal A100-80GB | ~$3.20/h | unverified |
+| Modal L4 | **unverified** | used for the Phase 0.1 calibration sweep — **look up and record** |
 | Tinker — Qwen3-8B train | $0.40/M tok | 2026-07-11 (via waterline) — **re-verify**; a price step-up was flagged for 2026-07-17 |
 | Tinker — Qwen3-8B sample | $0.40→$0.60/M tok | same |
 | Prime Sprints free queue | $0 (Llama-3.2-1B, validated submissions) | **unverified — check terms; moves $28** |

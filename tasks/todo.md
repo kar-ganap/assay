@@ -6,10 +6,16 @@
 
 ## STATUS (as of 2026-07-26)
 
-- **Scaffold complete.** Repo initialised at `random_projects/assay`, `main`, no remote yet.
-- `make check` **green** (ruff clean · mypy --strict clean on 10 files · 20 tests pass). Branch renamed
-  `master` → `main` to match `CLAUDE.md` §13.
-- `src/assay/` is **typed stubs** (`NotImplementedError`). No compute path implemented.
+- **Phase 0.1 in progress** on `phase-0.1-grpo-by-hand`. `make check` green (ruff · mypy --strict on
+  17 files · **116 passed, 29 xfailed**).
+- **Task pinned by measurement:** `arithmetic/add-2digit` (dead 0.115 ± 0.023, pass@1 0.720,
+  headroom 0.280), with `arithmetic/add-3digit` pre-declared as a **robustness arm**. Full result and
+  the arm declaration: `docs/phases/phase-0.1-grpo-by-hand-plan.md` → *RESULT*.
+- **Calibration harness done** (`src/assay/crawl/`), Modal wiring proven, ~$0.60 est. spent.
+- **The 29 xfails are the handoff:** `tests/test_advantage_spec.py` is the executable spec for
+  `assay.crawl.advantage.group_advantages` — **user writes it** (§7). They XPASS loudly when done,
+  which is the cue to delete the `pytestmark`.
+- Rest of `src/assay/` is still typed stubs (`bisect`, battery, screen — Phases 1.1+).
 - `docs/pre-registration.md` = **DRAFT, not locked.**
 - `docs/related-work.md` = **UNVERIFIED** — one LLM-assisted research pass, 0/12 papers read
   first-hand.
@@ -19,11 +25,13 @@
 
 ## NEXT ACTION (the one thing to do)
 
-**Phase 0.1** (`docs/phases/phase-0.1-grpo-by-hand-plan.md`): pick the task, measure the base
-policy's pass rate (require ≥5% at k=8 before committing), cut `phase-0.1-grpo-by-hand`, and write the
-loop.
+**Implement `group_advantages` in `src/assay/crawl/advantage.py`** until
+`tests/test_advantage_spec.py` XPASSes, then delete its `pytestmark`. That function is the heart of
+GRPO and all four ablations are switch settings on it — `baseline` × `normalize_by_std`.
 
-*(Scaffold is green — `make check` passes as of 2026-07-26. No longer a blocker.)*
+Then the loop itself (runs 1–7 + ablations A–D) on the pinned task.
+
+*(Task selection, Modal wiring and the calibration harness are done. Spend ~$0.60 of $17.)*
 
 **In parallel, cheap and unblocking:** apply for **Tinker credits** ($150 on waitlist clearance) and
 **check whether the Prime Sprints free queue is live and on what terms** — that second one moves $28

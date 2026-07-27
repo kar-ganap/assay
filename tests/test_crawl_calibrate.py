@@ -157,6 +157,24 @@ def _summary(setting: str, dead: float, parse_fail: float, headroom: float, toke
     )
 
 
+def _summary_n(setting: str, *, dead: float, n: int, tokens: float):  # type: ignore[no-untyped-def]
+    """Like ``_summary`` but with an explicit prompt count, since SE depends on it."""
+    return calibrate.SettingSummary(
+        family="fam",
+        setting=setting,
+        n_prompts=n,
+        k=K,
+        histogram=[0] * (K + 1),
+        dead_group_fraction=dead,
+        pass_at_1=0.5,
+        pass_at_k=1.0,
+        headroom=0.5,
+        parse_fail_rate=0.0,
+        wrong_answer_rate=0.1,
+        median_completion_tokens=tokens,
+    )
+
+
 def test_select_minimises_dead_group_fraction() -> None:
     chosen = calibrate.select(
         [
@@ -192,6 +210,49 @@ def test_select_excludes_low_headroom_with_a_reason() -> None:
     assert result.chosen is not None
     assert result.chosen.setting == "roomy"
     assert any(e.setting == "saturated" and "headroom" in e.reason.lower() for e in result.excluded)
+
+
+def test_standard_error_shrinks_with_sample_size() -> None:
+    assert calibrate.standard_error(0.15, 64) > calibrate.standard_error(0.15, 200)
+    assert calibrate.standard_error(0.15, 200) == pytest.approx(0.0252, abs=0.001)
+
+
+def test_standard_error_floors_a_degenerate_estimate() -> None:
+    """0 dead groups out of 200 is not evidence of SE = 0."""
+    assert calibrate.standard_error(0.0, 200) > 0.0
+    assert calibrate.standard_error(1.0, 200) > 0.0
+
+
+def test_tie_tolerance_scales_with_sample_size() -> None:
+    """The point of using 1 SE: the same gap is a tie at small n and a real difference at large n."""
+    gap = 0.05
+
+    noisy = calibrate.select(
+        [
+            _summary_n("a", dead=0.10, n=64, tokens=200.0),
+            _summary_n("b", dead=0.10 + gap, n=64, tokens=60.0),
+        ]
+    )
+    assert noisy.chosen is not None
+    assert noisy.chosen.setting == "b", "at n=64 a 0.05 gap is within noise; tie-break decides"
+
+    precise = calibrate.select(
+        [
+            _summary_n("a", dead=0.10, n=5000, tokens=200.0),
+            _summary_n("b", dead=0.10 + gap, n=5000, tokens=60.0),
+        ]
+    )
+    assert precise.chosen is not None
+    assert precise.chosen.setting == "a", "at n=5000 the same gap is real; dead_group_fraction wins"
+
+
+def test_selection_rule_records_the_widened_tolerance() -> None:
+    """The rule carries its own amendment history, including when the change was made relative to
+    seeing the data. A rule that silently changed would be indistinguishable from a post-hoc one."""
+    result = calibrate.select([_summary("a", dead=0.1, parse_fail=0.0, headroom=0.5)])
+    assert "standard error" in result.rule
+    assert "widened from a fixed 0.01" in result.rule
+    assert "before the n=200 result was read" in result.rule
 
 
 def test_select_tie_breaks_on_shorter_completions() -> None:
@@ -265,3 +326,49 @@ def test_sweep_works_without_an_observer() -> None:
     )
     assert summary.n_prompts == 5
     assert summary.k == 4
+
+
+# --------------------------------------------------------------------------------------
+# Round-trip: the rule must be re-appliable to a committed results file, GPU-free.
+# --------------------------------------------------------------------------------------
+
+
+def test_summaries_round_trip_through_records() -> None:
+    import dataclasses
+
+    original = _summarize([_row(4) for _ in range(20)])
+    rebuilt = calibrate.summaries_from_records([dataclasses.asdict(original)])
+    assert rebuilt == [original]
+
+
+def test_report_rederives_the_selection_rather_than_trusting_the_file() -> None:
+    """A stale ``selection`` in an old results file must not survive a rule change."""
+    import dataclasses
+
+    from assay.crawl import report
+
+    summaries = [
+        _summary_n("wide", dead=0.10, n=200, tokens=200.0),
+        _summary_n("narrow", dead=0.40, n=200, tokens=60.0),
+    ]
+    result = {
+        "summaries": [dataclasses.asdict(s) for s in summaries],
+        "selection": {"chosen": None, "excluded": [], "rule": "STALE RULE FROM AN OLD RUN"},
+        "provenance": {"n_prompts": 200, "k": 8, "git_dirty": False},
+    }
+    rendered = report.render(result)
+    assert "CHOSEN: fam/wide" in rendered
+    assert "STALE RULE" not in rendered
+    assert "standard error" in rendered
+
+
+def test_report_warns_on_a_dirty_tree() -> None:
+    import dataclasses
+
+    from assay.crawl import report
+
+    result = {
+        "summaries": [dataclasses.asdict(_summary_n("a", dead=0.1, n=200, tokens=50.0))],
+        "provenance": {"git_dirty": True, "git_sha": "abc123"},
+    }
+    assert "WARNING: dirty tree" in report.render(result)

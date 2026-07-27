@@ -84,10 +84,79 @@ survivors gives the stable histogram.
 3. **Constraint:** `headroom = pass@8 − pass@1 ≥ 0.15`. RL at this scale sharpens the sampling
    distribution rather than adding capability, so no headroom means no curve for **A** to discriminate
    on. Free from the same k=8 samples.
-4. **Tie-break:** shorter median completion length (L6 — more steps per dollar).
+4. **Tie-break:** settings within **1 standard error of the difference** from the best are treated
+   as tied; among those, shorter median completion length wins (L6 — more steps per dollar).
+
+> **Amendment, 2026-07-27 — made before the n=200 result was read.** The tie tolerance was
+> originally a fixed `0.01`. That is indefensible at any sample size: the SE of
+> `dead_group_fraction` is ≈0.04 at n=64 and ≈0.024 at n=200, so a 0.01 window means the rule
+> resolves on sampling noise and the tie-break can never fire. It was visibly wrong in the coarse
+> pass, where add-2digit (0.109) and add-3digit (0.156) differed by 0.047 ± ~0.06 — inside noise —
+> yet the rule declared a winner. The same two settings had been ranked the *other way* at n=16,
+> which is what a noise-driven decision looks like.
+>
+> Replaced with `SE = sqrt(p(1−p)/n)` on the prompt count, floored at `p = 1/n` (an observed zero is
+> not evidence of `SE = 0`), and compared as `hypot(SE_best, SE_other)`. The rule string carries this
+> amendment verbatim, so a run's own output records that the change predated the data.
 
 **Families swept:** counting / string-ops (dial = string length, target-char frequency) and parametric
 arithmetic (dial = digits × operation). Both, so the choice is made on evidence rather than intuition.
+
+### RESULT — task pinned 2026-07-27 (n=200, k=8, seed 0)
+
+`experiments/phase-0.1-grpo-by-hand/results/calibration-n200-k8-seed0.json`,
+`git_sha 1d9a805`, `git_dirty false`, model revision `9213176…`, prompt template `1d37f53b…`.
+
+| setting | dead | ±SE | pass@1 | pass@8 | headroom | parse_fail |
+|---|---|---|---|---|---|---|
+| **arithmetic/add-2digit** | **0.115** | 0.023 | 0.720 | 1.000 | 0.280 | 0.000 |
+| arithmetic/add-3digit | 0.175 | 0.027 | 0.433 | 0.865 | 0.432 | 0.001 |
+| arithmetic/mul-2x1digit | 0.295 | 0.032 | 0.804 | 0.995 | 0.191 | 0.001 |
+| arithmetic/mul-2x2digit | 0.330 | 0.033 | 0.383 | 0.730 | 0.347 | 0.001 |
+| counting/count-L20 | 0.525 | 0.035 | 0.079 | 0.475 | 0.396 | 0.001 |
+| counting/L40 · L60 · L90 | 0.625–0.765 | ~0.033 | 0.037–0.058 | 0.235–0.375 | 0.197–0.318 | ≤0.002 |
+
+**The rule selects `arithmetic/add-2digit`.** The gap to add-3digit is 0.060 against
+`SE_diff = 0.035` — **1.7 SE, outside the tie window**, so it resolves on merit and not on noise. The
+n=64 and n=200 passes agree on the ordering (n=16 did not, at SE ≈ 0.08).
+
+**Counting is out**, and decisively: tokenisation-bound at 1B, 3.7–7.9% pass@1 with 52–77% dead
+groups even at its easiest rung. The earlier recommendation of counting as the primary family was
+wrong and is retracted.
+
+### Finding — `dead_group_fraction` is blind to the *sign* of a dead group
+
+| setting | all-CORRECT groups | all-WRONG groups | trajectory under training |
+|---|---|---|---|
+| add-2digit | **23 (11.5%)** | **0 (0.0%)** | dead fraction **rises** — pure saturation |
+| add-3digit | 8 (4.0%) | 27 (13.5%) | dead fraction **falls** — unreachable becomes reachable |
+
+Every one of add-2digit's dead groups is an already-solved prompt (`pass@8 = 1.000` exactly — nothing
+is unreachable). As RL lifts `pass@1` from 0.720, more prompts saturate: at p ≈ 0.90 the closed form
+gives `0.9⁸ + 0.1⁸ ≈ 0.43`. add-3digit moves the opposite way.
+
+**So the criterion optimises a step-0 snapshot of a quantity that is not stationary, and it selected
+the candidate that degrades.** → **Battery axis A3 should decompose the pass-rate band by sign**
+(saturated vs unreachable), not merely by distance from p = 0.5. Carried to the retro as a Phase 1.3
+design input.
+
+### Arms — declared 2026-07-27, before any training
+
+| Arm | Setting | Status |
+|---|---|---|
+| **Primary / headline** | `arithmetic/add-2digit` | selected by the pre-committed rule |
+| **Robustness check** | `arithmetic/add-3digit` | pre-declared, *not* selected by the rule |
+
+The rule binds: add-2digit is the headline and stays the headline. add-3digit is run because the
+step-0 criterion cannot see the saturation trajectory, and a task that saturates by step 200 would
+cost ablation **A** its discriminating power exactly where the phase needs it.
+
+**Pre-committed so this cannot be cherry-picked:** the four ablation figures are reported from
+**add-2digit**. If the two arms disagree, **the disagreement is the reported result** — it is not
+licence to promote the prettier arm. Retiring the robustness arm requires a dated entry here.
+
+**Pinned configuration.** Llama-3.2-1B-Instruct @ `9213176726f574b556790deb65791e0c5aa438b6` ·
+`T=1.0, top_p=1.0, max_new_tokens=256` · `G = k = 8` · `R_binary` = last integer anywhere.
 
 ### Extractor decision — pre-declared 2026-07-27, before the few-shot run
 

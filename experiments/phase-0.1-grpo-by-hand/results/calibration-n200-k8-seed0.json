@@ -1,0 +1,249 @@
+{
+  "provenance": {
+    "chat_template_sha256": "5816fce10444e03c",
+    "fewshot_examples": 0,
+    "git_dirty": false,
+    "git_sha": "1d9a805481e507df4fe915d1a981e2941554027b",
+    "gpu": "L4",
+    "grader": {
+      "integer_pattern": "-?\\d{1,3}(?:,\\d{3})+|-?\\d+",
+      "r_binary_extractor": "extract_final_integer:last-integer-anywhere",
+      "r_format_extractor": "extract_tagged_answer:strict-answer-tag",
+      "tagged_pattern": "<answer>\\s*(-?\\d{1,3}(?:,\\d{3})+|-?\\d+)\\s*</answer>",
+      "tiebreak_weight": "0.001"
+    },
+    "k": 8,
+    "model_id": "meta-llama/Llama-3.2-1B-Instruct",
+    "model_revision": "9213176726f574b556790deb65791e0c5aa438b6",
+    "n_prompts": 200,
+    "prompt_template_sha256": "1d37f53bddc5eb93",
+    "sampler": {
+      "max_new_tokens": 256,
+      "seed": 0,
+      "temperature": 1.0,
+      "top_p": 1.0
+    }
+  },
+  "selection": {
+    "chosen": {
+      "dead_group_fraction": 0.115,
+      "family": "arithmetic",
+      "headroom": 0.28,
+      "histogram": [
+        0,
+        2,
+        4,
+        11,
+        24,
+        35,
+        53,
+        48,
+        23
+      ],
+      "k": 8,
+      "median_completion_tokens": 7.0,
+      "n_prompts": 200,
+      "parse_fail_rate": 0.0,
+      "pass_at_1": 0.72,
+      "pass_at_k": 1.0,
+      "setting": "add-2digit",
+      "wrong_answer_rate": 0.28
+    },
+    "excluded": [],
+    "rule": "Minimise dead_group_fraction subject to parse_fail_rate <= 0.2 and headroom >= 0.15; tie-break within 0.01 on shorter median_completion_tokens. Pre-committed 2026-07-27 in docs/phases/phase-0.1-grpo-by-hand-plan.md before any sweep result was seen."
+  },
+  "summaries": [
+    {
+      "dead_group_fraction": 0.525,
+      "family": "counting",
+      "headroom": 0.39625,
+      "histogram": [
+        105,
+        69,
+        21,
+        5,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "k": 8,
+      "median_completion_tokens": 6.0,
+      "n_prompts": 200,
+      "parse_fail_rate": 0.00125,
+      "pass_at_1": 0.07875,
+      "pass_at_k": 0.475,
+      "setting": "count-L20",
+      "wrong_answer_rate": 0.92
+    },
+    {
+      "dead_group_fraction": 0.625,
+      "family": "counting",
+      "headroom": 0.3175,
+      "histogram": [
+        125,
+        60,
+        13,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "k": 8,
+      "median_completion_tokens": 7.0,
+      "n_prompts": 200,
+      "parse_fail_rate": 0.0,
+      "pass_at_1": 0.0575,
+      "pass_at_k": 0.375,
+      "setting": "count-L40",
+      "wrong_answer_rate": 0.9425
+    },
+    {
+      "dead_group_fraction": 0.645,
+      "family": "counting",
+      "headroom": 0.305,
+      "histogram": [
+        129,
+        62,
+        9,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "k": 8,
+      "median_completion_tokens": 6.0,
+      "n_prompts": 200,
+      "parse_fail_rate": 0.0,
+      "pass_at_1": 0.05,
+      "pass_at_k": 0.355,
+      "setting": "count-L60",
+      "wrong_answer_rate": 0.95
+    },
+    {
+      "dead_group_fraction": 0.765,
+      "family": "counting",
+      "headroom": 0.19749999999999998,
+      "histogram": [
+        153,
+        37,
+        8,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "k": 8,
+      "median_completion_tokens": 6.0,
+      "n_prompts": 200,
+      "parse_fail_rate": 0.001875,
+      "pass_at_1": 0.0375,
+      "pass_at_k": 0.235,
+      "setting": "count-L90",
+      "wrong_answer_rate": 0.960625
+    },
+    {
+      "dead_group_fraction": 0.115,
+      "family": "arithmetic",
+      "headroom": 0.28,
+      "histogram": [
+        0,
+        2,
+        4,
+        11,
+        24,
+        35,
+        53,
+        48,
+        23
+      ],
+      "k": 8,
+      "median_completion_tokens": 7.0,
+      "n_prompts": 200,
+      "parse_fail_rate": 0.0,
+      "pass_at_1": 0.72,
+      "pass_at_k": 1.0,
+      "setting": "add-2digit",
+      "wrong_answer_rate": 0.28
+    },
+    {
+      "dead_group_fraction": 0.175,
+      "family": "arithmetic",
+      "headroom": 0.431875,
+      "histogram": [
+        27,
+        28,
+        25,
+        22,
+        24,
+        21,
+        31,
+        14,
+        8
+      ],
+      "k": 8,
+      "median_completion_tokens": 8.0,
+      "n_prompts": 200,
+      "parse_fail_rate": 0.000625,
+      "pass_at_1": 0.433125,
+      "pass_at_k": 0.865,
+      "setting": "add-3digit",
+      "wrong_answer_rate": 0.56625
+    },
+    {
+      "dead_group_fraction": 0.295,
+      "family": "arithmetic",
+      "headroom": 0.19062500000000004,
+      "histogram": [
+        1,
+        1,
+        2,
+        6,
+        15,
+        19,
+        41,
+        57,
+        58
+      ],
+      "k": 8,
+      "median_completion_tokens": 7.0,
+      "n_prompts": 200,
+      "parse_fail_rate": 0.00125,
+      "pass_at_1": 0.804375,
+      "pass_at_k": 0.995,
+      "setting": "mul-2x1digit",
+      "wrong_answer_rate": 0.194375
+    },
+    {
+      "dead_group_fraction": 0.33,
+      "family": "arithmetic",
+      "headroom": 0.3475,
+      "histogram": [
+        54,
+        25,
+        21,
+        16,
+        13,
+        20,
+        24,
+        15,
+        12
+      ],
+      "k": 8,
+      "median_completion_tokens": 9.0,
+      "n_prompts": 200,
+      "parse_fail_rate": 0.000625,
+      "pass_at_1": 0.3825,
+      "pass_at_k": 0.73,
+      "setting": "mul-2x2digit",
+      "wrong_answer_rate": 0.616875
+    }
+  ]
+}

@@ -19,6 +19,7 @@ any sweep result was seen.
 
 from __future__ import annotations
 
+import math
 import statistics
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -27,12 +28,23 @@ from assay.crawl.rewards import Grade, Outcome, grade_binary
 from assay.crawl.sampling import Completion, Sampler, SamplerConfig
 from assay.crawl.tasks import Prompt, TaskFamily
 
-#: Two settings whose dead-group fractions differ by less than this are treated as tied, and the
-#: tie-break (shorter completions -> more steps per dollar, L6) decides.
-TIE_TOLERANCE = 0.01
-
 MAX_PARSE_FAIL = 0.20
 MIN_HEADROOM = 0.15
+
+
+def standard_error(proportion: float, n: int) -> float:
+    """Binomial standard error of a group-level proportion.
+
+    ``dead_group_fraction`` is one Bernoulli draw per *prompt* (one group each), so ``n`` is the
+    prompt count, not the rollout count.
+
+    The estimate is floored at ``1/n`` because an observed 0 would otherwise give ``SE = 0``, which
+    is plainly wrong — 0 dead groups out of 200 is consistent with a true rate near 1.5%.
+    """
+    if n <= 0:
+        return 0.0
+    p = min(max(proportion, 1.0 / n), 1.0 - 1.0 / n)
+    return math.sqrt(p * (1.0 - p) / n)
 
 
 def dead_group_fraction_closed_form(p: float, g: int) -> float:
@@ -155,9 +167,11 @@ def select(
     """
     rule = (
         f"Minimise dead_group_fraction subject to parse_fail_rate <= {max_parse_fail} and "
-        f"headroom >= {min_headroom}; tie-break within {TIE_TOLERANCE} on shorter "
-        "median_completion_tokens. Pre-committed 2026-07-27 in "
-        "docs/phases/phase-0.1-grpo-by-hand-plan.md before any sweep result was seen."
+        f"headroom >= {min_headroom}; settings within 1 standard error of the difference from the "
+        "best are treated as tied, and the tie-break is shorter median_completion_tokens. "
+        "Pre-committed 2026-07-27 in docs/phases/phase-0.1-grpo-by-hand-plan.md before any sweep "
+        "result was seen; tie tolerance widened from a fixed 0.01 to 1 SE on 2026-07-27, before "
+        "the n=200 result was read."
     )
 
     eligible: list[SettingSummary] = []
@@ -176,8 +190,18 @@ def select(
     if not eligible:
         return Selection(chosen=None, excluded=excluded, rule=rule)
 
-    best_dead = min(s.dead_group_fraction for s in eligible)
-    tied = [s for s in eligible if s.dead_group_fraction - best_dead <= TIE_TOLERANCE]
+    # A fixed tolerance cannot be right at every sample size: 0.01 is far below the estimator's own
+    # SE (~0.04 at n=64, ~0.024 at n=200), so it would resolve on sampling noise and the tie-break
+    # would never fire. One SE of the *difference* makes "these are indistinguishable" a statistical
+    # statement rather than a hand-picked constant.
+    best = min(eligible, key=lambda s: s.dead_group_fraction)
+    best_se = standard_error(best.dead_group_fraction, best.n_prompts)
+    tied = [
+        s
+        for s in eligible
+        if s.dead_group_fraction - best.dead_group_fraction
+        <= math.hypot(best_se, standard_error(s.dead_group_fraction, s.n_prompts))
+    ]
     chosen = min(tied, key=lambda s: s.median_completion_tokens)
     return Selection(chosen=chosen, excluded=excluded, rule=rule)
 
@@ -186,6 +210,16 @@ def select(
 #: raw rollouts. ``experiments/README.md``: raw generations live in ``raw/`` and are never modified.
 #: Without this seam a surprising summary cannot be debugged — you only ever see the aggregate.
 Observer = Callable[[str, str, Sequence[Prompt], Sequence[Sequence[Completion]]], None]
+
+
+def summaries_from_records(records: Sequence[dict[str, object]]) -> list[SettingSummary]:
+    """Rebuild summaries from a committed results JSON.
+
+    Lets the selection rule be re-applied to an existing sweep without re-running the GPU job — the
+    statistics are the expensive part, the rule is free. Also what makes "every number regenerates
+    from a committed script" (desideratum 12) true for the *rule* and not just the measurements.
+    """
+    return [SettingSummary(**record) for record in records]  # type: ignore[arg-type]
 
 
 def sweep_setting(
