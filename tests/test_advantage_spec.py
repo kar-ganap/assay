@@ -41,18 +41,9 @@ import pytest
 
 from assay.crawl.advantage import group_advantages
 
-#: **The handoff signal.** These are red on purpose: the implementation is the user's (§7). Marking
-#: them ``xfail(strict=True)`` keeps ``make check`` green (validation gate 4) while leaving them
-#: visible as expected-failures in every run. The moment the function is implemented they XPASS,
-#: which *fails* the suite under ``strict=True`` — that is the cue to delete this marker. The gate
-#: cannot be satisfied by quietly skipping the work.
-pytestmark = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Phase 0.1 — user implements assay.crawl.advantage.group_advantages (CLAUDE.md §7). "
-        "When these XPASS, delete this pytestmark: that is the signal the phase's core landed."
-    ),
-)
+#: The ``xfail(strict=True)`` handoff marker was removed on 2026-07-27 when implementation started.
+#: It existed so an *untouched* spec would not fail the gate; during active red-green work, honest
+#: red is the correct state and hiding it behind xfail would obscure the progression.
 
 G = 8
 SQRT_G_MINUS_1 = math.sqrt(G - 1)
