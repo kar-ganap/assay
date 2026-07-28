@@ -320,6 +320,53 @@ purpose *in a run* is the consequence: reward flat while wall-clock and tokens a
 ≥2 seeds exist. Tighten each to "outside run 7's seed band" once measured, and record that as a
 dated amendment here, the way the tie tolerance was.
 
+### Learning-rate probe — declared 2026-07-28, before it runs
+
+**The learning rate is the one unpinned number that can silently void the whole phase.** Too low and
+nothing moves in 200 steps; gate 1 fails and *every* ablation is inert, because they are all
+comparisons against a reference curve that never left the ground. Too high and run 7 is unstable and
+the comparisons are noise. The plan's own risk framing applies: a flat curve already has four
+indistinguishable causes, and an unprobed learning rate adds a fifth.
+
+So probe it, exactly as the task was probed rather than assumed.
+
+- **Candidates:** `1e-5 · 3e-5 · 1e-4 · 3e-4`, on the `run7` configuration, `add-2digit`.
+- **Length:** 30 steps each. Enough to see movement and instability, ~15% of a full run.
+- **Read:** `proxy_reward`, `kl_to_ref` (drift), `grad_norm`, `policy_entropy`,
+  `frac_degenerate_groups`.
+
+**Selection rule, pre-committed:**
+
+1. **Reject** any rate with a non-finite loss or `grad_norm`, or with `policy_entropy` falling by
+   more than half within 30 steps (collapse before training has begun).
+2. **Reject** any rate whose `kl_to_ref` stays ≈ 0 — the policy did not move at all, so the rate is
+   below the noise floor of the optimiser.
+3. Among survivors, take the **largest** rate. Faster movement means more of the 200-step budget is
+   spent past the transient, and the ablations get more signal to differ on.
+4. If **none** survive, that is a finding about the rig, not the science — widen the grid once and
+   record both attempts here.
+
+`kl_coef = 0.04` is used for the probe (published GRPO), so the probe also reads whether the leash
+engages at that value.
+
+**β — what "big enough" means, since it is not a number you can pick at step 0.** `KL ≈ 0` at the
+start for *any* β, because the policy has not moved. It is a property of the trajectory:
+
+| | reading |
+|---|---|
+| run 7's `kl_to_ref` **plateaus** while its reward still improves | the leash is engaged and not strangling — β is right |
+| `kl_to_ref` **grows without bound** | β too small; ablation B then removes a leash that was never on, and its null is a **rig failure**, not a finding |
+| reward **flat** while KL is pinned near 0 | β too large; the policy cannot move |
+
+`kl_loss_fraction` is logged as a supporting readout but **is not the criterion on its own — it is
+not monotone in β.** A dry run showed β=0.05 giving a 7.8% loss share against β=1.0 giving 1.7%,
+because a tighter leash suppresses the very drift that would make the term large. It peaks at
+intermediate β.
+
+To make the comparison possible at all, KL is **measured every `kl_measure_every` steps even when
+`kl_coef == 0`**, and never applied to the loss there. Without that, ablation B has no drift reading
+and "removing the leash changed nothing" is indistinguishable from "the policy never drifted anyway".
+
 ### Length-normalisation arms — declared 2026-07-28, before any training run
 
 `loss_i = −A_i · log π(y_i)` where `log π` is **summed** over the completion's tokens. Dividing by

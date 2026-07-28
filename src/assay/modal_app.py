@@ -31,6 +31,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import math
 import subprocess
 from pathlib import Path
 
@@ -351,49 +352,105 @@ if modal is not None:
         print(f"\nwrote {out}")
 
     @app.local_entrypoint()
-    def ladder(runs: str = "", setting: str = "add-2digit") -> None:
-        """Launch ladder runs by id: ``modal run ... ::ladder --runs run1,run2,run3,run7``.
+    def probe_lr(rates: str = "1e-5,3e-5,1e-4,3e-4", steps: int = 30) -> None:
+        """Learning-rate probe. Rule pre-committed in the phase plan, before this ran.
+
+            modal run src/assay/modal_app.py::probe_lr
+
+        Reject a rate for: non-finite loss/grad, entropy halving inside `steps` (collapse before
+        training began), or kl_to_ref staying ~0 (the policy never moved). Among survivors take the
+        LARGEST — faster movement leaves more of the 200-step budget past the transient.
+        """
+        from assay.crawl import runlog
+        from assay.crawl.config import LadderConfig
+
+        provenance = _provenance()
+        print(f"{'lr':>8} {'reward 0->end':>16} {'kl_end':>9} {'entropy 0->end':>18} "
+              f"{'|g| mean':>9} {'dead_end':>9}")
+        print("-" * 78)
+        for rate in [float(r) for r in rates.split(",")]:
+            cfg = LadderConfig(
+                run_id=f"probe-lr{rate:g}", steps=steps, baseline="group_loo",
+                normalize_by_std=True, kl_coef=0.04, learning_rate=rate,
+            )
+            result = train_remote.remote(dataclasses.asdict(cfg), provenance)
+            rows = result["steps"]
+            first, last = rows[0], rows[-1]
+            finite = all(
+                math.isfinite(r["grad_norm"]) and math.isfinite(r["proxy_reward"]) for r in rows
+            )
+            print(
+                f"{rate:>8.0e} {first['proxy_reward']:7.3f}->{last['proxy_reward']:<7.3f} "
+                f"{last['kl_to_ref']:9.4f} {first['policy_entropy']:8.3f}->"
+                f"{last['policy_entropy']:<8.3f} "
+                f"{sum(r['grad_norm'] for r in rows)/len(rows):9.4f} "
+                f"{last['frac_degenerate_groups']:9.3f}"
+                + ("" if finite else "   NON-FINITE -> reject")
+            )
+            runlog.write_results(result["summary"], RESULTS_DIR)
+
+    @app.local_entrypoint()
+    def ladder(runs: str = "", setting: str = "add-2digit", seeds: str = "0") -> None:
+        """Launch ladder runs: ``modal run ... ::ladder --runs run1,run7 --seeds 0,1``.
 
         The ladder table lives in ``assay.crawl.ladder`` and is **the user's** (§7). This entry
         point only dispatches it and lands the artefacts:
 
             raw/<run_id>/steps.jsonl   per-step logs, gitignored, never modified
             results/<run_id>.json      derived metrics; every figure regenerates from these
+
+        ``--seeds`` exists because gate 1 needs >= 2 seeds on run 7, and that seed band is what
+        every ablation threshold should ultimately be stated against.
         """
         from assay.crawl import runlog
         from assay.crawl.ladder import LADDER
 
         wanted = [r.strip() for r in runs.split(",") if r.strip()] or sorted(LADDER)
-        provenance = {
-            "model_id": MODEL_ID,
-            "model_revision": MODEL_REVISION,
-            "prompt_template_sha256": tasks_fingerprint(),
-            "git_sha": _git_sha(),
-            "git_dirty": _git_dirty(),
-            "backend": f"modal-{TRAIN_GPU}",
-        }
+        seed_list = [int(s) for s in seeds.split(",") if s.strip()]
+        provenance = _provenance()
         if provenance["git_dirty"]:
             print("WARNING: dirty tree — git_sha does not identify the code producing these runs.")
 
         for run_id in wanted:
-            cfg = dataclasses.replace(LADDER[run_id], run_id=run_id, setting=setting)
-            print(f"\n=== {run_id} ({setting}) ===")
-            result = train_remote.remote(dataclasses.asdict(cfg), provenance)
+            for seed in seed_list:
+                tag = f"{run_id}-{setting}-seed{seed}"
+                cfg = dataclasses.replace(LADDER[run_id], run_id=tag, setting=setting, seed=seed)
+                print(f"\n=== {tag} ===")
+                result = train_remote.remote(dataclasses.asdict(cfg), provenance)
 
-            run_dir = RAW_DIR / f"{run_id}-{setting}"
-            run_dir.mkdir(parents=True, exist_ok=True)
-            with (run_dir / "steps.jsonl").open("w") as fh:
-                for step in result["steps"]:
-                    fh.write(json.dumps(step) + "\n")
-            runlog.write_manifest({**provenance, "config": dataclasses.asdict(cfg)}, run_dir)
-            runlog.write_results(result["summary"], RESULTS_DIR)
+                run_dir = RAW_DIR / tag
+                run_dir.mkdir(parents=True, exist_ok=True)
+                with (run_dir / "steps.jsonl").open("w") as fh:
+                    for step in result["steps"]:
+                        fh.write(json.dumps(step) + "\n")
+                runlog.write_manifest(
+                    {**provenance, "config": dataclasses.asdict(cfg)}, run_dir
+                )
+                runlog.write_results(result["summary"], RESULTS_DIR)
 
-            s = result["summary"]
-            print(
-                f"  gap_slope(50-200)={s['gap_slope_50_200']}  "
-                f"proxy {s['proxy_reward_first']:.3f}->{s['proxy_reward_last']:.3f}  "
-                f"degenerate {s['frac_degenerate_first']:.3f}->{s['frac_degenerate_last']:.3f}"
-            )
+                s = result["summary"]
+                print(
+                    f"  gap_slope(50-200)={s['gap_slope_50_200']}  "
+                    f"proxy {s['proxy_reward_first']:.3f}->{s['proxy_reward_last']:.3f}  "
+                    f"dead {s['frac_degenerate_first']:.3f}->{s['frac_degenerate_last']:.3f}  "
+                    f"live {s['live_fraction_in_slope_window']}"
+                )
+
+
+def _provenance() -> dict:  # type: ignore[type-arg]
+    """Everything a run's manifest needs to be reproducible from itself."""
+    from assay.crawl.rewards import grader_fingerprint
+    from assay.crawl.tasks import template_fingerprint
+
+    return {
+        "model_id": MODEL_ID,
+        "model_revision": MODEL_REVISION,
+        "prompt_template_sha256": template_fingerprint(),
+        "grader": grader_fingerprint(),
+        "git_sha": _git_sha(),
+        "git_dirty": _git_dirty(),
+        "backend": f"modal-{TRAIN_GPU}",
+    }
 
 
 def tasks_fingerprint() -> str:

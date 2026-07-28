@@ -37,6 +37,7 @@ def _log(
         policy_entropy=entropy,
         distinct_completions=distinct,
         kl_to_ref=0.0,
+        kl_loss_fraction=0.0,
         grad_norm=grad_norm,
         half_batch_grad_cosine=cosine,
         max_abs_advantage=max_adv,

@@ -69,6 +69,15 @@ class LadderConfig:
     #: (ablation A). The plan's risk section: staleness "will look like an unrelated instability".
     epochs_per_batch: int = 1
 
+    #: Measure KL to the reference every N steps **even when ``kl_coef == 0``**, for observability
+    #: only — never applied to the loss.
+    #:
+    #: Ablation B runs at ``kl_coef=0``, and skipping the computation there would make its result
+    #: ambiguous: without a drift measurement, "removing the leash changed nothing" cannot be told
+    #: apart from "the policy never drifted anyway". Measuring every 10th step buys that
+    #: distinction for a tenth of the cost of an extra forward pass per step.
+    kl_measure_every: int = 10
+
     #: PPO-style ratio clipping. **Inert while ``epochs_per_batch == 1``** — the ratio is exactly 1,
     #: so ``clip(1, 1-eps, 1+eps) == 1``. Kept as a switch rather than deleted so the design space
     #: stays visible, but see ``clipping_is_active``: setting this alone does nothing.

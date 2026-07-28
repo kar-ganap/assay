@@ -211,10 +211,16 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
             # half-split as the term it belongs to. Adding it after the split would leave the two
             # half-gradients differing by an unaccounted term and the cosine measuring that.
             kl_mean = 0.0
-            if cfg.kl_coef:
+            kl_loss_fraction = 0.0
+            # Measured whenever it is penalised, and periodically even when it is not. Ablation B
+            # runs at kl_coef=0; without a drift reading there, "removing the leash changed
+            # nothing" is indistinguishable from "the policy never drifted anyway".
+            measure_only = not cfg.kl_coef and step % max(1, cfg.kl_measure_every) == 0
+            if cfg.kl_coef or measure_only:
+                pg_magnitude = sum(abs(float(t)) for g in losses_by_group for t in g)
                 kl_per_rollout = policy.kl_to_reference(flat)
                 index = 0
-                for group_losses in losses_by_group:
+                for group_losses in losses_by_group if cfg.kl_coef else []:
                     for position in range(len(group_losses)):
                         # Same divisor as the policy-gradient term: the KL is a sum over the
                         # completion's tokens, so leaving it unnormalised while the PG term is
@@ -225,6 +231,12 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
                         )
                         index += 1
                 kl_mean = float(sum(float(k) for k in kl_per_rollout) / len(flat))
+                kl_magnitude = sum(
+                    abs(cfg.kl_coef * float(k) / d)
+                    for k, d in zip(kl_per_rollout, divisors, strict=True)
+                )
+                if pg_magnitude + kl_magnitude > 0:
+                    kl_loss_fraction = kl_magnitude / (pg_magnitude + kl_magnitude)
 
             # --- step 5: update --------------------------------------------------------
             # Split by GROUP, never by rollout. Advantages inside a group sum to zero, so a
@@ -251,6 +263,7 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
                 policy_entropy=policy.entropy(flat),
                 distinct_completions=len({r.text for r in flat}),
                 kl_to_ref=kl_mean,
+                kl_loss_fraction=kl_loss_fraction,
                 grad_norm=grad_norm,
                 half_batch_grad_cosine=cosine,
                 # Ablation C's rig-broken branch: a z-score cannot exceed sqrt(G-1) = 2.646 at

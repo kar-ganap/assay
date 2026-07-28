@@ -170,11 +170,14 @@ def test_different_seeds_draw_different_prompts(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------------------
 
 
-def test_kl_is_zero_and_uncomputed_when_the_coefficient_is_zero(tmp_path: Path) -> None:
-    """Ablation B is kl_coef=0.0, so this is the common path.
+def test_the_reference_pass_is_sampled_not_paid_every_step(tmp_path: Path) -> None:
+    """At kl_coef=0 the reference pass is *periodic*, not per-step and not absent.
 
-    For HFPolicy the reference is an extra full forward pass; multiplying it by zero would pay for
-    it on every ladder run. The counter proves it is skipped, not scaled.
+    Two requirements pulling against each other. For HFPolicy the reference is a whole extra
+    forward, and ablation B plus runs 1/2/3 all sit at kl_coef=0 — so paying it every step (by
+    multiplying by zero) is waste. But skipping it entirely leaves ablation B uninterpretable:
+    without a drift reading, "removing the leash changed nothing" cannot be told apart from "the
+    policy never drifted anyway". Sampling every Nth step buys the distinction at 1/N the cost.
     """
     calls = {"n": 0}
 
@@ -183,11 +186,13 @@ def test_kl_is_zero_and_uncomputed_when_the_coefficient_is_zero(tmp_path: Path) 
             calls["n"] += 1
             return super().kl_to_reference(rollouts)
 
-    cfg = LadderConfig(run_id="t", steps=2, prompts_per_step=4, kl_coef=0.0)
-    logs = train(cfg, tmp_path, policy=CountingPolicy(p_correct=0.5, seed=0))
+    cfg = LadderConfig(
+        run_id="t", steps=20, prompts_per_step=4, kl_coef=0.0, kl_measure_every=10
+    )
+    train(cfg, tmp_path, policy=CountingPolicy(p_correct=0.5, seed=0))
 
-    assert all(log.kl_to_ref == 0.0 for log in logs)
-    assert calls["n"] == 0, "the reference pass must be skipped, not multiplied by zero"
+    assert calls["n"] == 2, "measured at steps 0 and 10 only"
+    assert calls["n"] < cfg.steps, "the per-step cost saving must survive"
 
 
 def test_kl_is_computed_and_logged_when_enabled(tmp_path: Path) -> None:
@@ -253,3 +258,31 @@ def test_removing_the_baseline_lowers_the_half_batch_snr(tmp_path: Path) -> None
 
     assert without_baseline < with_baseline, "removing the baseline must lower the SNR"
     assert with_baseline / without_baseline > 1.5
+
+
+def test_drift_is_measured_even_when_the_leash_is_off(tmp_path: Path) -> None:
+    """Ablation B runs at kl_coef=0. Without a drift reading there, "removing the leash changed
+    nothing" cannot be told apart from "the policy never drifted anyway"."""
+    cfg = LadderConfig(run_id="b", steps=12, prompts_per_step=4, kl_coef=0.0, kl_measure_every=5)
+    logs = train(cfg, tmp_path, policy=ToyPolicy(seed=1, lr=3.0, vocab=8, reward_from_tokens=True))
+
+    measured = [log for log in logs if log.step % 5 == 0]
+    assert any(log.kl_to_ref > 0 for log in measured[1:]), "drift must be observable at kl_coef=0"
+    # ...but never applied: an unpenalised measurement must not enter the loss.
+    assert all(log.kl_loss_fraction == 0.0 for log in logs)
+
+
+def test_a_tighter_leash_holds_the_policy_closer(tmp_path: Path) -> None:
+    """The operational meaning of beta: larger beta => less drift at equilibrium."""
+    def final_kl(beta: float) -> float:
+        cfg = LadderConfig(
+            run_id="k", steps=30, prompts_per_step=6, kl_coef=beta,
+            baseline="group_loo", normalize_by_std=True,
+        )
+        logs = train(
+            cfg, tmp_path / str(beta),
+            policy=ToyPolicy(seed=2, lr=3.0, vocab=8, reward_from_tokens=True),
+        )
+        return logs[-1].kl_to_ref
+
+    assert final_kl(1.0) < final_kl(0.05), "a tighter leash must restrain more"

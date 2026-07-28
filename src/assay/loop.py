@@ -39,6 +39,17 @@ class StepLog:
     distinct_completions: int
 
     kl_to_ref: float
+
+    #: Share of the total loss magnitude contributed by the KL term:
+    #: ``|beta*KL| / (|PG| + |beta*KL|)``, in [0, 1]. Zero when ``kl_coef == 0``.
+    #:
+    #: **Ablation B's rig-broken check.** "Big enough" for beta is not a number you can pick at
+    #: step 0 — KL is ~0 there for any beta, because the policy has not moved yet. It is a property
+    #: of the trajectory: the leash is real if this rises to a material share while reward still
+    #: improves. If run 7 ends with this near zero, then removing KL in ablation B removed a leash
+    #: that was never on, and the resulting null is a rig failure rather than a finding.
+    kl_loss_fraction: float
+
     grad_norm: float
 
     #: Cosine similarity between the gradients of the batch's two halves — a **direct** measure of

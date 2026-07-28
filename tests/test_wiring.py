@@ -81,6 +81,7 @@ def test_step_log_exposes_both_reward_legs() -> None:
         policy_entropy=1.0,
         distinct_completions=64,
         kl_to_ref=0.0,
+        kl_loss_fraction=0.0,
         grad_norm=1.0,
         half_batch_grad_cosine=0.9,
         max_abs_advantage=2.0,
@@ -102,6 +103,7 @@ def test_step_log_carries_every_ablation_signature() -> None:
     assert {"grad_norm", "half_batch_grad_cosine"} <= fields, "ablation A"
     assert {"policy_entropy", "distinct_completions"} <= fields, "ablation B"
     assert {"tokens", "max_abs_advantage"} <= fields, "ablation C"
+    assert {"kl_to_ref", "kl_loss_fraction"} <= fields, "ablation B rig-check"
     assert {"frac_degenerate_groups", "grad_norm"} <= fields, "ablation D"
 
 
