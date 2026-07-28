@@ -78,6 +78,15 @@ class HFPolicy:
         self.model.gradient_checkpointing_enable()
         self.model.config.use_cache = False  # incompatible with checkpointing, and unused here
 
+        # **Required, and silent if omitted.** HF gates checkpointing on
+        # ``self.gradient_checkpointing and self.training``, and ``from_pretrained`` returns a model
+        # in *eval* mode — so without this, enabling checkpointing does nothing at all and every
+        # layer's activations are retained. That is ~21 GB of MLP intermediates across 16 layers at
+        # this batch size, which is what put a 1B model at 31 GB on an A100-40GB.
+        #
+        # Safe for generation because ``lora_dropout`` is 0: train mode changes nothing else here.
+        self.model.train()
+
         self.params = [p for p in self.model.parameters() if p.requires_grad]
         self.opt = torch.optim.AdamW(self.params, lr=learning_rate)
 
