@@ -47,25 +47,167 @@ Two things worth logging carefully because they are the phase's actual findings:
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
+from typing import Any
 
+from assay.crawl.advantage import group_advantages
 from assay.crawl.config import LadderConfig
+from assay.crawl.policy import Policy, Rollout
+from assay.crawl.rewards import Outcome, grade_pair
+from assay.crawl.runlog import step_log_writer
+from assay.crawl.tasks import Prompt, all_families
 from assay.loop import StepLog
 
 
-def train(cfg: LadderConfig, run_dir: Path) -> list[StepLog]:
+def _family_for(cfg: LadderConfig):  # type: ignore[no-untyped-def]
+    for family in all_families():
+        if family.name == cfg.family:
+            return family
+    raise ValueError(f"unknown family {cfg.family!r}")
+
+
+def _prompt_seed(cfg: LadderConfig, step: int) -> int:
+    """Fresh prompts each step, deterministic given the run seed.
+
+    Reusing one prompt set across all steps would let the policy memorise it, turning the reward
+    curve into a memorisation curve — the same class of confound as training on the format.
+    """
+    return cfg.seed * 1_000_000 + step
+
+
+def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
     """Run one ladder configuration for ``cfg.steps`` steps, logging every step.
 
     Args:
         cfg: the rung or ablation to run. Runs 1/2/3/7 and ablations A-D are all switch settings
             on this one object — if the loop needs an ``if`` per rung, the modelling is wrong.
-        run_dir: destination for ``manifest.json`` and ``steps.jsonl``. The manifest is written
-            before step 1 so a crashed run is still identifiable.
+        run_dir: destination for ``steps.jsonl``. The manifest is written by the caller, before
+            step 1, so a crashed run is still identifiable.
+        policy: the model behind ``assay.crawl.policy.Policy``. Injected rather than constructed
+            so the loop runs against ``ToyPolicy`` on a machine with no GPU.
 
     Returns:
         The per-step logs, in step order.
     """
-    raise NotImplementedError(
-        "Phase 0.1 — user writes the GRPO loop (CLAUDE.md §7). "
-        "Start with assay.crawl.advantage.group_advantages; spec in tests/test_advantage_spec.py"
-    )
+    family = _family_for(cfg)
+    logs: list[StepLog] = []
+
+    with step_log_writer(run_dir) as writer:
+        for step in range(cfg.steps):
+            started = time.perf_counter()
+
+            prompts: list[Prompt] = family.generate(
+                cfg.setting, cfg.prompts_per_step, seed=_prompt_seed(cfg, step)
+            )
+            groups: list[list[Rollout]] = policy.generate(prompts, k=cfg.group_size)
+            # Flattened in group order, so index i of `flat` aligns with the i-th advantage.
+            flat: list[Rollout] = [r for group in groups for r in group]
+
+            # --- step 2: grading -------------------------------------------------------
+            # grade_pair returns (proxy, true) per rollout. The proxy is what the policy
+            # optimises; the true leg is measured and MUST NOT reach step 3, or it stops
+            # measuring generalisation and becomes a second proxy.
+            graded = [
+                [
+                    grade_pair(cfg.reward, r.text, r.prompt.answer, completion_tokens=r.n_tokens)
+                    for r in group
+                ]
+                for group in groups
+            ]
+            proxy_by_group = [[proxy.reward for proxy, _ in g] for g in graded]
+            true_by_group = [[true.reward for _, true in g] for g in graded]
+
+            flat_proxy = [r for g in proxy_by_group for r in g]
+            flat_true = [r for g in true_by_group for r in g]
+            flat_graded = [pair for g in graded for pair in g]
+
+            # Pass rate on the TRUE grader, not the proxy: under R_tiebreak every proxy reward
+            # exceeds 0 even for wrong answers, so a proxy-based pass rate would read ~100% for a
+            # policy that is answering incorrectly. The true leg keeps this comparable across all
+            # three reward variants.
+            group_pass_rate = sum(
+                1 for _, true in flat_graded if true.outcome is Outcome.CORRECT
+            ) / len(flat_graded)
+
+            # --- step 3: advantages ----------------------------------------------------
+            if cfg.force_unanimous_groups:
+                # Ablation D, synthetic on purpose. Overwrites the proxy rewards so every group is
+                # all-correct, decoupling reward from the completions. The *arithmetic* is already
+                # proven in tests/test_advantage_spec.py; what this arm demonstrates is the
+                # consequence — reward flat while wall-clock and tokens accrue exactly as normal.
+                proxy_by_group = [[1.0] * len(g) for g in proxy_by_group]
+
+            # Rung 2's baseline is THIS batch's mean over all prompts — not a running average.
+            # An EMA would make run 2 differ from run 3 in two ways at once (conditioning *and*
+            # temporal smoothing); using the same batch isolates the conditioning, which is the
+            # only thing the rung is about. Self-inclusion biases it by O(1/n) at n=128, ~16x
+            # smaller than group_mean's at n=8.
+            global_baseline = (
+                sum(flat_proxy) / len(flat_proxy) if cfg.baseline == "global" else None
+            )
+
+            advantages_by_group = [
+                group_advantages(
+                    rewards,
+                    baseline=cfg.baseline,
+                    normalize_by_std=cfg.normalize_by_std,
+                    global_baseline_value=global_baseline,
+                )
+                for rewards in proxy_by_group
+            ]
+            flat_advantages = [a for g in advantages_by_group for a in g]
+
+            # Derived from the advantages, not recomputed from rewards: a group is dead iff it
+            # produced no gradient, which is the thing we actually care about. This also stays
+            # consistent with group_advantages' own zero-std floor without a second tolerance.
+            frac_degenerate = sum(
+                1 for g in advantages_by_group if all(a == 0.0 for a in g)
+            ) / len(advantages_by_group)
+
+            # --- step 4: loss ----------------------------------------------------------
+            # The policy-gradient objective, one term per rollout:
+            #
+            #     loss_i = -A_i * log pi(y_i | x_i)
+            #
+            # A_i is a single scalar for the whole episode — terminal reward only, deterministic
+            # transitions — so every token in a rollout shares the same advantage. There is no
+            # per-timestep credit assignment to do here.
+            log_probs = policy.logprobs(flat)  # summed over each rollout's completion tokens
+
+            losses_by_group: list[list[Any]] = []
+            index = 0
+            for group, advantages in zip(groups, advantages_by_group, strict=True):
+                group_losses = []
+                for rollout, advantage in zip(group, advantages, strict=True):
+                    # max(1, ...) guards a completion that emitted EOS immediately.
+                    divisor = max(1, rollout.n_tokens) if cfg.length_normalize else 1
+                    group_losses.append(-advantage * log_probs[index] / divisor)
+                    index += 1
+                losses_by_group.append(group_losses)
+
+            # --- step 5: update --------------------------------------------------------
+            # --- step 6: KL ------------------------------------------------------------
+
+            log = StepLog(
+                step=step,
+                proxy_reward=sum(flat_proxy) / len(flat_proxy),
+                true_reward=sum(flat_true) / len(flat_true),
+                policy_entropy=policy.entropy(flat),
+                distinct_completions=len({r.text for r in flat}),
+                kl_to_ref=0.0,
+                grad_norm=0.0,
+                half_batch_grad_cosine=0.0,
+                # Ablation C's rig-broken branch: a z-score cannot exceed sqrt(G-1) = 2.646 at
+                # G=8. If this ever does, the advantage function is not computing a z-score and
+                # the run says nothing about the science either way.
+                max_abs_advantage=max((abs(a) for a in flat_advantages), default=0.0),
+                group_pass_rate=group_pass_rate,
+                frac_degenerate_groups=frac_degenerate,
+                tokens=sum(r.n_tokens for r in flat),
+                wall_clock_s=time.perf_counter() - started,
+            )
+            writer.append(log)
+            logs.append(log)
+
+    return logs

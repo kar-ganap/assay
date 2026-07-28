@@ -26,7 +26,14 @@ train = ["torch", "transformers", "peft", "accelerate", "datasets", "trl", "vllm
 envs = ["verifiers", "reasoning-gym"]
 modal = ["modal>=0.63"]
 api = ["anthropic>=0.40", "python-dotenv>=1.0"]
-dev = ["pytest>=8", "ruff", "mypy", "matplotlib>=3.8"]
+# `torch` here is for **local CPU smoke tests of the training loop**, not for training. 2.2.x is the
+# last macOS x86_64 wheel PyTorch published, and it was built against NumPy 1.x — hence the `numpy<2`
+# bound, which applies only to this dev environment and never to the published package. The Modal
+# image runs torch 2.13; the ops the loop uses (log_softmax, gather, backward) are stable across
+# that gap. Testing the loop against real autograd locally is what catches masking and shape bugs in
+# seconds rather than on a GPU, where they are silent — a wrongly-masked loss still trains, just
+# wrong.
+dev = ["pytest>=8", "ruff", "mypy", "matplotlib>=3.8", "torch<2.3", "numpy<2"]
 
 [project.scripts]
 assay = "assay.cli:main"

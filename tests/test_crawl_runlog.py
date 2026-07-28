@@ -312,3 +312,75 @@ def test_figures_refuse_to_invent_data(tmp_path: Path) -> None:
 
     with pytest.raises(FileNotFoundError):
         figures.load_runs(tmp_path)
+
+
+# --------------------------------------------------------------------------------------
+# Ablation A's SNR — scale-free in the operating point, unlike a raw cosine gap
+# --------------------------------------------------------------------------------------
+
+
+def test_snr_ratio_is_invariant_to_operating_point() -> None:
+    """The reason A's threshold moved off raw cosine gaps.
+
+    A fixed variance ratio shows very different cosine *gaps* depending on where the baselined arm
+    sits, so a real effect can slip under an absolute threshold. The SNR ratio does not move.
+    """
+    # Same underlying 3.6x variance ratio, two operating points.  rho = cos/(1-cos), and
+    # rho scales inversely with variance, so rho_1 = rho_2 / 3.6 in both cases.
+    for cos_baselined in (0.80, 0.95):
+        rho2 = cos_baselined / (1 - cos_baselined)
+        rho1 = rho2 / 3.6
+        cos_unbaselined = rho1 / (1 + rho1)
+
+        raw_gap = cos_baselined - cos_unbaselined
+        ratio = runlog.gradient_snr(cos_baselined) / runlog.gradient_snr(cos_unbaselined)
+
+        assert ratio == pytest.approx(3.6, rel=1e-6), "the SNR ratio recovers the variance ratio"
+        if cos_baselined == 0.95:
+            assert raw_gap < 0.15, "a real effect that the old absolute threshold would have missed"
+
+
+def test_snr_is_none_when_noise_is_below_resolution() -> None:
+    """cos == 1 must not report an enormous SNR; it means we cannot measure the noise."""
+    assert runlog.gradient_snr(1.0) is None
+
+
+def test_snr_is_zero_when_halves_do_not_agree() -> None:
+    assert runlog.gradient_snr(0.0) == 0.0
+    assert runlog.gradient_snr(-0.3) == 0.0
+
+
+def test_summary_reports_the_snr() -> None:
+    logs = [_log(t, proxy=0.5, true=0.5, cosine=0.8) for t in range(60)]
+    summary = runlog.summarize_run(LadderConfig(run_id="run2"), logs)
+    assert summary["gradient_snr"] == pytest.approx(4.0)
+
+
+# --------------------------------------------------------------------------------------
+# A dead run must not be reported as a flat gap
+# --------------------------------------------------------------------------------------
+
+
+def test_a_run_that_dies_partway_is_flagged_not_silently_flattened() -> None:
+    """Ablation B saturates and dies; the ladder may too. A slope fitted over mostly-dead steps
+    reads as "no gap opened" when the truth is "the run ended at step 80"."""
+    logs = [
+        _log(t, proxy=0.5 + (0.004 * t if t < 80 else 0.004 * 80), true=0.5,
+             degenerate=0.2 if t < 80 else 1.0)
+        for t in range(201)
+    ]
+    summary = runlog.summarize_run(LadderConfig(run_id="ablation_b"), logs)
+
+    assert summary["first_all_dead_step"] == 80
+    assert summary["live_steps"] == 80
+    # Only steps 50-79 of the 50-200 window are live: 30 of 151.
+    assert summary["live_fraction_in_slope_window"] == pytest.approx(30 / 151, abs=0.01)
+    # The slope looks near-zero, which without the flag would read as an honest null.
+    assert abs(summary["gap_slope_50_200"]) < 0.001
+
+
+def test_a_healthy_run_reports_a_full_live_window() -> None:
+    logs = [_log(t, proxy=0.5 + 0.002 * t, true=0.5, degenerate=0.2) for t in range(201)]
+    summary = runlog.summarize_run(LadderConfig(run_id="run7"), logs)
+    assert summary["first_all_dead_step"] is None
+    assert summary["live_fraction_in_slope_window"] == pytest.approx(1.0)

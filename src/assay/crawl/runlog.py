@@ -157,6 +157,24 @@ def _coefficient_of_variation(values: Sequence[float]) -> float | None:
     return math.sqrt(variance) / abs(mean)
 
 
+def gradient_snr(cosine: float) -> float | None:
+    """``rho = cos/(1-cos)`` — ablation **A**'s metric, scale-free in the operating point.
+
+    The raw cosine gap produced by a fixed variance ratio depends on where you are operating: at a
+    genuine 3.6x variance difference, a baseline arm sitting at cos 0.80 shows a gap of 0.27, but
+    the same effect at cos 0.95 shows only 0.11. Comparing ``rho`` instead is invariant to that.
+
+    Returns ``None`` when the cosine is numerically 1 — estimator noise below measurement
+    resolution, which is a real state and must not be reported as an enormous SNR. Returns 0.0 for
+    a non-positive cosine: orthogonal or opposed halves carry no detectable signal.
+    """
+    if cosine >= 1.0 - 1e-9:
+        return None
+    if cosine <= 0.0:
+        return 0.0
+    return cosine / (1.0 - cosine)
+
+
 def _detrended_cv(steps: Sequence[float], values: Sequence[float]) -> float | None:
     """Relative scatter about a linear fit: ``std(residuals) / |mean(values)|``.
 
@@ -183,17 +201,37 @@ def _detrended_cv(steps: Sequence[float], values: Sequence[float]) -> float | No
     return scatter / abs(mean)
 
 
+def live_steps(logs: Sequence[StepLog]) -> int:
+    """Steps that produced *any* gradient — groups not all unanimous.
+
+    A run whose groups all go dead is over, however many steps remain on the clock. Counting them
+    matters because the outcome variable is fitted over a fixed window: if the gradient dies at
+    step 80, fitting ``d(gap)/d(step)`` across 50-200 averages 30 live steps with 120 frozen ones
+    and flattens the slope toward zero — reporting "no gap opened" when the truth is "the run ended
+    at step 80". Read ``gap_slope_50_200`` together with ``live_fraction_in_slope_window``.
+    """
+    return sum(1 for log in logs if log.frac_degenerate_groups < 1.0)
+
+
 def summarize_run(cfg: LadderConfig, logs: Sequence[StepLog]) -> dict[str, Any]:
     """Derived metrics for ``results/<run_id>.json`` — what every figure regenerates from."""
     if not logs:
         raise ValueError("no steps logged — refusing to emit a hollow summary")
 
     first, last = logs[0], logs[-1]
+    window = [log for log in logs if SLOPE_START <= log.step <= SLOPE_END]
     return {
         "run_id": cfg.run_id,
         "config": dataclasses.asdict(cfg),
         "n_steps": len(logs),
         "gap_slope_50_200": gap_slope(logs),
+        # A slope fitted mostly over dead steps is an artefact, not a null. Ablation B is expected
+        # to saturate and die partway; the ladder runs may too as pass rate climbs.
+        "live_steps": live_steps(logs),
+        "live_fraction_in_slope_window": (live_steps(window) / len(window) if window else None),
+        "first_all_dead_step": next(
+            (log.step for log in logs if log.frac_degenerate_groups >= 1.0), None
+        ),
         "gap_first": first.gap,
         "gap_last": last.gap,
         "proxy_reward_first": first.proxy_reward,
@@ -224,6 +262,8 @@ def summarize_run(cfg: LadderConfig, logs: Sequence[StepLog]) -> dict[str, Any]:
         "half_batch_grad_cosine_mean": (
             sum(x.half_batch_grad_cosine for x in logs) / len(logs)
         ),
+        # A's threshold is on the ratio of these between run 1 and run 2, not on raw cosines.
+        "gradient_snr": gradient_snr(sum(x.half_batch_grad_cosine for x in logs) / len(logs)),
         "grad_norm_mean": sum(x.grad_norm for x in logs) / len(logs),
         "grad_norm_cv": _coefficient_of_variation([x.grad_norm for x in logs]),
         "grad_norm_cv_detrended": _detrended_cv(

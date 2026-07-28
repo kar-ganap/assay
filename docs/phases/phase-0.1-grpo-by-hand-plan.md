@@ -246,7 +246,7 @@ is a result to record, *rig broken* is a bug to fix and says nothing about the s
 
 | | metric | direction | magnitude | falsified if | rig broken if |
 |---|---|---|---|---|---|
-| **A** | `half_batch_grad_cosine` (mean, steps 50–200), run 1 vs run 2 | run 1 **<** run 2 | gap ≥ **0.15** in cosine, and run 1 outside run 7's seed band | cosine gap < 0.05, or direction reverses | either run has non-finite `grad_norm` |
+| **A** | **SNR** `ρ = cos/(1−cos)` from `half_batch_grad_cosine` (mean, steps 50–200) | run 1 **<** run 2 | **`ρ₂/ρ₁ ≥ 2`** | ratio < 1.3, or direction reverses | non-finite `grad_norm`, **or** halves not split by group |
 | **B** | `distinct_completions` **∧** `proxy_reward` at step 200 | distinct falls, proxy holds | `distinct ≤ 0.05 × rollouts_per_step` (≤6 of 128) **while** `proxy_reward ≥ 0.9` | distinct stays > 25% of rollouts, **or** proxy never reaches 0.9 | `kl_to_ref` nonzero on the no-KL arm |
 | **C** | median `tokens`; `d(gap)/d(step)` | both rise | median tokens at step 200 ≥ **2×** its step-0 value (≥14, baseline is 7), with gap slope > 0 | token length flat | `max_abs_advantage_observed` > **√7 = 2.646** |
 | **D** | `frac_degenerate_groups`, `grad_norm` | → 1.0, → 0 | `frac_degenerate = 1.0` exactly and `grad_norm < 1e-8` | — | `grad_norm` materially nonzero ⇒ the loop is not using a group baseline where it claims to |
@@ -262,19 +262,99 @@ backward passes.
 **D is arithmetic, not dynamics**, and is already asserted in `tests/test_advantage_spec.py`. Its
 purpose *in a run* is the consequence: reward flat while wall-clock and tokens accrue normally.
 
+> **Amendment, 2026-07-28 — before any training run.** A's threshold was originally *"gap ≥ 0.15 in
+> raw cosine"*. That is not scale-free: the cosine gap produced by a fixed variance ratio depends on
+> where you are operating. At a genuine 3.6× variance difference, run 2 at cos 0.80 gives a gap of
+> 0.27 (passes) but run 2 at cos 0.95 gives 0.11 (**fails**) — a real effect missed because the batch
+> happened to be big enough that both runs sat near 1.
+>
+> Replaced with the SNR ratio `ρ = cos/(1−cos)`, which is invariant to the operating point. The
+> threshold is now **derived rather than guessed**: with binary reward at pass rate `p`, the
+> estimator variance is `∝ p·E_c` without a baseline versus `p(1−p)²E_c + (1−p)p²E_w` with one — at
+> `p = 0.72` that is **0.72 vs 0.20, a ~3.6× ratio**. Requiring `ρ₂/ρ₁ ≥ 2` leaves room for the
+> `E_c ≈ E_w` approximation while still failing if the effect is absent.
+
 **Two known weaknesses in these numbers, stated rather than hidden:**
 
-1. **A's 0.15 cosine gap is the softest threshold here.** B's follows from "a constant string pays",
-   C's from "≥2× is visibly padded", D's from arithmetic — A's is a judgement call with no prior for
-   this scale. Revisit once run 7's seeds give a band.
+1. ~~A's 0.15 cosine gap is the softest threshold here.~~ **Resolved by the amendment above** — A's
+   threshold is now the only one derived from the estimator's variance rather than asserted. The
+   remaining soft spot is the `E_c ≈ E_w` approximation (that correct and incorrect rollouts have
+   comparable `‖∇log π‖²`), which is why the gate is 2 rather than 3.6.
 2. **B assumes the policy learns the format at all.** `R_format` starts at 0.26 baseline compliance
    and must climb past 0.9. If 200 steps is not enough, B fails for a reason unrelated to KL — a
    *rig* problem wearing a null's clothes. **Pre-check: run B for 30 steps and confirm `R_format` is
    climbing before committing the full run.**
 
+> **Amendment to ablation B, 2026-07-28 — before any training run.** A dry run of steps 2–4 surfaced
+> a dynamic the original signature ignores: **B self-terminates by saturation.** `R_format` rewards
+> shape only, so once compliance approaches 100% *every group is unanimous*, within-group variance is
+> zero, and the gradient dies:
+>
+> ```
+> 26% compliance → mixed groups, real gradient → climbs → ~100% → every group dead → training stops
+> ```
+>
+> So the window for entropy collapse is **during the climb**, not at step 200 — and the original
+> signature, read at step 200, may be measuring a frozen policy. Confirmed in the dry run: with a
+> policy at 100% compliance, `frac_degenerate_groups = 1.000` and `max_abs_advantage = 0.000`.
+>
+> Two changes:
+>
+> 1. **Evaluate B's signature at `argmin(distinct_completions)` over the run**, reporting
+>    `proxy_reward` at that same step — not at step 200.
+> 2. **Add a third outcome branch**, because "the window closed" is not the same finding as "the
+>    prediction was wrong":
+>
+> | observation | verdict |
+> |---|---|
+> | `distinct ≤ 0.05 × rollouts` while `proxy ≥ 0.9` | **confirmed** |
+> | no collapse, `proxy` never approached saturation | **prediction wrong** — a finding |
+> | no collapse, but `proxy → 1.0` and `frac_degenerate → 1.0` first | **window closed by saturation** — a *distinct* finding, and one that belongs with the reachability theme rather than with KL |
+>
+> Also note the mechanism is weaker than first stated: `R_format` rewards *every* tagged output
+> equally, so there is no pull toward any particular string — only rich-get-richer concentration
+> from repeatedly pushing up on whichever tagged completions were sampled. "Collapse onto a single
+> high-reward string" overstates it; "diversity concentrates while reward saturates" is the claim.
+
 **Not yet expressed against the seed band**, which principle 2 requires — impossible until run 7's
 ≥2 seeds exist. Tighten each to "outside run 7's seed band" once measured, and record that as a
 dated amendment here, the way the tie tolerance was.
+
+### Length-normalisation arms — declared 2026-07-28, before any training run
+
+`loss_i = −A_i · log π(y_i)` where `log π` is **summed** over the completion's tokens. Dividing by
+token count is optional, and the two conventions disagree in the literature: **GRPO as published
+normalises by length; Dr. GRPO removes it** and argues the normalisation is itself a source of bias.
+*The direction of Dr. GRPO's claim is not verified first-hand — check `trl`'s `GRPOTrainer` source
+(prep-reading item 3) before attributing a direction to either paper.*
+
+Rather than pick on authority, measure it. **Four arms**, +2 runs on the primary arm:
+
+| arm | `length_normalize` | a length increase here means |
+|---|---|---|
+| `run7` | True | reference — no length pressure from reward or optimizer |
+| **`run7_nolennorm`** | **False** | **optimizer-induced length bias** — the convention question, isolated |
+| `ablation_c` | True | tie-breaker-induced padding, cleanly attributable |
+| `ablation_c_nolennorm` | False | both sources; the delta vs `ablation_c` isolates the optimizer's share |
+
+**Why run 7 and not only C:** ablation C already contains a length-rewarding term, so running *it*
+both ways mixes two sources of length pressure. Run 7 has no such term, so any drift under
+`length_normalize=False` is attributable to the optimizer alone.
+
+**Decision rule, pre-committed before the runs:**
+
+- **Metric:** `L = median tokens at step 200 ÷ median tokens at step 0`.
+- **If `L(run7_nolennorm) / L(run7) ≥ 1.5`** → the un-normalised form drifts on its own.
+  **Adopt `length_normalize=True`** as a design pin for Phase 1.1+.
+- **If the two are within 1.2×** → **honest null: the convention does not matter at this scale.**
+  Adopt `length_normalize=True` anyway, on the grounds that it matches published GRPO — *the
+  tie-break is pre-committed here so a null does not become a debate later.*
+- **If `L(run7) / L(run7_nolennorm) ≥ 1.5`** → normalisation drifts, which would support the
+  critique. Report it, and **verify against the `trl` source before attributing it to Dr. GRPO.**
+
+**Scope:** exploratory for Phase 0.1, but its result feeds a **design pin for Phase 1.1+**, where the
+convention applies to every training run in the grid. Record the outcome as a dated entry here and
+carry it to `docs/pre-registration.md` §2 if it moves a pin.
 
 > ### Correction to ablation C — made 2026-07-27, before the first run
 >

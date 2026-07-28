@@ -79,6 +79,21 @@ class LadderConfig:
     #: correct for the ladder, which is about the estimator rather than about Goodhart.
     reward: RewardVariant = "binary"
 
+    #: Divide each rollout's summed log-prob by its token count. **Default True.**
+    #:
+    #: Without it a 40-token rollout contributes 40 gradient terms and a 10-token one contributes
+    #: 10, so long rollouts dominate the batch gradient *regardless of their reward*. That is a
+    #: length pressure originating in the optimizer rather than the reward — which would confound
+    #: ablation **C**, whose entire prediction is that the tie-breaker makes completions longer.
+    #:
+    #: Contested in the literature: GRPO as published normalises by length; Dr. GRPO removes it and
+    #: argues the normalisation introduces its own bias. Check against ``trl``'s ``GRPOTrainer``
+    #: (prep-reading item 3) before citing either direction.
+    #:
+    #: Kept as a switch because running ablation C **both ways** separates "the tie-breaker caused
+    #: padding" from "the optimizer caused padding" — a cheap and decisive extra arm.
+    length_normalize: bool = True
+
     # --- ablation D --------------------------------------------------------------------
     #: Force every group to be unanimous, to demonstrate the zero-gradient step directly.
     force_unanimous_groups: bool = False
