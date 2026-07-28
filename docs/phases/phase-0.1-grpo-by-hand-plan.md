@@ -233,6 +233,49 @@ all — which is exactly how this failure was caught in the first place.
 **Ablation D is the conceptual bridge to the whole project.** It is why pass-rate band is an axis at
 all, and why `Rollout Pass-Rate Control` is cited rather than re-derived.
 
+### Pre-registered signatures — written 2026-07-28, before any training run
+
+A prediction that cannot fail is not a prediction. Each signature below names a **metric**, a
+**direction**, a **magnitude**, and a **comparison** — the test being that a stranger with the logs
+and none of this conversation could apply it and reach the same verdict. Gate 2 says an ablation
+that does not fail as predicted is a *finding*; that only has teeth if the prediction was sharp
+enough to fail.
+
+Each carries **two failure branches**, because they demand different responses: *prediction wrong*
+is a result to record, *rig broken* is a bug to fix and says nothing about the science.
+
+| | metric | direction | magnitude | falsified if | rig broken if |
+|---|---|---|---|---|---|
+| **A** | `half_batch_grad_cosine` (mean, steps 50–200), run 1 vs run 2 | run 1 **<** run 2 | gap ≥ **0.15** in cosine, and run 1 outside run 7's seed band | cosine gap < 0.05, or direction reverses | either run has non-finite `grad_norm` |
+| **B** | `distinct_completions` **∧** `proxy_reward` at step 200 | distinct falls, proxy holds | `distinct ≤ 0.05 × rollouts_per_step` (≤6 of 128) **while** `proxy_reward ≥ 0.9` | distinct stays > 25% of rollouts, **or** proxy never reaches 0.9 | `kl_to_ref` nonzero on the no-KL arm |
+| **C** | median `tokens`; `d(gap)/d(step)` | both rise | median tokens at step 200 ≥ **2×** its step-0 value (≥14, baseline is 7), with gap slope > 0 | token length flat | `max_abs_advantage_observed` > **√7 = 2.646** |
+| **D** | `frac_degenerate_groups`, `grad_norm` | → 1.0, → 0 | `frac_degenerate = 1.0` exactly and `grad_norm < 1e-8` | — | `grad_norm` materially nonzero ⇒ the loop is not using a group baseline where it claims to |
+
+**Why the cosine is A's primary metric, not `CV(grad_norm)`.** The two batch halves are independent
+samples of the same expected gradient, so their cosine measures estimator variance *directly*.
+`CV(grad_norm)` across steps conflates estimator noise with genuine trend — a gradient decaying
+smoothly from 10 to 2 scores high CV with zero step-to-step jitter, so a healthy trajectory would
+read as confirmation. `grad_norm_cv` and `grad_norm_cv_detrended` are both reported alongside so the
+difference between them is visible; the cosine is what the verdict rests on. It costs no extra
+backward passes.
+
+**D is arithmetic, not dynamics**, and is already asserted in `tests/test_advantage_spec.py`. Its
+purpose *in a run* is the consequence: reward flat while wall-clock and tokens accrue normally.
+
+**Two known weaknesses in these numbers, stated rather than hidden:**
+
+1. **A's 0.15 cosine gap is the softest threshold here.** B's follows from "a constant string pays",
+   C's from "≥2× is visibly padded", D's from arithmetic — A's is a judgement call with no prior for
+   this scale. Revisit once run 7's seeds give a band.
+2. **B assumes the policy learns the format at all.** `R_format` starts at 0.26 baseline compliance
+   and must climb past 0.9. If 200 steps is not enough, B fails for a reason unrelated to KL — a
+   *rig* problem wearing a null's clothes. **Pre-check: run B for 30 steps and confirm `R_format` is
+   climbing before committing the full run.**
+
+**Not yet expressed against the seed band**, which principle 2 requires — impossible until run 7's
+≥2 seeds exist. Tighten each to "outside run 7's seed band" once measured, and record that as a
+dated amendment here, the way the tie tolerance was.
+
 > ### Correction to ablation C — made 2026-07-27, before the first run
 >
 > The original prediction, *"divide-by-≈0 advantage spikes; loss instability,"* is **unreachable**.

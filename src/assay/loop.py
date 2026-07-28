@@ -31,8 +31,34 @@ class StepLog:
     proxy_reward: float
     true_reward: float
     policy_entropy: float
+
+    #: Unique completion *strings* across the whole batch, out of ``prompts_per_step * group_size``.
+    #: Ablation **B**'s sharpest signature: entropy collapse predicts this falls toward 1 while
+    #: proxy reward stays high — a conjunction only collapse produces, unlike "reward got worse",
+    #: which is equally consistent with dead groups, buried signal, or a broken rig.
+    distinct_completions: int
+
     kl_to_ref: float
     grad_norm: float
+
+    #: Cosine similarity between the gradients of the batch's two halves — a **direct** measure of
+    #: estimator variance, and ablation **A**'s primary signature.
+    #:
+    #: The two halves are independent samples of the same expected gradient, so ~1.0 means they
+    #: agree (low noise) and ~0 means they disagree (high noise). Unlike ``CV(grad_norm)`` measured
+    #: across steps, this carries no trend confound: a gradient that decays smoothly has high CV
+    #: with zero step-to-step noise.
+    #:
+    #: Costs no extra backward passes — every sample is still backwarded exactly once, accumulated
+    #: into two buffers rather than one, and summed for the actual update. The price is a second
+    #: gradient buffer, which is negligible under LoRA.
+    half_batch_grad_cosine: float
+
+    #: ``max |A|`` over the step's advantages. Ablation **C**'s *rig-broken* branch: the normalised
+    #: advantage is a z-score, so this can never exceed ``sqrt(G-1)`` = 2.646 at G=8. If it does,
+    #: the implementation is not computing a z-score and the run says nothing about the science.
+    max_abs_advantage: float
+
     group_pass_rate: float
     frac_degenerate_groups: float
     tokens: int

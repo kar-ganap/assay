@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -134,6 +135,54 @@ def gap_slope(
     return fit_slope([float(log.step) for log in window], [log.gap for log in window])
 
 
+def _coefficient_of_variation(values: Sequence[float]) -> float | None:
+    """``std/mean``. Scale-free on purpose.
+
+    Removing the baseline changes both the gradient's noisiness *and* its typical magnitude, so raw
+    standard deviation would confound them. Returns ``None`` when the mean is ~0 — a real state (a
+    dead run), not zero variability, and reporting a huge CV there would look like a spectacular
+    ablation-A confirmation.
+
+    **Measured across steps, this conflates estimator noise with genuine trend**: a gradient
+    decaying smoothly from 10 to 2 has high CV and zero step-to-step jitter. Use
+    ``_detrended_cv`` for the trend-free version, and ``half_batch_grad_cosine`` for the direct
+    measurement that needs no correction at all.
+    """
+    if len(values) < 2:
+        return None
+    mean = sum(values) / len(values)
+    if abs(mean) < 1e-12:
+        return None
+    variance = sum((v - mean) ** 2 for v in values) / len(values)
+    return math.sqrt(variance) / abs(mean)
+
+
+def _detrended_cv(steps: Sequence[float], values: Sequence[float]) -> float | None:
+    """Relative scatter about a linear fit: ``std(residuals) / |mean(values)|``.
+
+    Note the denominator is the mean of the *values*, not of the residuals — residuals have mean ~0
+    by construction, so dividing by them would be meaningless.
+
+    This is the trend-free counterpart to ``_coefficient_of_variation``: a perfectly smooth decay
+    scores ~0 here and high there, which is exactly the confound that would otherwise let a
+    legitimate trajectory masquerade as ablation-A noise.
+    """
+    if len(values) < 3:
+        return None
+    mean = sum(values) / len(values)
+    if abs(mean) < 1e-12:
+        return None
+    try:
+        slope = fit_slope(steps, values)
+    except ValueError:
+        return None
+    mean_x = sum(steps) / len(steps)
+    intercept = mean - slope * mean_x
+    residuals = [v - (slope * x + intercept) for x, v in zip(steps, values, strict=True)]
+    scatter = math.sqrt(sum(r**2 for r in residuals) / len(residuals))
+    return scatter / abs(mean)
+
+
 def summarize_run(cfg: LadderConfig, logs: Sequence[StepLog]) -> dict[str, Any]:
     """Derived metrics for ``results/<run_id>.json`` — what every figure regenerates from."""
     if not logs:
@@ -160,9 +209,26 @@ def summarize_run(cfg: LadderConfig, logs: Sequence[StepLog]) -> dict[str, Any]:
             if len(logs) >= 2
             else None
         ),
+        # Ablation B: collapse is the *conjunction* of falling diversity with sustained proxy
+        # reward. Either alone is consistent with the model merely getting worse.
         "entropy_first": first.policy_entropy,
         "entropy_last": last.policy_entropy,
+        "distinct_completions_first": first.distinct_completions,
+        "distinct_completions_last": last.distinct_completions,
+        # Ablation C's rig-broken branch. A z-score cannot exceed sqrt(G-1); if this does, the
+        # implementation is wrong and the run says nothing about the science.
+        "max_abs_advantage_observed": max(x.max_abs_advantage for x in logs),
+        # Ablation A, three ways. The cosine is primary — it measures estimator variance directly
+        # and carries no trend confound. The two CVs are reported alongside so the difference
+        # between raw and detrended shows whether a CV gap is noise or merely trajectory.
+        "half_batch_grad_cosine_mean": (
+            sum(x.half_batch_grad_cosine for x in logs) / len(logs)
+        ),
         "grad_norm_mean": sum(x.grad_norm for x in logs) / len(logs),
+        "grad_norm_cv": _coefficient_of_variation([x.grad_norm for x in logs]),
+        "grad_norm_cv_detrended": _detrended_cv(
+            [float(x.step) for x in logs], [x.grad_norm for x in logs]
+        ),
         "total_tokens": sum(x.tokens for x in logs),
         "wall_clock_s": sum(x.wall_clock_s for x in logs),
     }

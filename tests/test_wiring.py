@@ -79,14 +79,30 @@ def test_step_log_exposes_both_reward_legs() -> None:
         proxy_reward=0.8,
         true_reward=0.3,
         policy_entropy=1.0,
+        distinct_completions=64,
         kl_to_ref=0.0,
         grad_norm=1.0,
+        half_batch_grad_cosine=0.9,
+        max_abs_advantage=2.0,
         group_pass_rate=0.5,
         frac_degenerate_groups=0.0,
         tokens=100,
         wall_clock_s=1.0,
     )
     assert log.gap == pytest.approx(0.5)
+
+
+def test_step_log_carries_every_ablation_signature() -> None:
+    """Each ablation's pre-registered signature must be computable from what is logged.
+
+    Writing the signatures is what surfaced ``distinct_completions`` (B) and ``max_abs_advantage``
+    (C) as gaps — discovering them after the runs would mean re-running.
+    """
+    fields = set(loop.StepLog.__dataclass_fields__)
+    assert {"grad_norm", "half_batch_grad_cosine"} <= fields, "ablation A"
+    assert {"policy_entropy", "distinct_completions"} <= fields, "ablation B"
+    assert {"tokens", "max_abs_advantage"} <= fields, "ablation C"
+    assert {"frac_degenerate_groups", "grad_norm"} <= fields, "ablation D"
 
 
 def test_transfer_efficiency_records_pair_provenance() -> None:

@@ -18,14 +18,28 @@ from assay.crawl.config import LadderConfig
 from assay.loop import StepLog
 
 
-def _log(step: int, *, proxy: float, true: float, degenerate: float = 0.0) -> StepLog:
+def _log(
+    step: int,
+    *,
+    proxy: float,
+    true: float,
+    degenerate: float = 0.0,
+    entropy: float = 1.0,
+    distinct: int = 64,
+    max_adv: float = 1.0,
+    grad_norm: float = 1.0,
+    cosine: float = 0.9,
+) -> StepLog:
     return StepLog(
         step=step,
         proxy_reward=proxy,
         true_reward=true,
-        policy_entropy=1.0,
+        policy_entropy=entropy,
+        distinct_completions=distinct,
         kl_to_ref=0.0,
-        grad_norm=1.0,
+        grad_norm=grad_norm,
+        half_batch_grad_cosine=cosine,
+        max_abs_advantage=max_adv,
         group_pass_rate=0.5,
         frac_degenerate_groups=degenerate,
         tokens=100,
@@ -86,6 +100,53 @@ def test_fit_slope_rejects_degenerate_input() -> None:
         runlog.fit_slope([1.0], [1.0])
     with pytest.raises(ValueError):
         runlog.fit_slope([2.0, 2.0], [1.0, 3.0])
+
+
+# --------------------------------------------------------------------------------------
+# Ablation A's metrics — noisiness must not be confounded with magnitude or with trend
+# --------------------------------------------------------------------------------------
+
+
+def test_cv_is_invariant_to_scale() -> None:
+    """A gradient that is 10x larger is not 10x noisier. Raw std would say it is."""
+    small = [10.0, 12.0, 8.0, 11.0, 9.0]
+    large = [10 * v for v in small]
+    assert runlog._coefficient_of_variation(small) == pytest.approx(
+        runlog._coefficient_of_variation(large)
+    )
+
+
+def test_cv_is_none_when_the_gradient_vanished() -> None:
+    """A dead run has no meaningful relative variability; a huge CV would read as confirmation."""
+    assert runlog._coefficient_of_variation([0.0, 0.0, 0.0]) is None
+
+
+def test_detrending_separates_trajectory_from_noise() -> None:
+    """The confound: a smoothly decaying gradient has high raw CV and *zero* step-to-step jitter.
+
+    Without detrending, a legitimate trajectory masquerades as ablation-A noise.
+    """
+    steps = [float(t) for t in range(50, 201)]
+    smooth_decay = [10.0 - 0.04 * t for t in steps]  # perfectly linear, no noise at all
+
+    assert runlog._coefficient_of_variation(smooth_decay) > 0.2, "raw CV sees the trend as spread"
+    assert runlog._detrended_cv(steps, smooth_decay) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_detrended_cv_still_sees_real_jitter() -> None:
+    """Detrending must not launder away the thing ablation A is actually looking for."""
+    steps = [float(t) for t in range(50, 201)]
+    jittery = [10.0 + (1.0 if t % 2 else -1.0) for t in steps]  # flat trend, real scatter
+    assert runlog._detrended_cv(steps, jittery) == pytest.approx(0.1, abs=0.01)
+
+
+def test_summary_reports_all_three_ablation_a_metrics() -> None:
+    """Cosine is primary; the two CVs sit beside it so raw-vs-detrended is visible."""
+    logs = [_log(t, proxy=0.5, true=0.5, grad_norm=10.0 - 0.04 * t, cosine=0.3) for t in range(201)]
+    summary = runlog.summarize_run(LadderConfig(run_id="run1"), logs)
+    assert summary["half_batch_grad_cosine_mean"] == pytest.approx(0.3)
+    assert summary["grad_norm_cv"] > summary["grad_norm_cv_detrended"]
+    assert summary["grad_norm_cv_detrended"] == pytest.approx(0.0, abs=1e-9)
 
 
 # --------------------------------------------------------------------------------------

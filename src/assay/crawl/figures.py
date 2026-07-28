@@ -31,7 +31,7 @@ from assay.crawl.runlog import read_step_logs
 PANELS = [
     ("proxy_reward", "reward (proxy)", "ladder — run 7 vs rungs 1/2/3"),
     ("grad_norm", "gradient norm", "ablation A — variance without a baseline"),
-    ("policy_entropy", "policy entropy", "ablation B — collapse without KL"),
+    ("distinct_completions", "distinct completions / batch", "ablation B — collapse without KL"),
     ("frac_degenerate_groups", "fraction of dead groups", "ablation D — wasted steps"),
 ]
 
