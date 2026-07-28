@@ -254,6 +254,27 @@ def test_only_non_binary_rewards_have_a_meaningful_gap() -> None:
     assert LadderConfig(run_id="x", reward="tiebreak").has_distinct_true_reward
 
 
+def test_single_epoch_is_pinned() -> None:
+    """The default is the pinned design, so it lands in every manifest without being remembered."""
+    assert LadderConfig(run_id="x").epochs_per_batch == 1
+
+
+def test_clipping_cannot_bind_under_a_single_epoch() -> None:
+    """A config that *claims* to clip but cannot must say so.
+
+    With one gradient step per batch the importance ratio is identically 1, so clip(1, ...) == 1.
+    This is why rung 4 is cut: under the pinned design it would be bit-identical to rung 3.
+    """
+    inert = LadderConfig(run_id="x", clip_epsilon=0.2, epochs_per_batch=1)
+    assert not inert.clipping_is_active
+
+    active = LadderConfig(run_id="x", clip_epsilon=0.2, epochs_per_batch=4)
+    assert active.clipping_is_active
+
+    # Epsilon absent: nothing to bind regardless of epochs.
+    assert not LadderConfig(run_id="x", clip_epsilon=None, epochs_per_batch=4).clipping_is_active
+
+
 def test_rollouts_per_step() -> None:
     assert LadderConfig(run_id="x", prompts_per_step=16, group_size=8).rollouts_per_step == 128
 

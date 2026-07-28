@@ -22,6 +22,19 @@ Shape of the work, per step:
    variable is ``d(gap)/d(step)`` over steps 50-200, so a run without per-step logs is unusable and
    cannot be repaired after the fact.
 
+**Single epoch per batch, pinned 2026-07-28** (``cfg.epochs_per_batch == 1``). Take one gradient
+step, discard the rollouts, resample. Consequences, so they are not rediscovered later:
+
+- The importance ratio is **identically 1**, because the rollouts always come from the current
+  policy. No importance weighting, no ratio logging, and ``cfg.clip_epsilon`` cannot bind — see
+  ``LadderConfig.clipping_is_active``.
+- Rung 4 (clipping) is therefore **bit-identical to rung 3** and its cut costs nothing.
+- The cost is sample efficiency: roughly 3x fewer gradient steps per dollar than 4 epochs would
+  give at this task's short completions. Paid deliberately — staleness is a second uncontrolled
+  source of gradient noise, and ablation A is an attempt to attribute gradient noise to the
+  *baseline*. If wall-clock later forces the issue, 2 epochs is the sane middle, but then run 4
+  must come back and the ratio distribution must be logged.
+
 Two things worth logging carefully because they are the phase's actual findings:
 
 - ``frac_degenerate_groups`` — ablation **D**'s direct observable. The calibration screen measured

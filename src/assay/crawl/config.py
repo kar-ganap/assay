@@ -58,6 +58,20 @@ class LadderConfig:
     baseline: Baseline = "group_loo"
     normalize_by_std: bool = False
     kl_coef: float = 0.0
+
+    #: Gradient steps taken per batch of rollouts. **Pinned to 1 on 2026-07-28.**
+    #:
+    #: With one epoch the rollouts are always drawn from the *current* policy, so the importance
+    #: ratio is identically 1 and no correction is needed. Reusing rollouts (>1) would amortise
+    #: generation — roughly 3x the gradient steps per dollar at this task's ~7-15 token completions
+    #: — but it introduces off-policy staleness, which is a **second, uncontrolled source of
+    #: gradient noise** in a phase whose deliverable is attributing gradient noise to the *baseline*
+    #: (ablation A). The plan's risk section: staleness "will look like an unrelated instability".
+    epochs_per_batch: int = 1
+
+    #: PPO-style ratio clipping. **Inert while ``epochs_per_batch == 1``** — the ratio is exactly 1,
+    #: so ``clip(1, 1-eps, 1+eps) == 1``. Kept as a switch rather than deleted so the design space
+    #: stays visible, but see ``clipping_is_active``: setting this alone does nothing.
     clip_epsilon: float | None = None
 
     # --- the proxy/true split ----------------------------------------------------------
@@ -83,6 +97,17 @@ class LadderConfig:
     top_p: float = 1.0
 
     seed: int = 0
+
+    @property
+    def clipping_is_active(self) -> bool:
+        """Whether ``clip_epsilon`` can actually bind.
+
+        Guards against a config that *claims* to clip but cannot: with a single epoch the
+        importance ratio is identically 1, so clipping is a no-op no matter what epsilon says.
+        Rung 4 of the ladder is cut for exactly this reason — under the pinned single-epoch design
+        it would be bit-identical to rung 3.
+        """
+        return self.clip_epsilon is not None and self.epochs_per_batch > 1
 
     @property
     def has_distinct_true_reward(self) -> bool:

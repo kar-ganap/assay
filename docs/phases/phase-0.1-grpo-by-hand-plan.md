@@ -389,10 +389,23 @@ transcription and forfeits the intuition the phase exists to build.
   *What this costs:* the marginal effect of clipping, KL and advantage-normalisation individually —
   3 → 7 becomes one jump combining all three, so a misbehaving run 7 has three suspects and no rungs
   to isolate them. Partially covered: ablation **B** isolates KL, ablation **C** isolates
-  advantage-normalisation. **Clipping is the uncovered one** — but note it is a *no-op under a
-  single-epoch loop*, where the importance ratio is identically 1. If the loop takes one gradient
-  step per batch of rollouts, cutting run 4 costs nothing at all; if it reuses rollouts across
-  epochs, run 4 should come back. Decide when the loop's epoch structure is fixed.
+  advantage-normalisation.
+  → **RESOLVED 2026-07-28: single epoch per batch pinned, so the cut costs nothing at all.** With
+  one gradient step per batch the importance ratio is identically 1, so `clip_epsilon` cannot bind
+  and rung 4 would be **bit-identical to rung 3**. There is no marginal effect of clipping to lose.
+  Only KL and advantage-normalisation are bundled into the 3 → 7 jump, and B and C isolate exactly
+  those two.
+
+- **Epoch structure — pinned 2026-07-28: `epochs_per_batch = 1`.** Multi-epoch would buy roughly 3×
+  the gradient steps per dollar (generation is ~88% of per-step cost even at this task's short
+  7–15 token completions). Declined because **off-policy staleness is a second, uncontrolled source
+  of gradient noise**, and ablation A is an attempt to attribute gradient noise to the *baseline*.
+  This plan's own risk list already flags staleness as something that "will look like an unrelated
+  instability" — deliberately admitting it while measuring A would be self-inflicted.
+  *If wall-clock later forces the issue:* 2 epochs is the sane middle (ratios stay near 1, clipping
+  rarely binds), but then **run 4 must come back**, the ratio distribution must be logged, and run 7
+  stops being plain GRPO and becomes GRPO + PPO-clipping. Record any such change as a dated entry
+  here before running.
 - **Silent off-policy staleness** from reusing rollouts across epochs — will look like an unrelated
   instability. Log the ratio distribution so it is visible rather than mysterious.
 
