@@ -301,3 +301,32 @@ def test_a_fully_masked_batch_returns_zeros_not_a_crash() -> None:
     assert completion_logprobs(logits, ids, empty).tolist() == [0.0, 0.0, 0.0]
     assert sequence_kl(logits, logits.clone(), ids, empty).tolist() == [0.0, 0.0, 0.0]
     assert entropy_over_completions(logits, empty) == 0.0
+
+
+def test_sliced_views_give_the_same_answer_as_full_ones() -> None:
+    """HFPolicy passes pre-sliced logits/ids/mask to avoid a 128k-vocab tensor over the whole
+    sequence. That is only safe if slicing is transparent to these functions — they re-derive the
+    span from the mask they are given, so a consistent slice must be a no-op on the result.
+    """
+    torch.manual_seed(0)
+    batch, seq, prompt_len = 4, 30, 22
+    logits = torch.randn(batch, seq, VOCAB)
+    ids = torch.randint(0, VOCAB, (batch, seq))
+    mask = build_completion_mask(prompt_len, [5, 2, 8, 1], seq)
+
+    full = completion_logprobs(logits, ids, mask)
+
+    lo, hi = prompt_len - 1, seq
+    sliced = completion_logprobs(logits[:, lo:hi], ids[:, lo:hi], mask[:, lo:hi])
+    assert torch.allclose(full, sliced, atol=1e-5)
+
+    # ...and the same for KL and entropy, which take the identical treatment.
+    reference = torch.randn(batch, seq, VOCAB)
+    assert torch.allclose(
+        sequence_kl(logits, reference, ids, mask),
+        sequence_kl(logits[:, lo:hi], reference[:, lo:hi], ids[:, lo:hi], mask[:, lo:hi]),
+        atol=1e-4,
+    )
+    assert entropy_over_completions(logits, mask) == pytest.approx(
+        entropy_over_completions(logits[:, lo:hi], mask[:, lo:hi]), abs=1e-5
+    )

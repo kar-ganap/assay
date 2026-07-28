@@ -179,14 +179,38 @@ class HFPolicy:
         mask = build_completion_mask(prompt_len, lengths, total)
         return ids.to(self.model.device), mask.to(self.model.device), prompt_len
 
-    def _logits(self, ids: Any, *, adapter: bool) -> Any:
-        """Forward pass. ``adapter=False`` disables LoRA, which *is* the reference policy."""
+    def _trunk_and_head(self) -> tuple[Any, Any]:
+        """The transformer body and the LM head, separately.
+
+        LoRA lives inside the body's attention modules, so calling the body directly still applies
+        the adapter — and disabling the adapter still yields the reference policy.
+        """
+        base = self.model.get_base_model()
+        return base.model, base.lm_head
+
+    def _logits(self, ids: Any, span: tuple[int, int], *, adapter: bool) -> Any:
+        """Logits over ``[lo, hi)`` only — **never over the whole sequence**.
+
+        This is the difference between a run that fits and one that does not. The head projects to
+        a 128k vocabulary, so full-sequence logits are ``[batch, seq, 128256]``. One completion
+        hitting ``max_new_tokens`` stretches the padded sequence to ~336 positions, and at 128
+        rollouts that single tensor is **~11 GB in bf16** — while only ~10 of those positions are
+        ever scored.
+
+        Hidden states are cheap by comparison (``2048`` wide, not ``128256``), so the body runs over
+        the full sequence — it must, for causal attention — and only the completion span is
+        projected through the head. Roughly a 30x reduction on the tensor that actually hurts.
+        """
         import torch
 
+        trunk, head = self._trunk_and_head()
+        lo, hi = span
         if adapter:
-            return self.model(input_ids=ids).logits
+            hidden = trunk(input_ids=ids).last_hidden_state
+            return head(hidden[:, lo:hi, :])
         with torch.no_grad(), self.model.disable_adapter():
-            return self.model(input_ids=ids).logits
+            hidden = trunk(input_ids=ids).last_hidden_state
+            return head(hidden[:, lo:hi, :])
 
     def logprobs(self, rollouts: Sequence[Rollout]) -> Any:
         """The step's **only** grad-carrying forward. Its logits are cached for the other readouts.
@@ -199,31 +223,45 @@ class HFPolicy:
         """
         import torch
 
-        ids, mask, _ = self._batch(rollouts)
-        logits = self._logits(ids, adapter=True)
-        self._cache = (id(rollouts), ids, mask, logits)
-        with torch.no_grad():
-            self._entropy = entropy_over_completions(logits, mask)
-        return completion_logprobs(logits, ids, mask)
+        from assay.crawl.logprob import completion_span
 
-    def _cached_for(self, rollouts: Sequence[Rollout]) -> tuple[Any, Any, Any]:
+        ids, mask, _ = self._batch(rollouts)
+        span = completion_span(mask)
+        if span is None:
+            raise RuntimeError("no completion tokens in the batch — nothing to score")
+
+        # One position earlier than the completion starts: scoring position p needs the logits at
+        # p-1. Everything downstream then works on consistently sliced views, so the logprob
+        # helpers need no notion of an offset — they re-derive the span from the sliced mask.
+        lo, hi = max(0, span[0] - 1), span[1]
+        window = (slice(None), slice(lo, hi))
+        ids_w, mask_w = ids[window], mask[window]
+
+        logits = self._logits(ids, (lo, hi), adapter=True)
+        self._cache = (id(rollouts), ids, ids_w, mask_w, (lo, hi), logits)
+        with torch.no_grad():
+            self._entropy = entropy_over_completions(logits, mask_w)
+        return completion_logprobs(logits, ids_w, mask_w)
+
+    def _cached_for(self, rollouts: Sequence[Rollout]) -> tuple[Any, Any, Any, Any, Any]:
         cache = getattr(self, "_cache", None)
         if cache is None or cache[0] != id(rollouts):
             raise RuntimeError(
                 "logprobs() must be called before entropy()/kl_to_reference() on the same "
                 "rollouts — the forward pass is shared, not recomputed"
             )
-        return cache[1], cache[2], cache[3]
+        return cache[1], cache[2], cache[3], cache[4], cache[5]
 
     def entropy(self, rollouts: Sequence[Rollout]) -> float:
         self._cached_for(rollouts)  # fail loudly rather than silently returning a stale value
         return float(self._entropy)
 
     def kl_to_reference(self, rollouts: Sequence[Rollout]) -> Any:
-        ids, mask, policy_logits = self._cached_for(rollouts)
+        ids_full, ids_w, mask_w, span, policy_logits = self._cached_for(rollouts)
         # Only the reference needs a fresh pass, and it runs under no_grad — the adapter disabled
         # IS the frozen base policy, so no second model is loaded.
-        return sequence_kl(policy_logits, self._logits(ids, adapter=False), ids, mask)
+        reference = self._logits(ids_full, span, adapter=False)
+        return sequence_kl(policy_logits, reference, ids_w, mask_w)
 
     # -- the update ---------------------------------------------------------------------
 
