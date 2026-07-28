@@ -137,7 +137,9 @@ def sequence_kl(
     return (per_token_kl * mask.to(per_token_kl.dtype)).sum(dim=-1)
 
 
-def entropy_over_completions(logits: Any, completion_mask: Any) -> float:
+def entropy_over_completions(
+    logits: Any, completion_mask: Any, *, entropy_chunk: int = 8
+) -> float:
     """Mean per-token entropy over completion positions only.
 
     Ablation **B**'s slower-moving diversity signal. Prompt positions are excluded because the
@@ -155,6 +157,15 @@ def entropy_over_completions(logits: Any, completion_mask: Any) -> float:
     if mask.numel() == 0 or float(mask.sum()) == 0.0:
         return 0.0
 
-    log_probs = torch.log_softmax(sliced, dim=-1)
-    per_position = -(log_probs.exp() * log_probs).sum(dim=-1)
-    return float(((per_position * mask).sum() / mask.sum()).item())
+    # Chunked over the batch. Entropy needs three full [chunk, span, vocab] tensors at once
+    # (log_softmax, its exp, their product) and at a 128k vocabulary that is ~2 GB for the whole
+    # batch in one go. It runs under no_grad, so each chunk is freed immediately — this is purely
+    # a peak-memory decision and changes nothing about the value.
+    total, count = 0.0, 0.0
+    for lo_row in range(0, sliced.shape[0], entropy_chunk):
+        rows = slice(lo_row, lo_row + entropy_chunk)
+        log_probs = torch.log_softmax(sliced[rows], dim=-1)
+        per_position = -(log_probs.exp() * log_probs).sum(dim=-1)
+        total += float((per_position * mask[rows]).sum())
+        count += float(mask[rows].sum())
+    return total / count if count else 0.0

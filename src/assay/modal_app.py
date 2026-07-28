@@ -310,7 +310,10 @@ if modal is not None:
             seed=cfg.seed,
         )
         logs = train(cfg, run_dir, policy=policy)
+        peak_gb = float(torch.cuda.max_memory_allocated()) / 1e9
+        print(f"peak CUDA memory: {peak_gb:.2f} GB")
         return {
+            "peak_memory_gb": peak_gb,
             "summary": runlog.summarize_run(cfg, logs),
             "steps": [dataclasses.asdict(log) for log in logs],
         }

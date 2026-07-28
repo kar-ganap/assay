@@ -45,7 +45,7 @@ class HFPolicy:
         top_p: float,
         seed: int,
         lora_rank: int = 16,
-        generate_batch: int = 16,
+        generate_batch: int = 4,
     ) -> None:
         import torch
         from peft import LoraConfig, get_peft_model
@@ -84,6 +84,9 @@ class HFPolicy:
         self._max_new_tokens = max_new_tokens
         self._temperature = temperature
         self._top_p = top_p
+        # Prompts per generate() call. With k=8 this is 4*8 = 32 sequences in flight rather than
+        # 128 — same total work, a quarter of the generation-time peak. Purely a memory knob; it
+        # cannot affect results because each prompt's group is generated independently.
         self._generate_batch = generate_batch
         self._prompt_len = 0  # set by generate(), consumed by logprobs()
 

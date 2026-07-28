@@ -246,7 +246,10 @@ def test_task_defaults_are_the_pinned_calibration_result() -> None:
     cfg = LadderConfig(run_id="x")
     assert (cfg.family, cfg.setting) == ("arithmetic", "add-2digit")
     assert cfg.group_size == 8, "k = G is what makes the screen's dead-group rate transfer"
-    assert (cfg.temperature, cfg.top_p, cfg.max_new_tokens) == (1.0, 1.0, 256)
+    assert (cfg.temperature, cfg.top_p) == (1.0, 1.0)
+    # 64, not the screen's 256: no add-2digit completion in 400 samples exceeded 28 tokens, so the
+    # two are observationally identical here while 256 pads every scored sequence for nothing.
+    assert cfg.max_new_tokens == 64
 
 
 def test_only_non_binary_rewards_have_a_meaningful_gap() -> None:
