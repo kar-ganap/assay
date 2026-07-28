@@ -67,6 +67,16 @@ def _family_for(cfg: LadderConfig):  # type: ignore[no-untyped-def]
     raise ValueError(f"unknown family {cfg.family!r}")
 
 
+def _scalar(value: Any) -> float:
+    """Read a loss term as a plain float without dragging autograd along.
+
+    These terms carry ``requires_grad``; ``float(t)`` on one works but warns and forces a device
+    sync. Detaching first says explicitly that this is a *readout*, not part of the graph.
+    """
+    detach = getattr(value, "detach", None)
+    return float(detach() if detach is not None else value)
+
+
 def _prompt_seed(cfg: LadderConfig, step: int) -> int:
     """Fresh prompts each step, deterministic given the run seed.
 
@@ -217,7 +227,7 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
             # nothing" is indistinguishable from "the policy never drifted anyway".
             measure_only = not cfg.kl_coef and step % max(1, cfg.kl_measure_every) == 0
             if cfg.kl_coef or measure_only:
-                pg_magnitude = sum(abs(float(t)) for g in losses_by_group for t in g)
+                pg_magnitude = sum(abs(_scalar(t)) for g in losses_by_group for t in g)
                 kl_per_rollout = policy.kl_to_reference(flat)
                 index = 0
                 for group_losses in losses_by_group if cfg.kl_coef else []:
@@ -230,9 +240,9 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
                             + cfg.kl_coef * kl_per_rollout[index] / divisors[index]
                         )
                         index += 1
-                kl_mean = float(sum(float(k) for k in kl_per_rollout) / len(flat))
+                kl_mean = float(sum(_scalar(k) for k in kl_per_rollout) / len(flat))
                 kl_magnitude = sum(
-                    abs(cfg.kl_coef * float(k) / d)
+                    abs(cfg.kl_coef * _scalar(k) / d)
                     for k, d in zip(kl_per_rollout, divisors, strict=True)
                 )
                 if pg_magnitude + kl_magnitude > 0:

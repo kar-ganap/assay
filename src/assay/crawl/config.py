@@ -116,7 +116,17 @@ class LadderConfig:
     learning_rate: float = 1e-5
 
     # --- sampler (must match the screen, or its base rate does not transfer) ------------
-    max_new_tokens: int = 256
+    #: The calibration screen sampled at 256, but **no ``add-2digit`` completion in 400 samples
+    #: exceeded 28 tokens** (median 7, p99 23). So 64 is not a compromise — it is removing headroom
+    #: that was never used, and the two settings are observationally identical on this task.
+    #:
+    #: It matters because unused headroom is not free: it inflates the generation KV cache 4x and
+    #: pads every scored sequence to the longest completion in the batch, which is the tensor that
+    #: gets projected to a 128k vocabulary.
+    #:
+    #: **Re-check this if the task changes**, or if a run starts producing long completions —
+    #: ablation C predicts exactly that, so watch ``median_completion_tokens`` against this cap.
+    max_new_tokens: int = 64
     temperature: float = 1.0
     top_p: float = 1.0
 

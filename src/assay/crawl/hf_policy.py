@@ -72,6 +72,9 @@ class HFPolicy:
         # Recompute activations during backward instead of storing them. A 1B model over
         # [128 rollouts, ~50 positions] retains roughly 7-8 GB of activations across 16 layers
         # without this; the trade is ~30% more compute for an order of magnitude less memory.
+        # With a frozen base and only LoRA trainable, the inputs to each checkpointed segment do
+        # not require grad, and checkpointing silently saves nothing. This makes them require it.
+        self.model.enable_input_require_grads()
         self.model.gradient_checkpointing_enable()
         self.model.config.use_cache = False  # incompatible with checkpointing, and unused here
 
