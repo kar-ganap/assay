@@ -284,13 +284,23 @@ if modal is not None:
 
         from assay.crawl import runlog
         from assay.crawl.config import LadderConfig
+        from assay.crawl.hf_policy import HFPolicy
         from assay.crawl.loop import train
 
         cfg = LadderConfig(**config)
         run_dir = Path("/tmp/run") / cfg.run_id
         runlog.write_manifest({**provenance, "config": config}, run_dir)
 
-        logs = train(cfg, run_dir)
+        policy = HFPolicy(
+            MODEL_ID,
+            revision=MODEL_REVISION,
+            learning_rate=cfg.learning_rate,
+            max_new_tokens=cfg.max_new_tokens,
+            temperature=cfg.temperature,
+            top_p=cfg.top_p,
+            seed=cfg.seed,
+        )
+        logs = train(cfg, run_dir, policy=policy)
         return {
             "summary": runlog.summarize_run(cfg, logs),
             "steps": [dataclasses.asdict(log) for log in logs],
