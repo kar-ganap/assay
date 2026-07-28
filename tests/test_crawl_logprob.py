@@ -275,3 +275,29 @@ def test_mismatched_reference_shape_raises() -> None:
             torch.zeros(1, 5, dtype=torch.long),
             torch.zeros(1, 5),
         )
+
+
+def test_only_the_completion_span_is_softmaxed() -> None:
+    """Memory, not correctness — but at a 128k vocabulary it decides whether the run exists.
+
+    A [128 rollouts, 50 positions, 128256 vocab] tensor is gigabytes, and ~80% of those positions
+    are prompt whose distribution nothing needs. The model must attend over them; we must not
+    normalise over them. This asserts the slice is actually taken.
+    """
+    from assay.crawl.logprob import completion_span
+
+    mask = build_completion_mask(prompt_len=40, completion_lens=[8, 3], total_len=50)
+    assert completion_span(mask) == (40, 48), "prompt columns must be excluded"
+
+    # 40 of 50 positions dropped: the full-vocab work shrinks by ~5x.
+    start, end = completion_span(mask)
+    assert (end - start) / 50 < 0.25
+
+
+def test_a_fully_masked_batch_returns_zeros_not_a_crash() -> None:
+    logits = _uniform_logits(3, 6)
+    ids = torch.randint(0, VOCAB, (3, 6))
+    empty = torch.zeros(3, 6)
+    assert completion_logprobs(logits, ids, empty).tolist() == [0.0, 0.0, 0.0]
+    assert sequence_kl(logits, logits.clone(), ids, empty).tolist() == [0.0, 0.0, 0.0]
+    assert entropy_over_completions(logits, empty) == 0.0

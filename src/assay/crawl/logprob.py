@@ -63,25 +63,49 @@ def completion_logprobs(logits: Any, token_ids: Any, completion_mask: Any) -> An
     if completion_mask.shape != token_ids.shape:
         raise ValueError("completion_mask must match token_ids")
 
-    shifted_logits = logits[:, :-1, :]
-    shifted_ids = token_ids[:, 1:]
-    shifted_mask = completion_mask[:, 1:].to(shifted_logits.dtype)
-
-    token_logprobs = (
-        torch.log_softmax(shifted_logits, dim=-1)
-        .gather(-1, shifted_ids.unsqueeze(-1))
-        .squeeze(-1)
-    )
-    return (token_logprobs * shifted_mask).sum(dim=-1)
+    token_logprobs, mask = _token_logprobs(logits, token_ids, completion_mask)
+    if token_logprobs.shape[-1] == 0:
+        return torch.zeros(logits.shape[0], device=logits.device, dtype=token_logprobs.dtype)
+    return (token_logprobs * mask.to(token_logprobs.dtype)).sum(dim=-1)
 
 
-def _token_logprobs(logits: Any, token_ids: Any) -> Any:
-    """Per-token log-probs of the sampled tokens, already shifted. Shape ``[batch, seq-1]``."""
-    return (
-        torch.log_softmax(logits[:, :-1, :], dim=-1)
-        .gather(-1, token_ids[:, 1:].unsqueeze(-1))
-        .squeeze(-1)
-    )
+def completion_span(completion_mask: Any) -> tuple[int, int] | None:
+    """``[start, end)`` column range that any row marks, or ``None`` if nothing is marked.
+
+    Used to slice away the prompt before any full-vocabulary operation. With a 128k vocabulary a
+    ``[batch, seq, vocab]`` tensor is gigabytes, and typically ~80% of those positions are prompt
+    that we never score — the model must *attend* over them, but nothing needs their distribution.
+    """
+    columns = completion_mask.sum(dim=0).nonzero().flatten()
+    if columns.numel() == 0:
+        return None
+    return int(columns[0]), int(columns[-1]) + 1
+
+
+def _token_logprobs(logits: Any, token_ids: Any, completion_mask: Any) -> tuple[Any, Any]:
+    """Per-token log-probs over the completion span only, plus the matching mask slice.
+
+    Two memory decisions, both forced by the 128k vocabulary:
+
+    1. **Slice to the completion span first.** Scoring position ``p`` needs the logits at ``p-1``,
+       so the slice starts one position early.
+    2. **``gather`` minus ``logsumexp`` rather than ``log_softmax``**, since
+       ``log_softmax(x)[i] == x[i] - logsumexp(x)``. This avoids materialising a second full
+       ``[batch, span, vocab]`` tensor that would immediately be discarded by the gather.
+    """
+    span = completion_span(completion_mask)
+    if span is None:
+        empty = logits[:, :0, 0]
+        return empty, empty
+
+    start, end = span
+    lo = max(0, start - 1)
+    sliced = logits[:, lo : end - 1, :]
+    ids = token_ids[:, lo + 1 : end]
+    mask = completion_mask[:, lo + 1 : end]
+
+    selected = sliced.gather(-1, ids.unsqueeze(-1)).squeeze(-1)
+    return selected - torch.logsumexp(sliced, dim=-1), mask
 
 
 def sequence_kl(
@@ -103,11 +127,14 @@ def sequence_kl(
     if policy_logits.shape != reference_logits.shape:
         raise ValueError("policy and reference logits must have the same shape")
 
-    log_ratio = _token_logprobs(reference_logits, token_ids) - _token_logprobs(
-        policy_logits, token_ids
-    )
+    reference_lp, mask = _token_logprobs(reference_logits, token_ids, completion_mask)
+    policy_lp, _ = _token_logprobs(policy_logits, token_ids, completion_mask)
+    if policy_lp.shape[-1] == 0:
+        return torch.zeros(policy_logits.shape[0], device=policy_logits.device)
+
+    log_ratio = reference_lp - policy_lp
     per_token_kl = torch.exp(log_ratio) - log_ratio - 1.0
-    return (per_token_kl * completion_mask[:, 1:].to(per_token_kl.dtype)).sum(dim=-1)
+    return (per_token_kl * mask.to(per_token_kl.dtype)).sum(dim=-1)
 
 
 def entropy_over_completions(logits: Any, completion_mask: Any) -> float:
@@ -116,11 +143,18 @@ def entropy_over_completions(logits: Any, completion_mask: Any) -> float:
     Ablation **B**'s slower-moving diversity signal. Prompt positions are excluded because the
     policy's uncertainty there says nothing about what it chose to generate.
     """
-    shifted_logits = logits[:, :-1, :]
-    shifted_mask = completion_mask[:, 1:].to(shifted_logits.dtype)
-    log_probs = torch.log_softmax(shifted_logits, dim=-1)
-    per_position = -(log_probs.exp() * log_probs).sum(dim=-1)
-    total = shifted_mask.sum()
-    if float(total) == 0.0:
+    span = completion_span(completion_mask)
+    if span is None:
         return 0.0
-    return float(((per_position * shifted_mask).sum() / total).item())
+    start, end = span
+    lo = max(0, start - 1)
+    # Sliced to the completion span for the same reason as _token_logprobs: entropy over prompt
+    # positions is both irrelevant and, at a 128k vocabulary, the bulk of the memory.
+    sliced = logits[:, lo : end - 1, :]
+    mask = completion_mask[:, lo + 1 : end].to(sliced.dtype)
+    if mask.numel() == 0 or float(mask.sum()) == 0.0:
+        return 0.0
+
+    log_probs = torch.log_softmax(sliced, dim=-1)
+    per_position = -(log_probs.exp() * log_probs).sum(dim=-1)
+    return float(((per_position * mask).sum() / mask.sum()).item())

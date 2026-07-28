@@ -51,8 +51,10 @@ SWEEP_GPU = "L4"
 
 #: Phase 0.1's ladder runs. Inference-only fits on an L4, but training adds optimizer state,
 #: gradients and a frozen reference model for the KL term. A10G (24 GB) is the smallest tier with
-#: comfortable headroom for 1B + LoRA + bf16; raise to A100 if the reference copy does not fit.
-TRAIN_GPU = "A10G"
+#: headroom. A10G (24 GB) OOMed on the first real run: Llama-3.2 has a 128k vocabulary, so the
+#: logits tensor alone is ~1.6 GB and log_softmax over it doubled that. Slicing to the completion
+#: span cut ~5x of it, but A100-40GB is bought for margin rather than run against the ceiling.
+TRAIN_GPU = "A100-40GB"
 TRAIN_TIMEOUT_S = 60 * 120
 
 TIMEOUT_S = 60 * 90
@@ -75,9 +77,15 @@ RAW_PER_SETTING = 400
 
 
 def _image():  # type: ignore[no-untyped-def]
+    """One image for both the sweep and the ladder.
+
+    ``add_local_python_source`` must be the **last** step — Modal rejects any build step after a
+    local-file step, because local files are attached at container startup rather than baked in.
+    So every ``pip_install`` belongs here, not chained on at the call site.
+    """
     return (
         modal.Image.debian_slim(python_version="3.12")
-        .pip_install("torch", "transformers", "accelerate", "huggingface_hub")
+        .pip_install("torch", "transformers", "accelerate", "huggingface_hub", "peft")
         .add_local_python_source("assay")
     )
 
@@ -268,7 +276,7 @@ if modal is not None:
     @app.function(
         gpu=TRAIN_GPU,
         timeout=TRAIN_TIMEOUT_S,
-        image=_image().pip_install("peft"),
+        image=_image(),
         secrets=[modal.Secret.from_dict({"HF_TOKEN": _dotenv().get("HF_TOKEN", "")})],
     )
     def train_remote(config: dict, provenance: dict) -> dict:
