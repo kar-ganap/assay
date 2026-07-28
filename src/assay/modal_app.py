@@ -48,6 +48,12 @@ GPU = "H100"
 #: Phase 0.1's calibration sweep: ~9k short completions from a 1B model.
 SWEEP_GPU = "L4"
 
+#: Phase 0.1's ladder runs. Inference-only fits on an L4, but training adds optimizer state,
+#: gradients and a frozen reference model for the KL term. A10G (24 GB) is the smallest tier with
+#: comfortable headroom for 1B + LoRA + bf16; raise to A100 if the reference copy does not fit.
+TRAIN_GPU = "A10G"
+TRAIN_TIMEOUT_S = 60 * 120
+
 TIMEOUT_S = 60 * 90
 
 MODEL_ID = "meta-llama/Llama-3.2-1B-Instruct"
@@ -258,6 +264,38 @@ if modal is not None:
             },
         }
 
+    @app.function(
+        gpu=TRAIN_GPU,
+        timeout=TRAIN_TIMEOUT_S,
+        image=_image().pip_install("peft"),
+        secrets=[modal.Secret.from_dict({"HF_TOKEN": _dotenv().get("HF_TOKEN", "")})],
+    )
+    def train_remote(config: dict, provenance: dict) -> dict:
+        """Run one ladder configuration and return its per-step logs plus derived metrics.
+
+        The loop itself is ``assay.crawl.loop.train`` — **user-written** (``CLAUDE.md`` §7). This
+        function is only the remote wrapper: it rebuilds the config, writes the manifest before the
+        first step, hands off, and brings the logs home.
+
+        Raises ``NotImplementedError`` until the loop exists. That is the intended state; the wiring
+        is proven by the calibration sweep, which shares this image and secret path.
+        """
+        from pathlib import Path
+
+        from assay.crawl import runlog
+        from assay.crawl.config import LadderConfig
+        from assay.crawl.loop import train
+
+        cfg = LadderConfig(**config)
+        run_dir = Path("/tmp/run") / cfg.run_id
+        runlog.write_manifest({**provenance, "config": config}, run_dir)
+
+        logs = train(cfg, run_dir)
+        return {
+            "summary": runlog.summarize_run(cfg, logs),
+            "steps": [dataclasses.asdict(log) for log in logs],
+        }
+
     @app.local_entrypoint()
     def main(n_prompts: int = 64, k: int = 8, seed: int = 0, max_new_tokens: int = 256) -> None:
         """Coarse pass defaults to 64 prompts; rerun with ``--n-prompts 200`` for the fine pass.
@@ -301,6 +339,57 @@ if modal is not None:
         for e in result["selection"]["excluded"]:
             print(f"excluded {e['family']}/{e['setting']}: {e['reason']}")
         print(f"\nwrote {out}")
+
+    @app.local_entrypoint()
+    def ladder(runs: str = "", setting: str = "add-2digit") -> None:
+        """Launch ladder runs by id: ``modal run ... ::ladder --runs run1,run2,run3,run7``.
+
+        The ladder table lives in ``assay.crawl.ladder`` and is **the user's** (§7). This entry
+        point only dispatches it and lands the artefacts:
+
+            raw/<run_id>/steps.jsonl   per-step logs, gitignored, never modified
+            results/<run_id>.json      derived metrics; every figure regenerates from these
+        """
+        from assay.crawl import runlog
+        from assay.crawl.ladder import LADDER
+
+        wanted = [r.strip() for r in runs.split(",") if r.strip()] or sorted(LADDER)
+        provenance = {
+            "model_id": MODEL_ID,
+            "model_revision": MODEL_REVISION,
+            "prompt_template_sha256": tasks_fingerprint(),
+            "git_sha": _git_sha(),
+            "git_dirty": _git_dirty(),
+            "backend": f"modal-{TRAIN_GPU}",
+        }
+        if provenance["git_dirty"]:
+            print("WARNING: dirty tree — git_sha does not identify the code producing these runs.")
+
+        for run_id in wanted:
+            cfg = dataclasses.replace(LADDER[run_id], run_id=run_id, setting=setting)
+            print(f"\n=== {run_id} ({setting}) ===")
+            result = train_remote.remote(dataclasses.asdict(cfg), provenance)
+
+            run_dir = RAW_DIR / f"{run_id}-{setting}"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            with (run_dir / "steps.jsonl").open("w") as fh:
+                for step in result["steps"]:
+                    fh.write(json.dumps(step) + "\n")
+            runlog.write_manifest({**provenance, "config": dataclasses.asdict(cfg)}, run_dir)
+            runlog.write_results(result["summary"], RESULTS_DIR)
+
+            s = result["summary"]
+            print(
+                f"  gap_slope(50-200)={s['gap_slope_50_200']}  "
+                f"proxy {s['proxy_reward_first']:.3f}->{s['proxy_reward_last']:.3f}  "
+                f"degenerate {s['frac_degenerate_first']:.3f}->{s['frac_degenerate_last']:.3f}"
+            )
+
+
+def tasks_fingerprint() -> str:
+    from assay.crawl.tasks import template_fingerprint
+
+    return template_fingerprint()
 
 
 def build_app():  # type: ignore[no-untyped-def]

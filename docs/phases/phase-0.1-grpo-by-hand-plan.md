@@ -340,6 +340,16 @@ transcription and forfeits the intuition the phase exists to build.
 - **Scope creep into a good trainer.** This code is disposable. If it takes more than ~10 h, cut runs
   4–6 and keep 1, 2, 3, 7 plus all four ablations. **The ablations are the deliverable; the ladder is
   scaffolding for them.**
+  → **CUT TAKEN 2026-07-27, before any training run.** Ladder is **runs 1, 2, 3, 7**; all four
+  ablations retained. Taken up front on budget grounds rather than discovered mid-phase (§15 names
+  grid creep as the second most likely way this goes over). ~12 runs instead of ~15.
+  *What this costs:* the marginal effect of clipping, KL and advantage-normalisation individually —
+  3 → 7 becomes one jump combining all three, so a misbehaving run 7 has three suspects and no rungs
+  to isolate them. Partially covered: ablation **B** isolates KL, ablation **C** isolates
+  advantage-normalisation. **Clipping is the uncovered one** — but note it is a *no-op under a
+  single-epoch loop*, where the importance ratio is identically 1. If the loop takes one gradient
+  step per batch of rollouts, cutting run 4 costs nothing at all; if it reuses rollouts across
+  epochs, run 4 should come back. Decide when the loop's epoch structure is fixed.
 - **Silent off-policy staleness** from reusing rollouts across epochs — will look like an unrelated
   instability. Log the ratio distribution so it is visible rather than mysterious.
 

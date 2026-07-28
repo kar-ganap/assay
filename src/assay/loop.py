@@ -12,6 +12,7 @@ clean measurement (``docs/pre-registration.md`` §4 L3). A run without per-step 
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -59,8 +60,14 @@ class RunManifest:
 
 
 def write_manifest(manifest: RunManifest, run_dir: Path) -> None:
-    """Serialise the manifest before the first step. Scaffolding — Claude may implement."""
-    raise NotImplementedError("Phase 0.1 — plumbing")
+    """Serialise the manifest before the first step, so a crashed run is still identifiable.
+
+    Phase 0.1 uses ``assay.crawl.runlog.manifest_for``, whose config shape is the toy ladder rather
+    than the ``bisect`` grader factorial. This entry point is for Walk onward.
+    """
+    from assay.crawl.runlog import write_manifest as _write
+
+    _write(dataclasses.asdict(manifest), run_dir)
 
 
 def train(config: ExperimentConfig, run_dir: Path) -> list[StepLog]:

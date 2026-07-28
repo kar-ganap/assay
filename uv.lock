@@ -270,6 +270,7 @@ api = [
     { name = "python-dotenv" },
 ]
 dev = [
+    { name = "matplotlib" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "ruff" },
@@ -296,6 +297,7 @@ requires-dist = [
     { name = "accelerate", marker = "extra == 'train'" },
     { name = "anthropic", marker = "extra == 'api'", specifier = ">=0.40" },
     { name = "datasets", marker = "extra == 'train'" },
+    { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.8" },
     { name = "modal", marker = "extra == 'modal'", specifier = ">=0.63" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "numpy", specifier = ">=1.24" },
