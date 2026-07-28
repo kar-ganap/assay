@@ -76,6 +76,11 @@ class Policy(Protocol):
         **This costs no extra backward passes** — every sample is still backwarded exactly once,
         accumulated into two buffers rather than one, and summed for the actual update.
 
+        **Contract: the caller scales each half by the FULL rollout count**, so ``loss_a + loss_b``
+        is already exactly the full-batch mean. Implementations must therefore *not* divide the
+        accumulated gradient — halving would be correct only for equally-sized halves, which fails
+        whenever the group count is odd.
+
         **The caller must split by GROUP, never by rollout.** Advantages inside a group sum to
         exactly zero, so any within-group split hands the two halves complementary pieces of one
         contrast rather than independent replicates — their common-mode components end up
@@ -111,6 +116,8 @@ class ToyPolicy:
         lr: float = 0.1,
         min_tokens: int = 3,
         max_tokens: int = 9,
+        reward_from_tokens: bool = False,
+        signal_token: int = 0,
     ) -> None:
         import torch
 
@@ -126,6 +133,13 @@ class ToyPolicy:
         self._max_tokens = max_tokens
         self._call = 0
 
+        # When True, correctness depends on the *sampled tokens* (does ``signal_token`` appear?)
+        # instead of a coin flip. Without this the reward is independent of the tokens, so
+        # E[A * grad log pi] = E[A] * E[grad log pi] = 0 — the true gradient is exactly zero and
+        # there is no signal-to-noise ratio to measure. Required for any local check of ablation A.
+        self._reward_from_tokens = reward_from_tokens
+        self._signal_token = signal_token
+
     def generate(self, prompts: Sequence[Prompt], *, k: int) -> list[list[Rollout]]:
         import random
 
@@ -135,20 +149,42 @@ class ToyPolicy:
             rng = random.Random(f"{self._seed}:{self._call}:{prompt.prompt_id}")
             group = []
             for _ in range(k):
-                draw = rng.random()
-                if draw < self._p_correct:
-                    text = f"<answer>{prompt.answer}</answer>"
-                elif draw < self._p_correct + self._p_parse_fail:
-                    text = "not sure"
-                else:
-                    text = f"<answer>{int(prompt.answer) + rng.choice([-2, -1, 1, 2])}</answer>"
                 # Varying lengths on purpose: a mask bug that ignores length is invisible when
                 # every sequence is the same size.
                 n = rng.randint(self._min_tokens, self._max_tokens)
-                ids = [rng.randrange(self._vocab) for _ in range(n)]
+                ids = self._sample(n, rng)
+
+                if self._reward_from_tokens:
+                    correct, parse_fail = self._signal_token in ids, False
+                else:
+                    draw = rng.random()
+                    correct = draw < self._p_correct
+                    parse_fail = self._p_correct <= draw < self._p_correct + self._p_parse_fail
+
+                if correct:
+                    text = f"<answer>{prompt.answer}</answer>"
+                elif parse_fail:
+                    text = "not sure"
+                else:
+                    text = f"<answer>{int(prompt.answer) + rng.choice([-2, -1, 1, 2])}</answer>"
                 group.append(Rollout(prompt=prompt, text=text, token_ids=ids))
             out.append(group)
         return out
+
+    def _sample(self, n: int, rng: Any) -> list[int]:
+        """Draw ``n`` token ids **from the policy's own distribution**.
+
+        Not a detail. Drawing uniformly instead breaks ``E[grad log pi] = 0``, the identity that
+        makes a baseline unbiased and makes the "push everything up" common component cancel.
+        Without it the no-baseline arm keeps a large shared component and its two half-gradients
+        agree spuriously — ablation A's cosine comes out *backwards*, which is exactly what an
+        earlier version of this double produced.
+        """
+        import torch
+
+        generator = torch.Generator().manual_seed(rng.randrange(2**31))
+        probs = torch.softmax(self.logits.detach(), dim=-1)
+        return [int(t) for t in torch.multinomial(probs, n, replacement=True, generator=generator)]
 
     def logprobs(self, rollouts: Sequence[Rollout]) -> Any:
         import torch
@@ -188,9 +224,9 @@ class ToyPolicy:
         else:
             cosine = float(torch.dot(grad_a, grad_b) / (norm_a * norm_b))
 
-        # The update is the mean of the halves — identical to one backward over the full batch.
-        if self.logits.grad is not None:
-            self.logits.grad = self.logits.grad / 2.0
+        # No division: the caller scales each half by the FULL rollout count, so the accumulated
+        # g_A + g_B is already exactly the full-batch gradient. Halving here would be correct only
+        # when the two halves contain equally many rollouts.
         grad_norm = float(self._flat_grad().norm())
         self.opt.step()
         return grad_norm, cosine

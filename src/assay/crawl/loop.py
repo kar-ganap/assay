@@ -90,6 +90,12 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
     Returns:
         The per-step logs, in step order.
     """
+    if cfg.prompts_per_step < 2:
+        raise ValueError(
+            "prompts_per_step must be >= 2: the half-batch cosine needs two non-empty halves of "
+            "whole groups, and groups are never split"
+        )
+
     family = _family_for(cfg)
     logs: list[StepLog] = []
 
@@ -186,8 +192,48 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
                     index += 1
                 losses_by_group.append(group_losses)
 
+            # --- step 6: KL to the frozen reference -------------------------------------
+            # The leash. Ablation B is this term removed, so cfg.kl_coef == 0.0 is the common case
+            # and must skip the computation entirely rather than multiply it by zero: for HFPolicy
+            # the reference is a whole extra forward pass, and the base weights are frozen under
+            # LoRA so "reference" means the adapter disabled.
+            #
+            # Added to the LOSS, not the reward. Routed through the reward it would pass through
+            # group_advantages, where a per-prompt-roughly-constant penalty is largely subtracted
+            # away by the group baseline — the leash would quietly go slack.
+            #
+            # Applied per rollout, inside the group structure, so it lands on the same side of the
+            # half-split as the term it belongs to. Adding it after the split would leave the two
+            # half-gradients differing by an unaccounted term and the cosine measuring that.
+            kl_mean = 0.0
+            if cfg.kl_coef:
+                kl_per_rollout = policy.kl_to_reference(flat)
+                index = 0
+                for group_losses in losses_by_group:
+                    for position in range(len(group_losses)):
+                        group_losses[position] = (
+                            group_losses[position] + cfg.kl_coef * kl_per_rollout[index]
+                        )
+                        index += 1
+                kl_mean = float(sum(float(k) for k in kl_per_rollout) / len(flat))
+
             # --- step 5: update --------------------------------------------------------
-            # --- step 6: KL ------------------------------------------------------------
+            # Split by GROUP, never by rollout. Advantages inside a group sum to zero, so a
+            # within-group split hands the two halves complementary pieces of one contrast; their
+            # common-mode components anti-correlate by construction and the cosine stops measuring
+            # estimator variance. Whole groups keep the halves on disjoint prompts.
+            split = (len(losses_by_group) + 1) // 2
+
+            def _half(chunk: list[list[Any]], total: int = len(flat)) -> Any:
+                # Divided by the FULL rollout count, not the half's, so loss_a + loss_b is exactly
+                # the full-batch mean for any split — including an odd number of groups, where
+                # averaging two half-means would quietly be wrong.
+                return sum(term for group in chunk for term in group) / total
+
+            grad_norm, cosine = policy.optimize(
+                _half(losses_by_group[:split]), _half(losses_by_group[split:])
+            )
+
 
             log = StepLog(
                 step=step,
@@ -195,9 +241,9 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
                 true_reward=sum(flat_true) / len(flat_true),
                 policy_entropy=policy.entropy(flat),
                 distinct_completions=len({r.text for r in flat}),
-                kl_to_ref=0.0,
-                grad_norm=0.0,
-                half_batch_grad_cosine=0.0,
+                kl_to_ref=kl_mean,
+                grad_norm=grad_norm,
+                half_batch_grad_cosine=cosine,
                 # Ablation C's rig-broken branch: a z-score cannot exceed sqrt(G-1) = 2.646 at
                 # G=8. If this ever does, the advantage function is not computing a z-score and
                 # the run says nothing about the science either way.

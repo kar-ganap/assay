@@ -235,11 +235,11 @@ class HFPolicy:
         else:
             cosine = float(torch.dot(grad_a, grad_b) / (norm_a * norm_b))
 
-        # Mean of the halves, so the update is identical to one backward over the full batch.
-        for p in self.params:
-            if p.grad is not None:
-                p.grad /= 2.0
-
+        # No division: the caller scales each half by the FULL rollout count, so g_A + g_B is
+        # already exactly the full-batch gradient. Halving here would be correct only when the two
+        # halves hold equally many rollouts, which fails for an odd number of groups.
+        #
+        # clip_grad_norm_ returns the norm *before* clipping, which is what we want logged.
         grad_norm = float(torch.nn.utils.clip_grad_norm_(self.params, max_norm=1.0))
         self.opt.step()
         return grad_norm, cosine
