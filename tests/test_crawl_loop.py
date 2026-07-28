@@ -286,3 +286,32 @@ def test_a_tighter_leash_holds_the_policy_closer(tmp_path: Path) -> None:
         return logs[-1].kl_to_ref
 
     assert final_kl(1.0) < final_kl(0.05), "a tighter leash must restrain more"
+
+
+def test_the_loop_calls_logprobs_before_the_other_readouts(tmp_path: Path) -> None:
+    """HFPolicy shares one grad-carrying forward across logprobs, entropy and KL.
+
+    Recomputing it in kl_to_reference retained a second full activation graph over the same batch
+    and put a 1B model over 39 GB on an A100-40GB. The sharing only works if the loop calls
+    logprobs() first, so this pins the call order that HFPolicy depends on.
+    """
+    order: list[str] = []
+
+    class OrderingPolicy(ToyPolicy):
+        def logprobs(self, rollouts):  # type: ignore[no-untyped-def]
+            order.append("logprobs")
+            return super().logprobs(rollouts)
+
+        def entropy(self, rollouts):  # type: ignore[no-untyped-def]
+            order.append("entropy")
+            return super().entropy(rollouts)
+
+        def kl_to_reference(self, rollouts):  # type: ignore[no-untyped-def]
+            order.append("kl")
+            return super().kl_to_reference(rollouts)
+
+    cfg = LadderConfig(run_id="t", steps=1, prompts_per_step=4, kl_coef=0.1)
+    train(cfg, tmp_path, policy=OrderingPolicy(p_correct=0.5, seed=0))
+
+    assert order.index("logprobs") < order.index("kl")
+    assert order.index("logprobs") < order.index("entropy")

@@ -69,6 +69,12 @@ class HFPolicy:
                 task_type="CAUSAL_LM",
             ),
         )
+        # Recompute activations during backward instead of storing them. A 1B model over
+        # [128 rollouts, ~50 positions] retains roughly 7-8 GB of activations across 16 layers
+        # without this; the trade is ~30% more compute for an order of magnitude less memory.
+        self.model.gradient_checkpointing_enable()
+        self.model.config.use_cache = False  # incompatible with checkpointing, and unused here
+
         self.params = [p for p in self.model.parameters() if p.requires_grad]
         self.opt = torch.optim.AdamW(self.params, lr=learning_rate)
 
@@ -183,22 +189,41 @@ class HFPolicy:
             return self.model(input_ids=ids).logits
 
     def logprobs(self, rollouts: Sequence[Rollout]) -> Any:
-        ids, mask, _ = self._batch(rollouts)
-        self._cached = (ids, mask)
-        return completion_logprobs(self._logits(ids, adapter=True), ids, mask)
+        """The step's **only** grad-carrying forward. Its logits are cached for the other readouts.
 
-    def entropy(self, rollouts: Sequence[Rollout]) -> float:
+        Recomputing them in ``kl_to_reference`` would retain a *second* full activation graph over
+        the same batch — which is what put a 1B model over 39 GB on an A100-40GB. Entropy is taken
+        from the same pass too, which also fixes a timing bug: ``entropy()`` is called after
+        ``optimize()``, so an independent forward there would describe the *post-update* policy
+        while every other metric describes the batch that was collected.
+        """
         import torch
 
         ids, mask, _ = self._batch(rollouts)
+        logits = self._logits(ids, adapter=True)
+        self._cache = (id(rollouts), ids, mask, logits)
         with torch.no_grad():
-            return entropy_over_completions(self._logits(ids, adapter=True), mask)
+            self._entropy = entropy_over_completions(logits, mask)
+        return completion_logprobs(logits, ids, mask)
+
+    def _cached_for(self, rollouts: Sequence[Rollout]) -> tuple[Any, Any, Any]:
+        cache = getattr(self, "_cache", None)
+        if cache is None or cache[0] != id(rollouts):
+            raise RuntimeError(
+                "logprobs() must be called before entropy()/kl_to_reference() on the same "
+                "rollouts — the forward pass is shared, not recomputed"
+            )
+        return cache[1], cache[2], cache[3]
+
+    def entropy(self, rollouts: Sequence[Rollout]) -> float:
+        self._cached_for(rollouts)  # fail loudly rather than silently returning a stale value
+        return float(self._entropy)
 
     def kl_to_reference(self, rollouts: Sequence[Rollout]) -> Any:
-        ids, mask, _ = self._batch(rollouts)
-        return sequence_kl(
-            self._logits(ids, adapter=True), self._logits(ids, adapter=False), ids, mask
-        )
+        ids, mask, policy_logits = self._cached_for(rollouts)
+        # Only the reference needs a fresh pass, and it runs under no_grad — the adapter disabled
+        # IS the frozen base policy, so no second model is loaded.
+        return sequence_kl(policy_logits, self._logits(ids, adapter=False), ids, mask)
 
     # -- the update ---------------------------------------------------------------------
 
