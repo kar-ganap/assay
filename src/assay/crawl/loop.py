@@ -181,14 +181,19 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
             # per-timestep credit assignment to do here.
             log_probs = policy.logprobs(flat)  # summed over each rollout's completion tokens
 
+            # max(1, ...) guards a completion that emitted EOS immediately. Kept so step 6 can
+            # scale the KL term the same way — mixing a length-normalised policy-gradient term
+            # with an unnormalised KL would silently reweight the leash by completion length.
+            divisors = [
+                (max(1, r.n_tokens) if cfg.length_normalize else 1) for r in flat
+            ]
+
             losses_by_group: list[list[Any]] = []
             index = 0
-            for group, advantages in zip(groups, advantages_by_group, strict=True):
+            for advantages in advantages_by_group:
                 group_losses = []
-                for rollout, advantage in zip(group, advantages, strict=True):
-                    # max(1, ...) guards a completion that emitted EOS immediately.
-                    divisor = max(1, rollout.n_tokens) if cfg.length_normalize else 1
-                    group_losses.append(-advantage * log_probs[index] / divisor)
+                for advantage in advantages:
+                    group_losses.append(-advantage * log_probs[index] / divisors[index])
                     index += 1
                 losses_by_group.append(group_losses)
 
@@ -211,8 +216,12 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
                 index = 0
                 for group_losses in losses_by_group:
                     for position in range(len(group_losses)):
+                        # Same divisor as the policy-gradient term: the KL is a sum over the
+                        # completion's tokens, so leaving it unnormalised while the PG term is
+                        # normalised would make the leash tighter on longer completions.
                         group_losses[position] = (
-                            group_losses[position] + cfg.kl_coef * kl_per_rollout[index]
+                            group_losses[position]
+                            + cfg.kl_coef * kl_per_rollout[index] / divisors[index]
                         )
                         index += 1
                 kl_mean = float(sum(float(k) for k in kl_per_rollout) / len(flat))

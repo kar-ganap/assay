@@ -219,3 +219,59 @@ def test_entropy_ignores_prompt_positions() -> None:
     logits[:, 0, :] = 0.0  # ...except the prompt's first position, which is uniform
     mask = build_completion_mask(3, [2], 6)
     assert entropy_over_completions(logits, mask) == pytest.approx(0.0, abs=1e-4)
+
+
+def test_per_token_k3_does_not_compound_over_length() -> None:
+    """The reason k3 is applied per token rather than per sequence.
+
+    A sequence-level ratio is a *product* over tokens, so exp() of the accumulated log-ratio
+    compounds multiplicatively. Here a modest ~1.18-nat drift per token over 10 tokens gives a
+    per-token KL near 10.7; the sequence-level form would give ~1.3e5, and that one sequence would
+    swamp the whole batch loss.
+    """
+    n_tokens = 10
+    total = n_tokens + 1
+    token_ids = torch.zeros(1, total, dtype=torch.long)
+
+    reference = torch.zeros(1, total, VOCAB)
+    reference[:, :, 0] = 2.0          # reference prefers the sampled token by 2 nats
+    policy = torch.zeros(1, total, VOCAB)
+
+    mask = build_completion_mask(prompt_len=1, completion_lens=[n_tokens], total_len=total)
+    kl = sequence_kl(policy, reference, token_ids, mask).item()
+
+    per_token_log_ratio = math.log(math.exp(2.0) / (math.exp(2.0) + VOCAB - 1)) + math.log(VOCAB)
+    expected = n_tokens * (math.exp(per_token_log_ratio) - per_token_log_ratio - 1.0)
+    assert kl == pytest.approx(expected, rel=1e-4)
+    assert kl < 100, "per-token k3 grows linearly in length"
+
+    # What the sequence-level form would have produced, for contrast.
+    sequence_level = math.exp(n_tokens * per_token_log_ratio) - n_tokens * per_token_log_ratio - 1
+    assert sequence_level > 1e4
+    assert sequence_level / kl > 1_000, "the two must be dramatically different, or the test is inert"
+
+
+def test_kl_grows_linearly_with_completion_length() -> None:
+    """Linear, not exponential — the property the per-token form buys."""
+    def kl_for(n: int) -> float:
+        total = n + 1
+        reference = torch.zeros(1, total, VOCAB)
+        reference[:, :, 0] = 2.0
+        return sequence_kl(
+            torch.zeros(1, total, VOCAB),
+            reference,
+            torch.zeros(1, total, dtype=torch.long),
+            build_completion_mask(1, [n], total),
+        ).item()
+
+    assert kl_for(20) == pytest.approx(2 * kl_for(10), rel=1e-4)
+
+
+def test_mismatched_reference_shape_raises() -> None:
+    with pytest.raises(ValueError):
+        sequence_kl(
+            torch.zeros(1, 5, VOCAB),
+            torch.zeros(1, 6, VOCAB),
+            torch.zeros(1, 5, dtype=torch.long),
+            torch.zeros(1, 5),
+        )

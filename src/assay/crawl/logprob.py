@@ -75,20 +75,39 @@ def completion_logprobs(logits: Any, token_ids: Any, completion_mask: Any) -> An
     return (token_logprobs * shifted_mask).sum(dim=-1)
 
 
+def _token_logprobs(logits: Any, token_ids: Any) -> Any:
+    """Per-token log-probs of the sampled tokens, already shifted. Shape ``[batch, seq-1]``."""
+    return (
+        torch.log_softmax(logits[:, :-1, :], dim=-1)
+        .gather(-1, token_ids[:, 1:].unsqueeze(-1))
+        .squeeze(-1)
+    )
+
+
 def sequence_kl(
     policy_logits: Any, reference_logits: Any, token_ids: Any, completion_mask: Any
 ) -> Any:
-    """Per-sequence KL to the reference, via the **k3** estimator. Shape ``[batch]``.
+    """KL to the reference, **k3 applied per token** then summed. Shape ``[batch]``.
 
-    ``k3(r) = r − log r − 1`` where ``r = π_ref/π_θ`` on the sampled token. Unbiased and
-    **non-negative by construction**, unlike the naive ``log π_θ − log π_ref``, which is unbiased
-    but can go negative on a single sample and is much higher variance. This is the estimator GRPO
-    uses.
+    ``k3(r) = r − log r − 1`` where ``r = π_ref/π_θ``. Unbiased and **non-negative by
+    construction**, unlike the naive ``log π_θ − log π_ref``, which is unbiased but goes negative
+    on single samples and has much higher variance.
+
+    **Per token, not per sequence — and the difference is not cosmetic.** A sequence-level ratio is
+    a *product* over tokens, so ``log_ratio`` accumulates and ``exp`` of it compounds
+    multiplicatively: a modest 1.2-nat drift per token over 10 tokens gives a per-token KL of ~10.7
+    but a sequence-level one of ~1.3e5, and that single sequence would swamp the entire batch loss.
+    This is the same compounding that makes sequence-level importance ratios unusable. Per-token is
+    also the published GRPO form, so it is what a comparison against ``trl`` would match.
     """
-    policy_lp = completion_logprobs(policy_logits, token_ids, completion_mask)
-    reference_lp = completion_logprobs(reference_logits, token_ids, completion_mask)
-    log_ratio = reference_lp - policy_lp
-    return torch.exp(log_ratio) - log_ratio - 1.0
+    if policy_logits.shape != reference_logits.shape:
+        raise ValueError("policy and reference logits must have the same shape")
+
+    log_ratio = _token_logprobs(reference_logits, token_ids) - _token_logprobs(
+        policy_logits, token_ids
+    )
+    per_token_kl = torch.exp(log_ratio) - log_ratio - 1.0
+    return (per_token_kl * completion_mask[:, 1:].to(per_token_kl.dtype)).sum(dim=-1)
 
 
 def entropy_over_completions(logits: Any, completion_mask: Any) -> float:
