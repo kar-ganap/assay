@@ -128,6 +128,24 @@ class HFPolicy:
         return int(ids.shape[0])
 
     def generate(self, prompts: Sequence[Prompt], *, k: int) -> list[list[Rollout]]:
+        """Sample under **eval mode**, then restore train mode for scoring.
+
+        The two requirements fight each other and the failure is silent. Gradient checkpointing
+        only engages when ``model.training`` is True — but checkpointing under ``no_grad``, which
+        is what generation is, does not recompute correctly and the model emits noise. Observed
+        directly: a base model whose measured pass rate is 0.720 produced
+        ``"<The is when were you was was.<?<?201You we we..."`` at step 0, so every group came back
+        unanimous-wrong, every advantage was zero, and ``grad_norm`` was exactly 0.0.
+
+        Generation needs no backward pass, so it has nothing to gain from checkpointing anyway.
+        """
+        self.model.eval()
+        try:
+            return self._generate(prompts, k=k)
+        finally:
+            self.model.train()  # scoring needs checkpointing engaged
+
+    def _generate(self, prompts: Sequence[Prompt], *, k: int) -> list[list[Rollout]]:
         import torch
 
         out: list[list[Rollout]] = []
