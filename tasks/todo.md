@@ -4,38 +4,40 @@
 > already made so you don't relitigate them. Update the STATUS + NEXT blocks at the end of each
 > session.
 
-## STATUS (as of 2026-07-26)
+## STATUS (as of 2026-07-29 — PAUSED on compute budget)
 
-- **Phase 0.1 in progress** on `phase-0.1-grpo-by-hand`. `make check` green (ruff · mypy --strict on
-  17 files · **116 passed, 29 xfailed**).
-- **Task pinned by measurement:** `arithmetic/add-2digit` (dead 0.115 ± 0.023, pass@1 0.720,
-  headroom 0.280), with `arithmetic/add-3digit` pre-declared as a **robustness arm**. Full result and
-  the arm declaration: `docs/phases/phase-0.1-grpo-by-hand-plan.md` → *RESULT*.
-- **Calibration harness done** (`src/assay/crawl/`), Modal wiring proven, ~$0.60 est. spent.
-- **The 29 xfails are the handoff:** `tests/test_advantage_spec.py` is the executable spec for
-  `assay.crawl.advantage.group_advantages` — **user writes it** (§7). They XPASS loudly when done,
-  which is the cue to delete the `pytestmark`.
-- Rest of `src/assay/` is still typed stubs (`bisect`, battery, screen — Phases 1.1+).
-- `docs/pre-registration.md` = **DRAFT, not locked.**
-- `docs/related-work.md` = **UNVERIFIED** — one LLM-assisted research pass, 0/12 papers read
-  first-hand.
-- `literature-review/README.md` gate = **0/5 Block-A papers read.**
-- `tasks/spend.md` = **$0.**
-- Origin plan (the reasoning behind all of this): `../explore/rl-envs-onramp.md`.
+- **Phase 0.1 in progress** on `phase-0.1-grpo-by-hand`, 29 commits, `make check` green (229 tests).
+- **⛔ PAUSED: Modal budget exhausted (~$0.18 left).** Waiting for the monthly quota reset.
+  `tasks/spend.md`'s **>50% replan trigger has fired** — Phase 0.1's $5 line is at ~$8–13 of Crawl's
+  $17, with R0 ($10) and R1 ($2) still owed and both never-cut. **Reconcile against the Modal
+  dashboard before resuming.**
+- **GATE 1 PASSED.** Run 7 on `add-3digit`, 2 seeds, 200 steps: reward 0.438→0.873 and 0.406→0.905
+  against the screen's base rate 0.433. Gain **+0.456 vs a seed band of 0.032 — 14× the band**, and
+  `live_fraction_in_slope_window = 1.00` on both seeds.
+- **Primary arm swapped** (documented deviation): `add-3digit`, not the rule's `add-2digit`, which
+  saturates to ~100% dead groups within ten steps. `learning_rate = 1e-5`, `kl_coef = 0.04`.
+- **14 runs recovered locally** into `experiments/phase-0.1-grpo-by-hand/`; all also live on the
+  Modal volume `assay-phase01`. Nothing is at risk.
+- **`TRAIN_GPU` is back to L4** — measured peak is 13.5–14.5 GB, so A100-40GB was never needed.
 
-## NEXT ACTION (the one thing to do)
+## WHAT REMAINS (≈1.3 h GPU ≈ $1 on L4)
 
-**Implement `group_advantages` in `src/assay/crawl/advantage.py`** until
-`tests/test_advantage_spec.py` XPASSes, then delete its `pytestmark`. That function is the heart of
-GRPO and all four ablations are switch settings on it — `baseline` × `normalize_by_std`.
+8 ladder entries with no `add-3digit` run: `run2`, `run3`, `ablation_b`, `ablation_b_control`,
+`ablation_c`, `ablation_c_nolennorm`, `ablation_d`, `run7_nolennorm`.
 
-Then the loop itself (runs 1–7 + ablations A–D) on the pinned task.
+```
+modal run --detach src/assay/modal_app.py::ladder --runs run2 --seeds 0,1,2   # completes ablation A
+modal run --detach src/assay/modal_app.py::ladder --runs run3,ablation_b,ablation_b_control,ablation_c,ablation_c_nolennorm,ablation_d,run7_nolennorm
+modal run src/assay/modal_app.py::fetch                                        # land the artifacts
+```
 
-*(Task selection, Modal wiring and the calibration harness are done. Spend ~$0.60 of $17.)*
+`run1 × 2 seeds` is already done, so **ablation A needs only `run2`.** It wants ≥3 seeds per arm: its
+metric (half-batch gradient cosine) sits at ρ≈0.04 with a seed band of 0.006 — measurable but tight,
+because two half-batch gradients in a million-parameter space are nearly orthogonal.
 
-**In parallel, cheap and unblocking:** apply for **Tinker credits** ($150 on waitlist clearance) and
-**check whether the Prime Sprints free queue is live and on what terms** — that second one moves $28
-of budget and determines whether Stage 2's exploratory grid is free.
+**Doable now, with zero compute:** figures from the 6 completed 200-step runs · the
+`add-2digit` vs `add-3digit` saturation comparison (a real A3 finding, with curves) · seed-variance
+section · retro · `/learn`.
 
 ## DECISIONS ALREADY MADE (do not relitigate — the *why* is in `docs/conceptual.md`)
 
