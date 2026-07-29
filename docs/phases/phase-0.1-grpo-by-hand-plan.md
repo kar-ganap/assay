@@ -373,6 +373,34 @@ path, not the hyperparameters.
 This exercises generation, grading, advantages, the loss, masking, backward and the optimizer step
 end to end, and it is the cheapest test that covers all of them at once.
 
+**Result — PASS, 2026-07-28.** Reward `0.438 → 1.000` within 8 steps; entropy `0.58 → 0.006`.
+The gradient path is verified end to end.
+
+It failed on the first attempt and found two real bugs, both silent, both invisible to the local
+test suite because they live in `HFPolicy`:
+
+1. **The scoring forward had no attention mask.** Prompts are left-padded, so it attended to
+   padding as content. `generate()` had a mask, so reward looked healthy in short runs while every
+   *gradient* was meaningless.
+2. **Gradient checkpointing and generation were mutually destructive.** Checkpointing only engages
+   when `model.training` is True, which the OOM fix required — but checkpointing under `no_grad`
+   does not recompute correctly, so generation emitted noise. Two individually-correct fixes,
+   silently cancelling each other. Fixed by generating in eval mode and restoring train mode after.
+
+**A finding fell out of the check itself.** Once reward reaches 1.000, `frac_degenerate_groups`
+goes to 1.000 and `grad_norm` to exactly 0.0 — **ablation D occurring spontaneously**, with the
+remaining 40 steps burning compute and teaching nothing. That is the `add-2digit` saturation
+prediction (0.115 → ~0.43) visible at 50 steps rather than 200, and it is the first direct evidence
+for it.
+
+**Process note, recorded because it cost most of the phase's session.** Six failures were diagnosed
+by inference from a traceback line, and most of those guesses were wrong. The two diagnosed by
+*looking* — comparing observed GPU memory against what it should have been, and reading raw
+completions — found their cause in minutes. Raw rollout capture already existed for the calibration
+sweep, where it did exactly this job; it was not carried into the training path, and that omission
+is what made the intervening failures expensive. `experiments/README.md` requires it. Both paths now
+have it.
+
 `kl_coef = 0.04` is used for the probe (published GRPO), so the probe also reads whether the leash
 engages at that value.
 

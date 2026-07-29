@@ -15,8 +15,16 @@ re-runs.
 | Date | Stage | Phase | Run | Backend | Duration | Cost | Running total | Notes |
 |---|---|---|---|---|---|---|---|---|
 | 2026-07-27 | 0 · Crawl | 0.1 | Calibration sweep — 5 runs (n=4/16/16/64/200, k=4–8) | Modal L4 | ~45 min GPU | **~$0.60 (est.)** | ~$0.60 | ~19,000 completions ≤256 tok, Llama-3.2-1B. **Estimate — confirm against the Modal dashboard and replace.** Pinned Phase 0.1's task. |
+| 2026-07-28 | 0 · Crawl | 0.1 | Bringing up `HFPolicy`: ~12 invocations, mostly failures | Modal A10G → A100-40GB | ~1–1.5 h GPU + image builds | **~$2–4 (est.)** | ~$3–5 | 6 OOM/crash failures, 2 LR probes, 3 overfit checks. Found: image build order, 4-forwards-per-step, uncheckpointed activations, missing attention mask, checkpointing-vs-generation. |
 
-**Running total: ~$0.60 (estimated, unconfirmed)** of Crawl's authorised $17.
+**Running total: ~$3–5 (estimated, unconfirmed)** of Crawl's authorised $17.
+
+> ⚠️ **Both rows are estimates and neither was logged at the time.** Desideratum 17 says log at the
+> point of incurring; on 2026-07-28 roughly a dozen Modal invocations went by unlogged while
+> debugging. That is exactly the drift the rule exists to prevent — the numbers here were
+> reconstructed after the fact and could be off by a factor of two in either direction.
+> **Reconcile against the Modal dashboard before Phase 0.1 closes**, and log the ladder runs as they
+> happen rather than afterwards.
 
 > ⚠️ **This figure is an estimate, not a reading.** Modal's L4 rate is not in the verified-pricing
 > table below, and the cost was not captured at the time of the runs. Confirm from the Modal
