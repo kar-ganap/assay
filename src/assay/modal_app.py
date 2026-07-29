@@ -511,7 +511,7 @@ if modal is not None:
             runlog.write_results(result["summary"], RESULTS_DIR)
 
     @app.local_entrypoint()
-    def ladder(runs: str = "", setting: str = "add-2digit", seeds: str = "0") -> None:
+    def ladder(runs: str = "", setting: str = "", seeds: str = "0") -> None:
         """Launch ladder runs: ``modal run ... ::ladder --runs run1,run7 --seeds 0,1``.
 
         The ladder table lives in ``assay.crawl.ladder`` and is **the user's** (§7). This entry
@@ -522,6 +522,12 @@ if modal is not None:
 
         ``--seeds`` exists because gate 1 needs >= 2 seeds on run 7, and that seed band is what
         every ablation threshold should ultimately be stated against.
+
+        ``--setting`` defaults to **empty**, meaning *use whatever the table pins*. It used to
+        default to a task name, which silently overrode the table: after the primary arm was
+        swapped to ``add-3digit`` this entry point kept dispatching ``add-2digit``, and the test
+        asserting the pinned arm still passed because it checked the *table* rather than what
+        actually ran.
         """
         from assay.crawl import runlog
         from assay.crawl.ladder import LADDER
@@ -534,8 +540,13 @@ if modal is not None:
 
         for run_id in wanted:
             for seed in seed_list:
-                tag = f"{run_id}-{setting}-seed{seed}"
-                cfg = dataclasses.replace(LADDER[run_id], run_id=tag, setting=setting, seed=seed)
+                # Empty `setting` means the table decides. Only an explicit value overrides it.
+                overrides: dict = {"seed": seed}
+                if setting:
+                    overrides["setting"] = setting
+                resolved = dataclasses.replace(LADDER[run_id], **overrides)
+                tag = f"{run_id}-{resolved.setting}-seed{seed}"
+                cfg = dataclasses.replace(resolved, run_id=tag)
                 print(f"\n=== {tag} ===")
                 result = train_remote.remote(dataclasses.asdict(cfg), provenance)
 
