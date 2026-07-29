@@ -323,7 +323,25 @@ if modal is not None:
         )
         import torch
 
-        logs = train(cfg, run_dir, policy=policy)
+        raw: list[dict] = []
+
+        def capture(step, rollouts, grades):  # type: ignore[no-untyped-def]
+            # A sample from the first few steps and then periodically. Enough to see what the
+            # policy is actually emitting without shipping every rollout home.
+            if step > 2 and step % 10:
+                return
+            for rollout, (proxy, true) in list(zip(rollouts, grades))[:8]:
+                raw.append({
+                    "step": step,
+                    "question": rollout.prompt.question,
+                    "answer": rollout.prompt.answer,
+                    "completion": rollout.text,
+                    "n_tokens": rollout.n_tokens,
+                    "proxy_reward": proxy.reward,
+                    "true_outcome": true.outcome.value,
+                })
+
+        logs = train(cfg, run_dir, policy=policy, observer=capture)
         peak_gb = float(torch.cuda.max_memory_allocated()) / 1e9
         print(f"peak CUDA memory: {peak_gb:.2f} GB")
         payload = {
@@ -331,6 +349,7 @@ if modal is not None:
             "summary": runlog.summarize_run(cfg, logs),
             "steps": [dataclasses.asdict(log) for log in logs],
             "provenance": {**provenance, "config": config},
+            "raw": raw,
         }
 
         # Persist here, before returning. If the caller has gone away — closed laptop, dropped

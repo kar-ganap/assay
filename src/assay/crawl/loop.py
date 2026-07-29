@@ -86,7 +86,13 @@ def _prompt_seed(cfg: LadderConfig, step: int) -> int:
     return cfg.seed * 1_000_000 + step
 
 
-def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
+def train(
+    cfg: LadderConfig,
+    run_dir: Path,
+    *,
+    policy: Policy,
+    observer: Any = None,
+) -> list[StepLog]:
     """Run one ladder configuration for ``cfg.steps`` steps, logging every step.
 
     Args:
@@ -94,6 +100,10 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
             on this one object — if the loop needs an ``if`` per rung, the modelling is wrong.
         run_dir: destination for ``steps.jsonl``. The manifest is written by the caller, before
             step 1, so a crashed run is still identifiable.
+        observer: optional ``(step, rollouts, grades) -> None``, called each step *before* the
+            update. Raw completions are the difference between diagnosing a broken run and
+            guessing at it — ``experiments/README.md`` requires them, and their absence is why the
+            first several failures here were debugged by inference rather than by looking.
         policy: the model behind ``assay.crawl.policy.Policy``. Injected rather than constructed
             so the loop runs against ``ToyPolicy`` on a machine with no GPU.
 
@@ -145,6 +155,9 @@ def train(cfg: LadderConfig, run_dir: Path, *, policy: Policy) -> list[StepLog]:
             group_pass_rate = sum(
                 1 for _, true in flat_graded if true.outcome is Outcome.CORRECT
             ) / len(flat_graded)
+
+            if observer is not None:
+                observer(step, flat, flat_graded)
 
             # --- step 3: advantages ----------------------------------------------------
             if cfg.force_unanimous_groups:
