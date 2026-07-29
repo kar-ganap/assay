@@ -350,9 +350,54 @@ purpose *in a run* is the consequence: reward flat while wall-clock and tokens a
 > from repeatedly pushing up on whichever tagged completions were sampled. "Collapse onto a single
 > high-reward string" overstates it; "diversity concentrates while reward saturates" is the claim.
 
-**Not yet expressed against the seed band**, which principle 2 requires — impossible until run 7's
-≥2 seeds exist. Tighten each to "outside run 7's seed band" once measured, and record that as a
-dated amendment here, the way the tie tolerance was.
+### GATE 1 — PASSED 2026-07-28. Run 7, `add-3digit`, 2 seeds, 200 steps
+
+| | seed 0 | seed 1 |
+|---|---|---|
+| reward, base → final | 0.438 → **0.873** | 0.406 → **0.905** |
+| dead groups, 0 → end | 0.188 → 0.625 | 0.062 → 0.500 |
+| `live_fraction_in_slope_window` | **1.00** | **1.00** |
+
+**Gain `+0.456` over the screen's base rate of 0.433, against a seed band of `0.032` — 14× the
+band.** Gate 1 is met.
+
+**The arm swap is vindicated.** `live_fraction = 1.00` on both seeds, against 0.70–0.75 on
+`add-2digit`, whose runs reached `dead ≈ 1.0`. The 50–200 window is fully usable here.
+
+Two rig checks fell out for free:
+
+- **`max_abs_advantage` = 2.598 / 2.618 against the bound √7 = 2.646.** The z-score sits just under
+  its ceiling and never crosses it — ablation C's rig-broken branch is clean, and it independently
+  confirms `group_advantages` really is computing a z-score.
+- **β = 0.04 is a real leash.** `kl_to_ref` reaches ~2.9 and `kl_loss_fraction` ~0.095 while reward
+  still climbed +0.456: engaged but not strangling, exactly the operational criterion. **Ablation B
+  will therefore be removing a leash that was genuinely on**, so a null there is a finding rather
+  than a rig failure.
+
+### Signatures restated against the seed band — 2026-07-28
+
+Principle 2 required this and it could not be done until run 7 existed. Band = |seed0 − seed1| over
+steps 50–200.
+
+| | run 7 baseline | band | threshold | separation |
+|---|---|---|---|---|
+| **A** `ρ = cos/(1−cos)` | 0.044 / 0.038 | 0.006 | `ρ₂/ρ₁ ≥ 2` | **tight** — see below |
+| **B** `distinct_completions` | 62.3 / 56.3 of 128 | 6.0 | ≤ 6.4 | ~9 bands clear |
+| **C** median tokens | ≈10.5 per rollout | — | ≥ 2× step-0 | comfortable |
+| **D** `frac_degenerate` | 0.465 / 0.488 | 0.024 | = 1.000 exactly | ~21 bands clear |
+
+**Ablation A is the one at risk, and the reason is dimensional.** Per-step cosine swings −0.8 to
++0.7; only the 150-step mean is stable. With millions of LoRA parameters, two independent half-batch
+gradients are *nearly orthogonal* unless the signal is strong — which is why the toy showed 0.53 vs
+0.71 (16 parameters) and the real model shows 0.04. The `≥2` ratio is still detectable at a band of
+0.006, but barely.
+
+The alternative was checked and is worse: `grad_norm_cv` has a seed band of **40–46%** of its value
+against the cosine's 13%. A stays on the cosine.
+
+**Two seeds is too few to trust that band** — desideratum "≥3 seeds on every headline arm" applies,
+and the plan only demanded ≥2 for gate 1. **Ablation A should be run at ≥3 seeds per arm**, or its
+result reported as indicative rather than confirmatory.
 
 ### Learning-rate probe — declared 2026-07-28, before it runs
 
