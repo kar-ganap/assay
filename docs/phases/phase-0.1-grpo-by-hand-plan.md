@@ -418,6 +418,35 @@ So probe it, exactly as the task was probed rather than assumed.
 > The saturation dynamics that drove the choice are task-specific, and a harder task may support —
 > or need — a larger rate.
 
+#### RESULT — `learning_rate = 1e-5`, probed on `add-3digit` 2026-07-28
+
+Three rates × 40 steps. Two rig checks passed first, and the first is close enough to be worth
+recording: **step-0 reward 0.438 against the screen's measured `pass@1 = 0.433`** — a match to 0.005
+on a pipeline the screen never touched. Step-0 dead groups 0.19 against the screen's 0.175.
+
+| lr | reward 0→end | entropy 0→end | dead_end | live |
+|---|---|---|---|---|
+| **1e-5** | 0.438 → 0.703 | 0.716 → **0.377** | 0.250 | 40/40 |
+| 3e-5 | 0.438 → 0.703 | 0.716 → 0.201 | 0.375 | 40/40 |
+| 1e-4 | 0.438 → 0.688 | 0.716 → 0.115 | 0.438 | 40/40 |
+
+**The arm swap is validated:** dead groups stay in 0.19–0.56 and never approach 1.0, against
+`add-2digit` reaching 1.0 by step 9. That is the sign-decomposition's prediction holding.
+
+**Rules 0, 1 and 2 pass for all three, and rule 3 ties** — every rate is 40/40 live, so
+"maximise live steps" does not discriminate and the tie-break falls back to "take the largest",
+which selects `1e-4`.
+
+**Deviation from the tie-break, recorded: `1e-5` is taken instead.** The tie is an artefact of
+probing 40 steps for a ladder that runs 200. Entropy is still falling at every rate, and at `1e-4`
+the policy is already at 0.115 — near-deterministic — so over 5× more steps it would very likely
+saturate, which is *exactly* how `add-2digit` failed. `1e-5` retains the most headroom, and since
+its reward climb (0.438 → 0.703) equals `3e-5`'s exactly, the extra speed buys nothing measurable.
+
+*The honest alternative was to extend the probe to 200 steps and resolve the tie on evidence rather
+than extrapolation. That was declined on cost; this is therefore a judgement call, and it is the
+fourth amendment to this rule.*
+
 ### Overfit check — precondition for the probe, added 2026-07-28
 
 **Before any learning rate is probed, the loop must be shown capable of learning at all.** Train on
