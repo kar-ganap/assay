@@ -41,6 +41,33 @@ def build_completion_mask(
     return mask
 
 
+def build_attention_mask(
+    prompt_attention: Any, completion_lens: Sequence[int], total_len: int
+) -> Any:
+    """``[batch, total_len]``, 1 where a token is real and 0 for padding on **either** side.
+
+    Not optional, and silent if omitted. Prompts are **left-padded**, so a forward pass without
+    this attends to pad tokens as though they were content: the log-probs are meaningless, the
+    gradients built from them are meaningless, and nothing raises. Generation gets this right for
+    free (the tokenizer returns it), which makes the omission easy to miss in a short run —
+    reward comes from generation and looks healthy while the *scoring* path quietly poisons every
+    update.
+
+    Observed: 30 steps at any learning rate drove reward to exactly 0.000 with entropy at 6.7 nats,
+    on a task whose measured base rate was 0.720.
+    """
+    if prompt_attention.shape[1] > total_len:
+        raise ValueError("prompt is longer than the padded sequence")
+    mask = torch.zeros((prompt_attention.shape[0], total_len), dtype=torch.long)
+    prompt_len = prompt_attention.shape[1]
+    mask[:, :prompt_len] = prompt_attention
+    for row, length in enumerate(completion_lens):
+        if prompt_len + length > total_len:
+            raise ValueError(f"completion of {length} tokens does not fit row {row}")
+        mask[row, prompt_len : prompt_len + length] = 1
+    return mask
+
+
 def completion_logprobs(logits: Any, token_ids: Any, completion_mask: Any) -> Any:
     """Summed log-prob of each sequence's **completion** tokens. Shape ``[batch]``.
 

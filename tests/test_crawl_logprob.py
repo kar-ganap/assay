@@ -330,3 +330,26 @@ def test_sliced_views_give_the_same_answer_as_full_ones() -> None:
     assert entropy_over_completions(logits, mask) == pytest.approx(
         entropy_over_completions(logits[:, lo:hi], mask[:, lo:hi]), abs=1e-5
     )
+
+
+def test_attention_mask_covers_real_tokens_on_both_sides() -> None:
+    """Left-padding before the prompt, right-padding after the completion; neither is real.
+
+    Omitting this makes the forward attend to pad tokens as content. Nothing raises — the
+    log-probs are simply meaningless, and so is every gradient built from them.
+    """
+    from assay.crawl.logprob import build_attention_mask
+
+    # Two left-padded prompts of width 4: row 0 has 1 pad, row 1 has 2.
+    prompt_attention = torch.tensor([[0, 1, 1, 1], [0, 0, 1, 1]])
+    attn = build_attention_mask(prompt_attention, [3, 1], total_len=8)
+
+    assert attn[0].tolist() == [0, 1, 1, 1, 1, 1, 1, 0]
+    assert attn[1].tolist() == [0, 0, 1, 1, 1, 0, 0, 0]
+
+
+def test_attention_mask_rejects_input_that_does_not_fit() -> None:
+    from assay.crawl.logprob import build_attention_mask
+
+    with pytest.raises(ValueError):
+        build_attention_mask(torch.ones(1, 4, dtype=torch.long), [6], total_len=8)
