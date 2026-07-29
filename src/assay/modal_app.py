@@ -51,10 +51,14 @@ SWEEP_GPU = "L4"
 
 #: Phase 0.1's ladder runs. Inference-only fits on an L4, but training adds optimizer state,
 #: gradients and a frozen reference model for the KL term. A10G (24 GB) is the smallest tier with
-#: headroom. A10G (24 GB) OOMed on the first real run: Llama-3.2 has a 128k vocabulary, so the
-#: logits tensor alone is ~1.6 GB and log_softmax over it doubled that. Slicing to the completion
-#: span cut ~5x of it, but A100-40GB is bought for margin rather than run against the ceiling.
-TRAIN_GPU = "A100-40GB"
+#: **Back to L4 after measurement.** This was raised to A10G then A100-40GB while chasing an OOM
+#: whose real cause turned out to be gradient checkpointing never engaging (the model was left in
+#: eval mode). Once fixed, six 200-step runs peaked at **13.5-14.5 GB** — comfortably inside an
+#: L4's 24 GB. The larger tier was never needed and cost roughly 3-4x per hour for ~1.5 h of runs.
+#:
+#: The lesson is the session's recurring one: a bigger machine masked a bug instead of fixing it,
+#: and the cost of that stayed switched on long after the bug was found.
+TRAIN_GPU = "L4"
 TRAIN_TIMEOUT_S = 60 * 120
 
 TIMEOUT_S = 60 * 90

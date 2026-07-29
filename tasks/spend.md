@@ -17,7 +17,22 @@ re-runs.
 | 2026-07-27 | 0 · Crawl | 0.1 | Calibration sweep — 5 runs (n=4/16/16/64/200, k=4–8) | Modal L4 | ~45 min GPU | **~$0.60 (est.)** | ~$0.60 | ~19,000 completions ≤256 tok, Llama-3.2-1B. **Estimate — confirm against the Modal dashboard and replace.** Pinned Phase 0.1's task. |
 | 2026-07-28 | 0 · Crawl | 0.1 | Bringing up `HFPolicy`: ~12 invocations, mostly failures | Modal A10G → A100-40GB | ~1–1.5 h GPU + image builds | **~$2–4 (est.)** | ~$3–5 | 6 OOM/crash failures, 2 LR probes, 3 overfit checks. Found: image build order, 4-forwards-per-step, uncheckpointed activations, missing attention mask, checkpointing-vs-generation. |
 
-**Running total: ~$3–5 (estimated, unconfirmed)** of Crawl's authorised $17.
+| 2026-07-28/29 | 0 · Crawl | 0.1 | LR probes, overfit checks, run7 ×4, run1 ×2 | Modal **A100-40GB** | **94 min logged GPU** (measured, from per-step wall clock) | **~$4–8** | ~$8–13 | 14 runs recovered. **Ran on A100-40GB throughout while peaking at 13.5–14.5 GB — an L4 (24 GB) would have fit, at ~3–4× less per hour.** |
+
+**Running total: ~$8–13 (estimated)** of Crawl's authorised $17 — **Phase 0.1's line was $5.**
+
+> 🛑 **REPLAN TRIGGER FIRED.** `spend.md`'s own rule: *"a stage's actual spend exceeds its estimate
+> by >50% → stop, re-estimate, and record the revision before continuing."* Phase 0.1 is 60–160%
+> over its $5 line, and R0 ($10) and R1 ($2) are both on the never-cut list. **Runs are stopped.**
+>
+> Two causes, both mine. Spend was not logged at the point of incurring across two days despite the
+> rule saying so and my flagging it twice. And the GPU tier was raised to diagnose an OOM and never
+> lowered once the real cause was found — a ~3–4× multiplier left switched on for every subsequent
+> run.
+>
+> **Measured cost of the remaining work:** 8 ladder entries × ~10 min ≈ 1.3 h. On L4 that is roughly
+> **$1**, against ~$3.30 on A100-40GB. The open `Prime Sprints free queue` thread in `tasks/todo.md`
+> is now directly relevant — it was scoped as moving $28.
 
 > ⚠️ **Both rows are estimates and neither was logged at the time.** Desideratum 17 says log at the
 > point of incurring; on 2026-07-28 roughly a dozen Modal invocations went by unlogged while
