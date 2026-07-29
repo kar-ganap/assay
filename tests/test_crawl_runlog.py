@@ -244,7 +244,9 @@ def test_results_are_written_under_the_run_id(tmp_path: Path) -> None:
 
 def test_task_defaults_are_the_pinned_calibration_result() -> None:
     cfg = LadderConfig(run_id="x")
-    assert (cfg.family, cfg.setting) == ("arithmetic", "add-2digit")
+    # add-3digit, not add-2digit: the rule picked the latter, but it saturates to ~100%
+    # dead groups within ten steps. Documented deviation, 2026-07-28.
+    assert (cfg.family, cfg.setting) == ("arithmetic", "add-3digit")
     assert cfg.group_size == 8, "k = G is what makes the screen's dead-group rate transfer"
     assert (cfg.temperature, cfg.top_p) == (1.0, 1.0)
     # 64, not the screen's 256: no add-2digit completion in 400 samples exceeded 28 tokens, so the

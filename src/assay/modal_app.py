@@ -469,7 +469,9 @@ if modal is not None:
               "FAIL — cannot overfit one example; the gradient path is broken, not the LR")
 
     @app.local_entrypoint()
-    def probe_lr(rates: str = "1e-5,3e-5,1e-4,3e-4", steps: int = 30) -> None:
+    def probe_lr(
+        rates: str = "1e-5,3e-5,1e-4,3e-4", steps: int = 30, setting: str = "add-3digit"
+    ) -> None:
         """Learning-rate probe. Rule pre-committed in the phase plan, before this ran.
 
             modal run src/assay/modal_app.py::probe_lr
@@ -483,11 +485,12 @@ if modal is not None:
 
         provenance = _provenance()
         print(f"{'lr':>8} {'reward 0->end':>16} {'kl_end':>9} {'entropy 0->end':>18} "
-              f"{'|g| mean':>9} {'dead_end':>9}")
+              f"{'|g| mean':>9} {'dead_end':>9} {'live':>6}")
         print("-" * 78)
         for rate in [float(r) for r in rates.split(",")]:
             cfg = LadderConfig(
-                run_id=f"probe-lr{rate:g}", steps=steps, baseline="group_loo",
+                run_id=f"probe-{setting}-lr{rate:g}", setting=setting, steps=steps,
+                baseline="group_loo",
                 normalize_by_std=True, kl_coef=0.04, learning_rate=rate,
             )
             result = train_remote.remote(dataclasses.asdict(cfg), provenance)
@@ -502,6 +505,7 @@ if modal is not None:
                 f"{last['policy_entropy']:<8.3f} "
                 f"{sum(r['grad_norm'] for r in rows)/len(rows):9.4f} "
                 f"{last['frac_degenerate_groups']:9.3f}"
+                + f" {sum(1 for r in rows if r['frac_degenerate_groups'] < 1.0):>5}"
                 + ("" if finite else "   NON-FINITE -> reject")
             )
             runlog.write_results(result["summary"], RESULTS_DIR)

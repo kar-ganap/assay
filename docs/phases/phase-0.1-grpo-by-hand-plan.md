@@ -140,6 +140,40 @@ the candidate that degrades.** → **Battery axis A3 should decompose the pass-r
 (saturated vs unreachable), not merely by distance from p = 0.5. Carried to the retro as a Phase 1.3
 design input.
 
+### DEVIATION — arms swapped 2026-07-28, on measured evidence
+
+**`arithmetic/add-3digit` is now the primary arm; `add-2digit` becomes the robustness check.** This
+is a **documented deviation from the pre-committed selection rule**, not the rule's output, and is
+labelled as such wherever it is reported.
+
+**Evidence.** The LR probe ran 4 rates × 30 steps on `add-2digit`. Two rig checks passed first —
+step-0 reward 0.672 against the screen's 0.720, and step-0 dead-group fraction 0.12 against the
+screen's 0.115, both independently reproduced. Then:
+
+| lr | live steps | ≥90% dead by | reward |
+|---|---|---|---|
+| 1e-5 | 30/30 | never | 0.67 → 0.95, smooth |
+| 3e-5 | 24/30 | step 7 | 0.67 → 1.00 |
+| 1e-4 | 18/30 | step 4 | 0.67 → 1.00 |
+| 3e-4 | 27/30 | step 3 | oscillates 0.99 → 0.84 → 0.91, unstable |
+
+`dead_group_fraction` climbs 0.12 → ~1.0 within ten steps. **The task is solved and dead long before
+the pre-registered slope window (steps 50–200) even opens**, so `d(gap)/d(step)` would be fitted
+entirely over dead steps — the artefact `live_fraction_in_slope_window` exists to flag.
+
+**Why this is not post-hoc rationalisation.** The limitation was recorded *when the task was pinned*,
+before any training: `dead_group_fraction` is blind to the **sign** of a dead group, all 23 of
+`add-2digit`'s were saturation-type, and its dead fraction was predicted to **rise** while
+`add-3digit`'s (27 unreachable vs 8 saturated) was predicted to **fall**. The rule optimised a step-0
+snapshot of a non-stationary quantity and selected the arm that degrades. The robustness arm was
+pre-declared for exactly this contingency; the two now swap roles.
+
+**The forecast was directionally right and quantitatively too optimistic** — predicted ~0.43,
+observed ~1.0.
+
+→ **Carries to battery axis A3**: the pass-rate band must be measured *dynamically and by sign*, not
+as a step-0 snapshot. This is now the third independent confirmation.
+
 ### Arms — declared 2026-07-27, before any training
 
 | Arm | Setting | Status |
@@ -350,7 +384,7 @@ So probe it, exactly as the task was probed rather than assumed.
 4. If **none** survive, that is a finding about the rig, not the science — widen the grid once and
    record both attempts here.
 
-> **Amendment, 2026-07-28 — rule 0 added after the first probe, before the rerun.** The original
+> **Amendment 1, 2026-07-28 — rule 0 added after the first probe, before the rerun.** The original
 > rule had no clause for "the reward never moved". The first probe returned `reward 0.000` at all
 > four rates with every group dead, and **rules 1–3 would all have passed**, selecting `3e-4` from
 > entirely corrupt data. The cause was a missing attention mask on the scoring forward: prompts are
@@ -358,6 +392,31 @@ So probe it, exactly as the task was probed rather than assumed.
 >
 > A rule that cannot distinguish "this learning rate is wrong" from "the harness is broken" is not
 > doing its job. Rule 0 is that distinction, and it is checked first.
+
+> **Amendments 2 and 3, 2026-07-28 — rules 1 and 3, after the second probe.** Both were falsified by
+> the same run, and both are recorded with the falsifying evidence rather than quietly adjusted.
+>
+> **Rule 1 conflated learning with collapse.** As written it rejected *all four* rates, because
+> entropy fell 0.590 → 0.12–0.25 everywhere — while reward rose 0.67 → 1.00. That is a policy
+> becoming *confident*, which is what successful training looks like. Amended to the **conjunction**,
+> matching ablation B's signature: entropy halving counts as collapse only if reward **fails to
+> improve**. No possible widening of the grid would have helped, since any rate that learns reduces
+> entropy.
+>
+> **Rule 3's rationale was inverted by saturation.** It said take the *largest* survivor, reasoning
+> that faster movement leaves more of the budget past the transient. On a task that saturates, the
+> fastest rate gives the **fewest** usable steps: 1e-4 → 18/30 live, versus 1e-5 → 30/30. Amended to
+> **maximise live steps**, since observability is what the step budget actually buys.
+>
+> **Selection under the amended rule: `learning_rate = 1e-5`** — 30/30 live steps, a smooth
+> 0.67 → 0.95 climb, no oscillation. Note this is the *smallest* candidate, the opposite of what the
+> original rule would have chosen, and that `3e-4` (the original rule's pick) is visibly unstable:
+> reward oscillating 0.99 → 0.84 → 0.91 with KL at 7.9 against ~1.0 elsewhere.
+>
+> **Caveat, stated rather than buried: this probe ran on `add-2digit`, which is no longer the primary
+> arm.** The rate must be re-probed on `add-3digit` under the amended rule before the ladder runs.
+> The saturation dynamics that drove the choice are task-specific, and a harder task may support —
+> or need — a larger rate.
 
 ### Overfit check — precondition for the probe, added 2026-07-28
 

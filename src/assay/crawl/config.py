@@ -52,7 +52,12 @@ class LadderConfig:
 
     # --- task (pinned by measurement, not by intuition) ---------------------------------
     family: str = "arithmetic"
-    setting: str = "add-2digit"
+    #: **Primary arm, swapped 2026-07-28.** The selection rule picked ``add-2digit``, but it
+    #: saturates to ~100% dead groups within ten steps — the whole 50-200 slope window would be
+    #: dead. ``add-3digit`` was pre-declared as the robustness arm for exactly this contingency
+    #: (13.5% of its dead groups are *unreachable* rather than saturated, so its dead fraction was
+    #: predicted to fall rather than rise). Documented deviation, not the rule's output.
+    setting: str = "add-3digit"
 
     # --- the ladder switches -----------------------------------------------------------
     baseline: Baseline = "group_loo"
