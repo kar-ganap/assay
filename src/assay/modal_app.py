@@ -414,6 +414,42 @@ if modal is not None:
         print(f"\nrecovered {recovered} run(s) into {phase_dir}")
 
     @app.local_entrypoint()
+    def overfit(steps: int = 50, lr: float = 3e-4) -> None:
+        """Can the loop learn *anything*? Precondition for the LR probe.
+
+            modal run --detach src/assay/modal_app.py::overfit
+
+        One prompt, high learning rate. A correct implementation drives reward on that single
+        example to ~1.0. If it cannot overfit one example, the gradient path is broken and no
+        learning rate will help — which is what the first probe spent a whole run discovering,
+        because a missing attention mask made every gradient meaningless.
+
+        Exercises generation, grading, advantages, the loss, masking, backward and the optimizer
+        step end to end. Pass: proxy_reward >= 0.95 within `steps`.
+        """
+        from assay.crawl.config import LadderConfig
+
+        # prompts_per_step=2 is the minimum the half-batch split allows; both groups draw from the
+        # same seed, so this is very nearly a single example repeated.
+        cfg = LadderConfig(
+            run_id="overfit-check", steps=steps, prompts_per_step=2, group_size=8,
+            baseline="group_loo", normalize_by_std=True, kl_coef=0.0, learning_rate=lr,
+        )
+        result = train_remote.remote(dataclasses.asdict(cfg), _provenance())
+        rows = result["steps"]
+
+        print(f"\n{'step':>5} {'reward':>8} {'dead':>7} {'|g|':>9} {'entropy':>9}")
+        for row in rows[:: max(1, len(rows) // 12)]:
+            print(f"{row['step']:>5} {row['proxy_reward']:8.3f} "
+                  f"{row['frac_degenerate_groups']:7.3f} {row['grad_norm']:9.4f} "
+                  f"{row['policy_entropy']:9.4f}")
+
+        best = max(r["proxy_reward"] for r in rows)
+        print(f"\nbest reward reached: {best:.3f}")
+        print("PASS — the loop can learn" if best >= 0.95 else
+              "FAIL — cannot overfit one example; the gradient path is broken, not the LR")
+
+    @app.local_entrypoint()
     def probe_lr(rates: str = "1e-5,3e-5,1e-4,3e-4", steps: int = 30) -> None:
         """Learning-rate probe. Rule pre-committed in the phase plan, before this ran.
 

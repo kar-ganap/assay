@@ -337,6 +337,10 @@ So probe it, exactly as the task was probed rather than assumed.
 
 **Selection rule, pre-committed:**
 
+0. **Rig gate, before any rate is considered.** `proxy_reward` at step 0 must land within ±0.15 of
+   the screen's measured `pass@1 = 0.720`, and must not be identically 0.000 at any step. Failing
+   this is a **rig failure, not a learning-rate result**, and no rate may be selected until it is
+   fixed.
 1. **Reject** any rate with a non-finite loss or `grad_norm`, or with `policy_entropy` falling by
    more than half within 30 steps (collapse before training has begun).
 2. **Reject** any rate whose `kl_to_ref` stays ≈ 0 — the policy did not move at all, so the rate is
@@ -345,6 +349,29 @@ So probe it, exactly as the task was probed rather than assumed.
    spent past the transient, and the ablations get more signal to differ on.
 4. If **none** survive, that is a finding about the rig, not the science — widen the grid once and
    record both attempts here.
+
+> **Amendment, 2026-07-28 — rule 0 added after the first probe, before the rerun.** The original
+> rule had no clause for "the reward never moved". The first probe returned `reward 0.000` at all
+> four rates with every group dead, and **rules 1–3 would all have passed**, selecting `3e-4` from
+> entirely corrupt data. The cause was a missing attention mask on the scoring forward: prompts are
+> left-padded, so it attended to padding as content and every gradient was meaningless.
+>
+> A rule that cannot distinguish "this learning rate is wrong" from "the harness is broken" is not
+> doing its job. Rule 0 is that distinction, and it is checked first.
+
+### Overfit check — precondition for the probe, added 2026-07-28
+
+**Before any learning rate is probed, the loop must be shown capable of learning at all.** Train on
+a *single* prompt at a high rate for ~50 steps: a correct implementation drives reward on that one
+example to ~1.0. If it cannot overfit one example, the gradient path is broken and no learning rate
+will help — which is exactly what the first probe spent a run discovering the expensive way.
+
+**Pass:** `proxy_reward` reaches ≥ 0.95 on the single prompt within 50 steps.
+**Fail:** it does not — a rig failure. Do not proceed to the probe; the fault is in the gradient
+path, not the hyperparameters.
+
+This exercises generation, grading, advantages, the loss, masking, backward and the optimizer step
+end to end, and it is the cheapest test that covers all of them at once.
 
 `kl_coef = 0.04` is used for the probe (published GRPO), so the probe also reads whether the leash
 engages at that value.
