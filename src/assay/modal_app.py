@@ -75,6 +75,16 @@ RAW_DIR = Path("experiments/phase-0.1-grpo-by-hand/raw")
 #: Cap on raw completions returned per (family, setting), to keep the payload sane on the fine pass.
 RAW_PER_SETTING = 400
 
+#: Durable artifact store, so a run does not depend on this laptop staying awake.
+#:
+#: Without it the *local* process is load-bearing: it receives the result and writes the files, so
+#: a closed lid or a dropped connection means paying for the compute and keeping nothing. The remote
+#: function now persists everything itself and commits before returning; the local write is a
+#: convenience. Pair with ``modal run --detach`` so the app also survives the client going away, and
+#: recover afterwards with the ``fetch`` entrypoint.
+VOLUME_NAME = "assay-phase01"
+VOLUME_PATH = "/artifacts"
+
 
 def _image():  # type: ignore[no-untyped-def]
     """One image for both the sweep and the ladder.
@@ -134,6 +144,7 @@ def _dotenv(path: Path = Path(".env")) -> dict[str, str]:
 
 if modal is not None:
     app = modal.App(APP_NAME)
+    artifacts = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
 
     class HFSampler:
         """``assay.crawl.sampling.Sampler`` backed by ``transformers.generate``.
@@ -278,6 +289,7 @@ if modal is not None:
         timeout=TRAIN_TIMEOUT_S,
         image=_image(),
         secrets=[modal.Secret.from_dict({"HF_TOKEN": _dotenv().get("HF_TOKEN", "")})],
+        volumes={VOLUME_PATH: artifacts},
     )
     def train_remote(config: dict, provenance: dict) -> dict:
         """Run one ladder configuration and return its per-step logs plus derived metrics.
@@ -314,11 +326,23 @@ if modal is not None:
         logs = train(cfg, run_dir, policy=policy)
         peak_gb = float(torch.cuda.max_memory_allocated()) / 1e9
         print(f"peak CUDA memory: {peak_gb:.2f} GB")
-        return {
+        payload = {
             "peak_memory_gb": peak_gb,
             "summary": runlog.summarize_run(cfg, logs),
             "steps": [dataclasses.asdict(log) for log in logs],
+            "provenance": {**provenance, "config": config},
         }
+
+        # Persist here, before returning. If the caller has gone away — closed laptop, dropped
+        # connection — the artifacts still exist and `fetch` recovers them.
+        artifact_dir = Path(VOLUME_PATH) / cfg.run_id
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "result.json").write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n"
+        )
+        artifacts.commit()
+        print(f"committed artifacts to volume {VOLUME_NAME}:/{cfg.run_id}")
+        return payload
 
     @app.local_entrypoint()
     def main(n_prompts: int = 64, k: int = 8, seed: int = 0, max_new_tokens: int = 256) -> None:
@@ -363,6 +387,31 @@ if modal is not None:
         for e in result["selection"]["excluded"]:
             print(f"excluded {e['family']}/{e['setting']}: {e['reason']}")
         print(f"\nwrote {out}")
+
+    @app.local_entrypoint()
+    def fetch(into: str = "experiments/phase-0.1-grpo-by-hand") -> None:
+        """Recover every run the volume holds into the local experiment layout.
+
+            modal run src/assay/modal_app.py::fetch
+
+        The point of the volume: a run that finished while this laptop was asleep is not lost, and
+        neither is one whose client disconnected. Idempotent — re-fetching simply overwrites.
+        """
+        phase_dir = Path(into)
+        recovered = 0
+        for entry in artifacts.listdir("/", recursive=True):
+            if not entry.path.endswith("result.json"):
+                continue
+            payload = json.loads(b"".join(artifacts.read_file(entry.path)).decode())
+            _fetch_into(payload, phase_dir)
+            summary = payload["summary"]
+            print(
+                f"  {summary['run_id']:<28} steps={summary['n_steps']:<4} "
+                f"live={summary['live_fraction_in_slope_window']} "
+                f"peak={payload.get('peak_memory_gb', float('nan')):.1f} GB"
+            )
+            recovered += 1
+        print(f"\nrecovered {recovered} run(s) into {phase_dir}")
 
     @app.local_entrypoint()
     def probe_lr(rates: str = "1e-5,3e-5,1e-4,3e-4", steps: int = 30) -> None:
@@ -448,6 +497,20 @@ if modal is not None:
                     f"dead {s['frac_degenerate_first']:.3f}->{s['frac_degenerate_last']:.3f}  "
                     f"live {s['live_fraction_in_slope_window']}"
                 )
+
+
+def _fetch_into(payload: dict, phase_dir: Path) -> None:  # type: ignore[type-arg]
+    """Land one remote payload in the local experiment layout."""
+    from assay.crawl import runlog
+
+    run_id = payload["summary"]["run_id"]
+    run_dir = phase_dir / "raw" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    with (run_dir / "steps.jsonl").open("w") as handle:
+        for step in payload["steps"]:
+            handle.write(json.dumps(step) + "\n")
+    runlog.write_manifest(payload["provenance"], run_dir)
+    runlog.write_results(payload["summary"], phase_dir / "results")
 
 
 def _provenance() -> dict:  # type: ignore[type-arg]
