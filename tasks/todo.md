@@ -78,12 +78,21 @@ section · retro · `/learn`.
 - [ ] **Tinker waitlist** — $150 credits would make Run and Gallop materially cheaper and could put
       the confirmatory arms at 8B.
 - [ ] **Pin the confirmatory model revision hash** (Phase 1.1). Candidate: Qwen3-1.7B.
-- [ ] **Phase 0.1 task choice** — needs base pass rate ≥5% at k=8. Candidates: 3-digit arithmetic
-      with regex extraction; strict output-format; an easy Reasoning Gym family.
+- [x] ~~Phase 0.1 task choice~~ — **DONE 2026-07-27/28.** Chosen by a calibration sweep, not
+      intuition, on `dead_group_fraction` rather than a mean. `arithmetic/add-3digit` is primary
+      after a documented deviation; `add-2digit` is the robustness arm. The ">=5% at k=8" criterion
+      in the original plan was superseded: it is stated on the wrong statistic and has no ceiling.
 - [ ] **`#11` (Anthropic natural emergent misalignment) vs the `p_hack@64` screen.** Their "no safe
       rarity threshold" is at ~1,500+ steps; ours is a 200-step budget. Expected to reconcile — but
       **if it doesn't, L1's admission band needs redesign.**
-- [ ] No remote yet. Create `github.com/kar-ganap/assay` (private) when Phase 0.1 lands.
+- [x] ~~No remote yet~~ — **DONE.** `github.com/kar-ganap/assay`, private. `main` sits at the
+      scaffold; work is on `phase-0.1-grpo-by-hand`, unmerged (§13: merge needs retro + `/learn`).
+- [ ] **Reconcile spend against the Modal dashboard** before resuming. Current figures are
+      reconstructed after the fact and could be off by 2x; the >50% replan trigger has fired.
+- [ ] **Ablation A wants >=3 seeds per arm.** `run1` has 2. Its metric sits at rho~0.04 with a seed
+      band of 0.006 — real but tight, because two half-batch gradients in a million-parameter space
+      are nearly orthogonal. If the ratio lands inside the band, the honest report is "not
+      measurable at this batch size", **not** "the baseline does not reduce variance".
 
 ## SPEND GATE
 
