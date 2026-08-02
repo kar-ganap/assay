@@ -9,6 +9,7 @@ flat_one`` is that claim, asserted.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -290,34 +291,80 @@ def test_rollouts_per_step() -> None:
 # --------------------------------------------------------------------------------------
 
 
-def test_figures_regenerate_from_logs_alone(tmp_path: Path) -> None:
+def test_figures_regenerate_from_committed_results_alone(tmp_path: Path) -> None:
+    """The gate: after --export, `raw/` can be deleted and every figure still draws.
+
+    That is the whole reason the per-step series is committed. The previous version of this test
+    passed while reading raw/ directly, which is gitignored -- so it verified nothing about whether
+    a fresh clone could reproduce the curves.
+    """
     from assay.crawl import figures
 
     phase = tmp_path / "phase"
-    for run_id, slope in (("run7", 0.0), ("ablation_c", 0.002)):
+    for run_id, slope in (("run7-add-3digit-seed0", 0.0), ("ablation_c-add-3digit-seed0", 0.002)):
         run_dir = phase / "raw" / run_id
         logs = [_log(t, proxy=0.5 + slope * t, true=0.5, degenerate=0.1 + 0.001 * t)
                 for t in range(201)]
         with runlog.step_log_writer(run_dir) as writer:
             for log in logs:
                 writer.append(log)
-        runlog.write_results(
-            runlog.summarize_run(LadderConfig(run_id=run_id), logs), phase / "results"
+        (run_dir / "manifest.json").write_text(
+            json.dumps({"git_sha": "deadbeefcafe", "git_dirty": False, "backend": "modal-L4"})
         )
 
-    out = figures.plot(phase)
+    assert len(figures.export_series(phase)) == 2
+
+    shutil.rmtree(phase / "raw")          # the point: results/ must now be sufficient
+    runs = figures.load_series(phase)
+    assert set(runs) == {"run7-add-3digit-seed0", "ablation_c-add-3digit-seed0"}
+    assert len(runs["run7-add-3digit-seed0"]) == 201
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    out = figures.figure_ladder(runs, phase / "fig1.png")
     assert out.exists() and out.stat().st_size > 0
 
-    table = figures.gap_table(phase)
-    assert "ablation_c" in table and "run7" in table
-    assert "+2.000e-03" in table, "the outcome variable must appear in the regenerated table"
+
+def test_figures_never_pool_runs_from_different_cohorts(tmp_path: Path) -> None:
+    """Seeds from different commits or GPU tiers are not replicates, and must not be averaged.
+
+    Caught on 2026-08-02: the ladder panel silently pooled a stale A100 seed of run1 and two
+    old-commit seeds of run2 with their clean-rerun counterparts, and simply labelled the curve
+    "n=2" / "n=3". The plot looked entirely healthy -- which is what makes this failure mode worth a
+    test rather than care.
+    """
+    from assay.crawl import figures
+
+    phase = tmp_path / "phase"
+    cohorts = {
+        "run7-add-3digit-seed0": ("cleansha0", False, "modal-L4"),
+        "run7-add-3digit-seed1": ("cleansha0", False, "modal-L4"),
+        "run7-add-3digit-seed2": ("stale123", False, "modal-A100-40GB"),  # different tier + commit
+        "run1-add-3digit-seed0": ("cleansha0", True, "modal-L4"),          # dirty tree
+    }
+    for run_id, (sha, dirty, backend) in cohorts.items():
+        run_dir = phase / "raw" / run_id
+        with runlog.step_log_writer(run_dir) as writer:
+            for t in range(5):
+                writer.append(_log(t, proxy=0.5, true=0.5, degenerate=0.1))
+        (run_dir / "manifest.json").write_text(
+            json.dumps({"git_sha": sha, "git_dirty": dirty, "backend": backend})
+        )
+
+    figures.export_series(phase)
+    kept = figures.load_series(phase)
+
+    assert set(kept) == {"run7-add-3digit-seed0", "run7-add-3digit-seed1"}
+    _, _, _, n = figures.pooled(kept, "run7-add-3digit", "true_reward")
+    assert n == 2, "only same-cohort seeds may be pooled"
 
 
 def test_figures_refuse_to_invent_data(tmp_path: Path) -> None:
     from assay.crawl import figures
 
     with pytest.raises(FileNotFoundError):
-        figures.load_runs(tmp_path)
+        figures.load_series(tmp_path)
 
 
 # --------------------------------------------------------------------------------------
