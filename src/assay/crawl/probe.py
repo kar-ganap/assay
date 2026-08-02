@@ -296,10 +296,12 @@ def probe_verdict(
     ``rig_broken``      any statistic non-finite, **or** the three mean gradients disagree
                         (pairwise cosine < 0.90). All three estimate the same expected
                         gradient, so disagreement means the probe is not measuring variance.
-    ``confirmed``       ordering holds **and** ``1/(1-p)`` falls inside the observed 95% CI
-    ``partial``         ordering holds and the CI clears 1.0, but misses ``1/(1-p)``
-    ``falsified``       the ordering reverses
-    ``not_measurable``  the bootstrap 95% CI for the ratio spans 1.0
+    ``falsified``       CI lies entirely **below** 1.0 — a significant reversal
+    ``confirmed``       CI excludes 1.0 **and** contains ``1/(1-p)``
+    ``partial``         CI excludes 1.0 but misses ``1/(1-p)`` — real effect, wrong size
+    ``magnitude_        CI spans 1.0 **and** excludes ``1/(1-p)`` — no reduction shown *and*
+    excluded``          the predicted size ruled out
+    ``not_measurable``  CI spans **both** 1.0 and ``1/(1-p)`` — genuinely uninformative
     ==================  =====================================================================
 
     Two branches deserve their own note.
@@ -309,9 +311,11 @@ def probe_verdict(
     threshold cannot do that. It replaced a flat ``>= 2.0`` on 2026-08-01, before the probe ran, once
     the point prediction showed 2.0 was mis-set for this operating point (``predicted_ratio``).
 
-    ``not_measurable`` is distinct on purpose, and is the outcome the training-arm design could not
-    express: "the baseline does not reduce variance" and "this rig cannot tell" are different claims,
-    and only the second is fixed by drawing more batches.
+    ``magnitude_excluded`` and ``not_measurable`` are split because they call for opposite actions.
+    Both have an interval containing 1.0, so neither demonstrates a reduction — but the first has
+    *also* ruled out the predicted size, which is a result, while only the second is fixed by
+    drawing more batches. Collapsing them (as the first version did) reports a real negative finding
+    as an absence of information.
     """
     import math
 
@@ -347,14 +351,36 @@ def probe_verdict(
     expected = predicted_ratio(pass_rate)
 
     ordered = values["none"] > values["global"] >= values["group_loo"]
-    if low <= 1.0 <= high:
-        verdict = "not_measurable"
-    elif not ordered:
+
+    # Two INDEPENDENT questions, deliberately not chained. "Is there an effect at all?" and "is it
+    # the size theory says?" have separate answers, and the interval can settle one while leaving
+    # the other open. The original chain tested them with if/elif, so whichever fired first hid the
+    # other — and on the 2026-08-01 no-length-norm probe both were true at once (CI spanned 1.0 AND
+    # excluded 1.87) while only "not_measurable" was reported, which reads as "we learned nothing"
+    # when in fact the predicted magnitude had been ruled out on every seed.
+    reduction_detected = low > 1.0
+    reversal_detected = high < 1.0
+    prediction_consistent = low <= expected <= high
+
+    # **Every branch reads the interval, never the point estimate.** An earlier version gated
+    # ``falsified`` on ``NSR_none > NSR_global`` as raw numbers, which would have called the
+    # 2026-08-01 no-length-norm probe falsified on two of three seeds off ratios of 0.859 and 0.921
+    # whose intervals comfortably span 1.0 — declaring the baseline actively harmful from noise.
+    # A direction claim needs the interval to exclude 1.0, in whichever direction.
+    if reversal_detected:
         verdict = "falsified"
-    elif low <= expected <= high:
+    elif reduction_detected and prediction_consistent:
         verdict = "confirmed"
+    elif reduction_detected:
+        verdict = "partial"  # a real reduction, but not the predicted size
+    elif not prediction_consistent:
+        # No reduction demonstrated *and* the predicted magnitude excluded. Strictly more
+        # informative than "not measurable": the interval is tight enough to rule something out.
+        verdict = "magnitude_excluded"
     else:
-        verdict = "partial"
+        # The interval spans both 1.0 and the prediction — genuinely uninformative, and the only
+        # case that more batches actually fixes.
+        verdict = "not_measurable"
 
     return {
         "verdict": verdict,
@@ -363,6 +389,11 @@ def probe_verdict(
         "ratio_none_over_global": ratio,
         "ratio_predicted": expected,
         "ratio_ci95": [low, high],
+        # The two facts the verdict is derived from, reported so a reader never has to trust the
+        # label over the interval.
+        "reduction_detected": reduction_detected,
+        "reversal_detected": reversal_detected,
+        "prediction_consistent": prediction_consistent,
         # Reported, never gated on. group_loo beats global only when prompts differ enough in
         # difficulty to repay estimating the baseline from G-1=7 samples instead of the batch's 127
         # — a bias/variance trade whose crossover this probe measures rather than assumes.

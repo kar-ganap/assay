@@ -467,8 +467,12 @@ if modal is not None:
 
         grid = [
             ProbeConfig(
+                # Batch count is in the id: N is the thing being varied to tighten the interval,
+                # so an N=160 run must not overwrite the N=40 artifact it is meant to be compared
+                # against (desideratum: raw artefacts are never modified).
                 run_id=f"probeA-w{warmup}-seed{seed}"
-                + ("" if length_normalize else "-nolennorm"),
+                + ("" if length_normalize else "-nolennorm")
+                + ("" if batches == 40 else f"-n{batches}"),
                 seed=seed,
                 warmup_steps=warmup,
                 batches=batches,
