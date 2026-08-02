@@ -92,6 +92,16 @@
   pdfstartview=FitH,
 ]{hyperref}
 \usepackage[noabbrev,capitalise]{cleveref}
+
+% cleveref does not auto-detect amsthm environments reliably, and the failure is SILENT: the label
+% resolves (the number is right) but the name slot renders "??", and LaTeX logs no warning because
+% nothing is actually undefined. Grepping the log is therefore useless here — `make pdf` greps the
+% rendered PDF instead.
+\crefname{claim}{Claim}{Claims}
+\Crefname{claim}{Claim}{Claims}
+\crefname{exercise}{Exercise}{Exercises}
+\Crefname{exercise}{Exercise}{Exercises}
+
 \usepackage{microtype}
 
 % ── Notation macros ──────────────────────────────────────────────
