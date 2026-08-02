@@ -4,40 +4,42 @@
 > already made so you don't relitigate them. Update the STATUS + NEXT blocks at the end of each
 > session.
 
-## STATUS (as of 2026-07-29 — PAUSED on compute budget)
+## STATUS (as of 2026-08-02 — seed pass running)
 
-- **Phase 0.1 in progress** on `phase-0.1-grpo-by-hand`, 29 commits, `make check` green (229 tests).
-- **⛔ PAUSED: Modal budget exhausted (~$0.18 left).** Waiting for the monthly quota reset.
-  `tasks/spend.md`'s **>50% replan trigger has fired** — Phase 0.1's $5 line is at ~$8–13 of Crawl's
-  $17, with R0 ($10) and R1 ($2) still owed and both never-cut. **Reconcile against the Modal
-  dashboard before resuming.**
-- **GATE 1 PASSED.** Run 7 on `add-3digit`, 2 seeds, 200 steps: reward 0.438→0.873 and 0.406→0.905
-  against the screen's base rate 0.433. Gain **+0.456 vs a seed band of 0.032 — 14× the band**, and
-  `live_fraction_in_slope_window = 1.00` on both seeds.
-- **Primary arm swapped** (documented deviation): `add-3digit`, not the rule's `add-2digit`, which
-  saturates to ~100% dead groups within ten steps. `learning_rate = 1e-5`, `kl_coef = 0.04`.
-- **14 runs recovered locally** into `experiments/phase-0.1-grpo-by-hand/`; all also live on the
-  Modal volume `assay-phase01`. Nothing is at risk.
-- **`TRAIN_GPU` is back to L4** — measured peak is 13.5–14.5 GB, so A100-40GB was never needed.
+- **Phase 0.1 nearly complete** on `phase-0.1-grpo-by-hand`. `make check` green (262 tests).
+- **All four breakages have clean results at n=1**, from the clean ladder of 2026-08-02: ten arms,
+  one commit (`f1cc4048`), one GPU tier (L4), 200 steps each, 410 GPU-min, **$5.45**.
+- **⏳ Seed pass running** (`4d4d64e`): seeds 1–2 on the 7 arms that carry a claimed *difference*.
+  ~8.8 h, ~$7.05. Rungs 1–3 stay at n=1 by design — their dead-group numbers match the derivation
+  exactly, so a seed band would only measure noise around a derived value.
+- **Spend reconciled from measured wall clock: $8.41** at the time of reconciliation, rising to
+  **~$21** with the clean ladder and probes, ~$28 once the seed pass lands. Modal rates verified:
+  L4 $0.799/h, A100-40GB $2.099/h. User holds ~$50 of Modal credits, so the earlier
+  "Crawl is over budget" alarm was against the *plan line*, not a wall.
 
-## WHAT REMAINS (≈1.3 h GPU ≈ $1 on L4)
+### Results, one line each
 
-8 ladder entries with no `add-3digit` run: `run2`, `run3`, `ablation_b`, `ablation_b_control`,
-`ablation_c`, `ablation_c_nolennorm`, `ablation_d`, `run7_nolennorm`.
+| | verdict |
+|---|---|
+| **A** no baseline | **Falsified, then redesigned.** The training-arm comparison is structurally void (two confounds pointing opposite ways + non-comparable trajectories). Replaced by a paired fixed-policy probe: at the base policy, **no detectable variance reduction and `1/(1-p)` excluded on 3/3 seeds**. At a converged policy the probe is `underpowered` — GRPO starves its own gradient (NSR 0.37 → 55–83). |
+| **B** no KL leash | **A finding, not the signature.** The degenerate grader is fully hacked (proxy 0.993 vs true 0.486, **gap +0.507**, the largest in the ladder), and removing the leash changes the gap by −0.018 — nothing — despite KL carrying 49% of the loss. B's mechanism runs through D's. |
+| **C** tie-breaker | **Confirmed on all four signatures.** dead 0.468→0.008, tokens 17.2→35.5, true-reward gain +0.315→+0.130, gap +0.042. |
+| **D** unanimous groups | **Confirmed exactly.** `frac_degenerate = 1.000` and `grad_norm = 0.0000` on all 200 steps; 313k tokens for zero gradient. |
 
-```
-modal run --detach src/assay/modal_app.py::ladder --runs run2 --seeds 0,1,2   # completes ablation A
-modal run --detach src/assay/modal_app.py::ladder --runs run3,ablation_b,ablation_b_control,ablation_c,ablation_c_nolennorm,ablation_d,run7_nolennorm
-modal run src/assay/modal_app.py::fetch                                        # land the artifacts
-```
+**Length normalisation** breaks `E[grad log pi] = 0`, which is why A was unreadable — and removing it
+improved NSR on every arm and final true reward on both arms tested. Two independent lines toward
+Dr. GRPO, reached by measurement.
 
-`run1 × 2 seeds` is already done, so **ablation A needs only `run2`.** It wants ≥3 seeds per arm: its
-metric (half-batch gradient cosine) sits at ρ≈0.04 with a seed band of 0.006 — measurable but tight,
-because two half-batch gradients in a million-parameter space are nearly orthogonal.
+## WHAT REMAINS
 
-**Doable now, with zero compute:** figures from the 6 completed 200-step runs · the
-`add-2digit` vs `add-3digit` saturation comparison (a real A3 finding, with curves) · seed-variance
-section · retro · `/learn`.
+1. **Wait for the seed pass**, then refresh every headline number to a 3-seed mean + band.
+2. **`docs/tutorial/reinforce-to-grpo.tex`** (18 pp, builds clean) needs one consolidated revision:
+   probe table is stale at N=40 (N=160 exists), the converged/`underpowered` result is missing
+   entirely, and **no table states its `n`** — every number currently reads as settled when it is
+   n=1. User is waiting on this to print it.
+3. **Retro** + `/learn`, then merge (§13 needs both).
+4. Optional: +$3.86 for seeds on rungs 1–3, which is what the unexplained *"a baseline tripled
+   completion length"* observation (9.2 → 25.2 tokens) would need to be claimable rather than dropped.
 
 ## DECISIONS ALREADY MADE (do not relitigate — the *why* is in `docs/conceptual.md`)
 
@@ -74,10 +76,19 @@ section · retro · `/learn`.
       (Prime Sprints, closest on the prediction leg). **If #2 turns out to occupy the skill-fixed /
       authorship-varied axis, `endemic` is dead and the project reverts to gap-only `assay`** —
       record that decision in the gate.
-- [ ] **Prime Sprints free queue: live? terms?** Moves $28 and decides the Stage-2 grid model.
+- [x] ~~**Prime Sprints free queue: live? terms?**~~ — **RESOLVED 2026-08-01.** The free compute
+      is live (`sprints/Llama-3.2-1B-Instruct`, $0/$0/$0, operational) but the *sprint* closed
+      ~2026-06-20 and no new track has been announced — **`CLAUDE.md` §15's "running now" is
+      stale.** Requirement established empirically: the free tier **requires a PUBLIC
+      environment** (ownership is fine, a fork was accepted; private was rejected). So the cost
+      is publishing `bisect` before the paper. Decide at Phase 0.2. **Trap:** `prime-rl` ships a
+      `zero_advantage` pre-batch filter ON BY DEFAULT — a Stage-2 grid there would silently
+      filter away ablation D's pathology unless the filter list is overridden.
 - [ ] **Tinker waitlist** — $150 credits would make Run and Gallop materially cheaper and could put
       the confirmatory arms at 8B.
-- [ ] **Pin the confirmatory model revision hash** (Phase 1.1). Candidate: Qwen3-1.7B.
+- [ ] **Pin the confirmatory model revision hash** (Phase 1.1). Candidate was Qwen3-1.7B;
+      **Prime hosted training now offers Qwen3.5-2B at $0.15/1M train**, which is a live
+      alternative and ~4-8x cheaper than Modal at our measured token volumes.
 - [x] ~~Phase 0.1 task choice~~ — **DONE 2026-07-27/28.** Chosen by a calibration sweep, not
       intuition, on `dead_group_fraction` rather than a mean. `arithmetic/add-3digit` is primary
       after a documented deviation; `add-2digit` is the robustness arm. The ">=5% at k=8" criterion
@@ -87,8 +98,8 @@ section · retro · `/learn`.
       **if it doesn't, L1's admission band needs redesign.**
 - [x] ~~No remote yet~~ — **DONE.** `github.com/kar-ganap/assay`, private. `main` sits at the
       scaffold; work is on `phase-0.1-grpo-by-hand`, unmerged (§13: merge needs retro + `/learn`).
-- [ ] **Reconcile spend against the Modal dashboard** before resuming. Current figures are
-      reconstructed after the fact and could be off by 2x; the >50% replan trigger has fired.
+- [x] ~~**Reconcile spend**~~ — **DONE 2026-08-01** from measured per-step wall clock, not the
+      dashboard: $8.41 across 22 runs, rates verified from modal.com/pricing.
 - [ ] **Ablation A wants >=3 seeds per arm.** `run1` has 2. Its metric sits at rho~0.04 with a seed
       band of 0.006 — real but tight, because two half-batch gradients in a million-parameter space
       are nearly orthogonal. If the ratio lands inside the band, the honest report is "not

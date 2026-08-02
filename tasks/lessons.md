@@ -122,3 +122,59 @@ that produced them would otherwise be the only record.*
   fired while runs were still being launched.
   *Trigger: without this, a budget rule exists on paper and is discovered after the money is gone;
   with this, the trigger fires while there is still budget to replan with.*
+
+- 2026-08-02 · **A check that reports instead of blocking is not a check.** Third instance in this
+  phase, and the most expensive. `modal_app.ladder` *printed* `WARNING: dirty tree` and fell straight
+  through into the launch loop — once, before a loop that then launched N runs, and paired with
+  `--detach`, whose entire purpose is that nobody is watching the terminal. Four 200-step runs
+  (~$2.50) landed at a `git_sha` that does not identify their code. The two earlier instances were
+  `make check | tail && git commit` swallowing the exit status, and the `--setting` default silently
+  overriding the pinned ladder table.
+  *Trigger: without this, a validation gate's enforcement mechanism is me noticing; with this, it
+  raises and the run does not start.*
+
+- 2026-08-02 · **Verify in the medium the error would appear in.** Two failures in one session that
+  a code- or log-level check structurally could not see. (a) Every `\cref` to a Claim rendered as
+  `?? 2.1` in the PDF; nothing was *undefined*, so LaTeX logged no warning, and my `grep undefined`
+  on the log passed a document with eleven broken references. (b) The ladder figure silently pooled
+  stale A100 seeds with clean ones and labelled the curve `n=2`; the code read fine and the plot
+  looked healthy — it was visible only by opening the PNG.
+  *Trigger: without this, a green check certifies a medium the bug does not live in; with this,
+  `make pdf` greps the rendered text and figures are looked at before they are believed.*
+
+- 2026-08-02 · **A gate's branches must be independent facts, not an `if/elif` chain.** The probe's
+  verdict chained "is there an effect?" and "is it the predicted size?", so whichever matched first
+  hid the other — and on the no-length-norm probe *both* were true (CI spanned 1.0 **and** excluded
+  `1/(1-p)`), while only `not_measurable` was reported. Rewriting it surfaced a worse bug in the
+  same function: the `falsified` branch gated on raw ordering, which would have called a ratio of
+  0.859 with a CI spanning 1.0 "the baseline is actively harmful" — a direction claim from noise.
+  *Trigger: without this, a verdict reports the first matching label and buries the rest; with this,
+  each fact is computed and reported separately and the label is derived from them.*
+
+- 2026-08-02 · **A right number can come from a wrong mechanism. Decompose before claiming.** The
+  first probe matched theory to 4.6% (1.786 observed vs 1.872 predicted) and I nearly reported it as
+  a clean confirmation. Decomposing `NSR = V/||g||^2` showed theory predicts *signal unchanged, noise
+  down 1.87x* while what happened was *noise up 2.34x, signal up 4.16x* — two effects the theory does
+  not contain, pulling opposite ways, landing on the right answer. Only the rig check ("do these
+  estimators even share a mean?") caught it.
+  *Trigger: without this, a coincidental agreement is banked as a confirmed prediction; with this,
+  the components are checked before the ratio is believed.*
+
+- 2026-08-02 · **A test double cannot exhibit what it was constructed to exclude.** `ToyPolicy`
+  samples from its own distribution precisely so `E[grad log pi] = 0` holds — which is exactly why it
+  could not reproduce the length-normalisation confound, and why the toy read ablation A forwards
+  while Llama read it backwards. Separately, my synthetic bootstrap gave every baseline the same
+  deterministic jitter, making their *ratio* constant and the `not_measurable` branch unreachable:
+  the double silently vouched for a gate it never exercised.
+  *Trigger: without this, a passing test certifies a branch the fixture cannot reach; with this, the
+  double's own invariants are checked against the property under test before trusting a green run.*
+
+- 2026-08-02 · **Define the project's vocabulary at first use — the words that stopped looking like
+  jargon are the ones that need it.** The user had to ask three separate times in one session what
+  `r-bar`, "degenerate"/"hackable", and "proxy vs true" meant in a tutorial written for them. Worse,
+  `r-bar` carried *three different meanings* across six uses (group mean, batch mean, half-batch
+  mean) — and conflating the first two is exactly the rung-2/rung-3 distinction the document spends a
+  section explaining.
+  *Trigger: without this, the terms internalised from months in the codebase are precisely the ones
+  left undefined, and the document fails hardest where it matters most; with this, notation is
+  defined where it is introduced and subscripted to its scope.*
