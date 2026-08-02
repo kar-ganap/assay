@@ -278,7 +278,7 @@ def variance_statistics(gradients: list[Any], *, bootstrap: int, seed: int) -> d
 
 
 def probe_verdict(
-    stats: dict[Baseline, dict[str, Any]], *, pass_rate: float
+    stats: dict[Baseline, dict[str, Any]], *, pass_rate: float, batches: int
 ) -> dict[str, Any]:
     """Ablation A's gate. **Pre-registered 2026-08-01, before the probe was run.**
 
@@ -294,8 +294,11 @@ def probe_verdict(
     verdict             condition
     ==================  =====================================================================
     ``rig_broken``      any statistic non-finite, **or** the three mean gradients disagree
-                        (pairwise cosine < 0.90). All three estimate the same expected
-                        gradient, so disagreement means the probe is not measuring variance.
+                        (pairwise cosine < 0.90) *while being individually resolved*. All three
+                        estimate the same expected gradient, so disagreement is a real defect.
+    ``underpowered``    ``NSR/N`` is large enough that ``g_bar`` itself is noise-dominated, so the
+                        agreement floor is unreachable however well the estimators agree. Checked
+                        **before** ``rig_broken``, because otherwise it masquerades as one.
     ``falsified``       CI lies entirely **below** 1.0 — a significant reversal
     ``confirmed``       CI excludes 1.0 **and** contains ``1/(1-p)``
     ``partial``         CI excludes 1.0 but misses ``1/(1-p)`` — real effect, wrong size
@@ -332,15 +335,50 @@ def probe_verdict(
             denominator = float(ga.norm()) * float(gb.norm())
             cosines[f"{a}|{b}"] = float(ga @ gb) / denominator if denominator > 0 else 0.0
 
+    # Is the mean gradient resolved well enough for its DIRECTION to mean anything?
+    #
+    # g_bar is itself an average of `batches` noisy draws, so its own squared relative error is
+    # NSR/N. Writing two estimates as g + eps_a and g + eps_b with independent errors of that size,
+    # the expected cosine between them is ~ 1/(1 + NSR/N) *even when they estimate the same vector*.
+    # So once NSR/N exceeds 1/floor - 1, the agreement floor is unreachable by construction and the
+    # check below is vacuous -- it would report "the baselines disagree" when the truth is "nothing
+    # here is estimated well enough to compare".
+    #
+    # Found 2026-08-02 on the 50-step warmup arm: NSR climbed to 23-61 (from 0.35 at the base
+    # policy) as ||g_bar||^2 collapsed ~600x, because dead groups had reached 0.469. The probe was
+    # correctly refusing to proceed and giving the wrong reason for it.
+    resolution = {b: values[b] / max(1, batches) for b in BASELINES}
+    attainable = {b: 1.0 / (1.0 + resolution[b]) for b in BASELINES}
+    if min(attainable.values()) < MEAN_AGREEMENT_FLOOR:
+        worst = min(attainable, key=lambda b: attainable[b])
+        return {
+            "verdict": "underpowered",
+            "reason": (
+                f"mean gradient unresolved: NSR/N = {resolution[worst]:.3f} for {worst!r}, so even "
+                f"identical estimators would only reach cosine ~{attainable[worst]:.3f} < "
+                f"{MEAN_AGREEMENT_FLOOR}. Not a disagreement -- the means are noise-dominated. "
+                f"Fixable with more batches, or by probing at an operating point with a larger "
+                f"signal."
+            ),
+            "nsr": values,
+            "pass_rate": pass_rate,
+            "mean_cosines": cosines,
+            "mean_resolution": resolution,
+            "attainable_cosine": attainable,
+        }
+
     if min(cosines.values()) < MEAN_AGREEMENT_FLOOR:
         return {
             "verdict": "rig_broken",
             "reason": (
                 f"mean gradients disagree (min pairwise cosine {min(cosines.values()):.3f} < "
-                f"{MEAN_AGREEMENT_FLOOR}); the baselines are not estimating one gradient"
+                f"{MEAN_AGREEMENT_FLOOR}); the baselines are not estimating one gradient. The means "
+                f"ARE resolved (NSR/N <= {max(resolution.values()):.4f}), so this is a property of "
+                f"the estimators, not a sample-size problem."
             ),
             "nsr": values,
             "mean_cosines": cosines,
+            "mean_resolution": resolution,
         }
 
     ratio = values["none"] / values["global"]
@@ -420,7 +458,9 @@ def probe(cfg: ProbeConfig, run_dir: Path, *, policy: Policy) -> dict[str, Any]:
         )
         for baseline in BASELINES
     }
-    verdict = probe_verdict(stats, pass_rate=telemetry["pass_rate"])
+    verdict = probe_verdict(
+        stats, pass_rate=telemetry["pass_rate"], batches=cfg.batches
+    )
 
     result = {
         "config": asdict(cfg),
