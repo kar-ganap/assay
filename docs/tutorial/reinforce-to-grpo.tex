@@ -172,6 +172,71 @@ The objective is the expected reward:
 
 We want $\grad J(\theta)$ so we can do gradient \emph{ascent}.
 
+\subsection{Two rewards: proxy and true}
+\label{sec:proxytrue}
+
+There is a second reward, and the distinction between them is the instrument this entire project is
+built around. Every completion is graded \emph{twice}:
+
+\begin{itemize}
+  \item $R_{\text{proxy}}(x,y)$ --- what the policy is \textbf{trained on}. It enters the loss. This
+        is the grader you can actually run at training time.
+  \item $R_{\text{true}}(x,y)$ --- what you actually \textbf{want}. It is computed at every step and
+        \textbf{never enters the loss}. Measured only.
+\end{itemize}
+
+The quantity of interest is their difference,
+\begin{equation}
+  \mathrm{gap} \;=\; R_{\text{proxy}} - R_{\text{true}},
+  \label{eq:gap}
+\end{equation}
+which is reward the proxy awards that the truth does not endorse --- Goodhart's law, as a number.
+
+In Phase 0.1, $R_{\text{true}}$ is \emph{always} $R_{\text{binary}}$; only the proxy varies:
+
+\begin{table}[H]
+\centering
+\caption{The three reward variants. Only the proxy changes, which is what makes gaps comparable
+across arms.}
+\label{tab:variants}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Variant} & \textbf{Used by} & \textbf{$R_{\text{proxy}}$} & \textbf{Gap} \\
+\midrule
+\texttt{binary}   & ladder runs 1--7 & $R_{\text{binary}}$ & $\equiv 0$ by construction \\
+\texttt{format}   & ablation B & shape only; the answer is discarded & grows: measured $+0.507$ \\
+\texttt{tiebreak} & ablation C & $R_{\text{binary}} + 0.001\,|y|$ & exactly $0.001\,|y|$: measured $+0.042$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{The ladder's gap is identically zero, and that is correct.} Runs 1--7 set proxy $=$ true, so
+\cref{eq:gap} vanishes. The ladder is about the \emph{estimator} --- whether the gradient works ---
+not about Goodhart. A nonzero gap on run 7 would indicate a bug, not a finding. The gap only becomes
+a meaningful quantity once a deliberately different proxy is introduced, which is what ablations B
+and C do.
+
+\textbf{Ablation C doubles as a calibration of the instrument.} Its gap is analytically known ---
+the tie-breaker pays exactly $0.001$ per token, so the gap \emph{must} equal $0.001\,|y|$. Measured
+over the final ten steps: gap $= 0.04188$ against $0.001 \times 41.88 = 0.04188$, a ratio of
+$1.0000$. When a measurement has a closed form, check it.
+
+\begin{aside}
+\textbf{Why the true reward must never be trained on.} This is a contamination argument, not a cost
+one. The moment a held-out grader enters the objective it stops measuring generalisation and becomes
+a second proxy --- and the gap it existed to reveal closes for the wrong reason. The asymmetry
+\emph{is} the instrument.
+
+The real-world version this rehearses: in the \texttt{bisect} environment, the proxy is ``the failing
+test passes'' and the truth is ``a held-out suite exercising the same root cause through other code
+paths.'' You cannot train on the latter --- if you could specify it perfectly, you would not need RL.
+
+And a caveat that has to travel with every gap ever reported here: \textbf{held-out graders are
+graders too.} They can be wrong in both directions, so a gap is only as trustworthy as the true
+grader's own false-positive and false-negative rates on a hand-labelled gold set.
+\end{aside}
+
 \subsection{Why this is a bandit, not an MDP}
 
 Textbook RL sets up states, actions, transitions and discounted returns. Almost none of that
