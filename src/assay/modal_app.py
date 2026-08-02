@@ -451,7 +451,7 @@ if modal is not None:
     @app.local_entrypoint()
     def probe_a(
         seeds: str = "0,1,2", warmups: str = "0,50", batches: int = 40,
-        allow_dirty: bool = False,
+        length_normalize: bool = True, allow_dirty: bool = False,
     ) -> None:
         """``modal run --detach src/assay/modal_app.py::probe_a``.
 
@@ -467,10 +467,12 @@ if modal is not None:
 
         grid = [
             ProbeConfig(
-                run_id=f"probeA-w{warmup}-seed{seed}",
+                run_id=f"probeA-w{warmup}-seed{seed}"
+                + ("" if length_normalize else "-nolennorm"),
                 seed=seed,
                 warmup_steps=warmup,
                 batches=batches,
+                length_normalize=length_normalize,
             )
             for warmup in (int(w) for w in warmups.split(",") if w.strip())
             for seed in (int(s) for s in seeds.split(",") if s.strip())
