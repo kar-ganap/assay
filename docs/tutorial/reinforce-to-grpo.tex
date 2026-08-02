@@ -684,8 +684,90 @@ measurement and the theory behind it turned out to be wrong. It is the most inst
 degenerate reward), it is measured against a control that has the degenerate reward but keeps the
 leash; the difference between B and its control isolates $\beta$ alone.
 
-The degenerate reward $R_{\text{format}}$ scores a completion on emitting the right \emph{shape},
-regardless of whether the answer is correct. It is a deliberately hackable grader.
+\subsubsection*{What ``degenerate'' and ``hackable'' mean}
+
+Two terms that get used loosely, and which are worth separating precisely because they are properties
+of \emph{different things}.
+
+A grader is \textbf{degenerate} when its score does not depend on whether the task was performed. For
+$R_{\text{format}}$ this is not a figure of speech --- it is one line of the implementation:
+\begin{quote}\ttfamily\small
+def grade\_format\_only(completion, expected):\\
+\hspace*{1em}del expected \ \ \# deliberately unused --- that *is* the pathology\\
+\hspace*{1em}\ldots\ return reward 1.0 if completion matches <answer>N</answer> else 0.0
+\end{quote}
+The correct answer is \emph{discarded before grading}. Anything shaped like
+\texttt{<answer>N</answer>} pays $1.0$, so the constant string \texttt{<answer>0</answer>} scores full
+marks on every prompt in the distribution. \textbf{The reward-maximising policy is a constant function
+that never reads its input.}
+
+``Degenerate'' is meant in the mathematical sense --- a structure has collapsed. A degenerate conic is
+a pair of lines rather than an ellipse; a degenerate reward is one whose level sets no longer separate
+correct from incorrect.
+
+A grader is \textbf{hackable} when a degenerate maximum both exists \emph{and} is cheaply reachable
+from where the policy starts. The distinction matters:
+
+\begin{itemize}
+  \item \textbf{Degeneracy} is a property of the grader alone --- inspectable statically, without
+        running anything.
+  \item \textbf{Hackability} is a property of the (grader, policy, budget) triple. A degenerate
+        grader whose exploit is astronomically unlikely under the base policy will not be hacked in
+        200 steps, because RL at this scale \emph{amplifies what is already in the policy's support}
+        rather than discovering new behaviour.
+\end{itemize}
+
+That second point is why this project screens $p_{\text{hack}}@64$ on the \emph{base} policy before
+admitting any grader variant, and why ``nothing hacks at 1.7B in 200 steps'' is recorded as its single
+largest risk. A diagnostic that flags degeneracy is measuring the grader; whether that degeneracy
+\emph{bites} depends on the model and the budget.
+
+\textbf{``Deliberately'' hackable} means $R_{\text{format}}$ was built this way as a \emph{positive
+control}. If one claims a diagnostic detects grader degeneracy, at least one environment must have a
+known answer --- otherwise a null result cannot be interpreted, since ``the diagnostic failed'' and
+``there was nothing to find'' look identical.
+
+\subsubsection*{What it looks like when the grader is hacked}
+
+\begin{table}[H]
+\centering
+\caption{Ablation B's control arm over training. The proxy is learned in ten steps; the skill never is.}
+\label{tab:bgap}
+\small
+\begin{tabular}{@{}rrrrr@{}}
+\toprule
+\textbf{step} & \textbf{proxy} & \textbf{true} & \textbf{gap} & \textbf{distinct completions} \\
+\midrule
+0   & 0.102 & 0.516 & $-0.414$ & 97 \\
+5   & 0.453 & 0.352 & $+0.102$ & 97 \\
+10  & 0.961 & 0.484 & $+0.477$ & 51 \\
+20  & 0.992 & 0.297 & $\mathbf{+0.695}$ & 66 \\
+199 & 0.984 & 0.445 & $+0.539$ & 80 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three things to read off \cref{tab:bgap}.
+
+\textbf{The gap starts negative.} The base model already solves $51.6\%$ of the additions but emits
+the required tag only $10.2\%$ of the time, so initially the proxy \emph{understates} true ability.
+Reward hacking is not visible at step 0; it has to be trained in.
+
+\textbf{The proxy saturates in ten steps and the skill never moves.} True reward wanders --- $0.516
+\to 0.297 \to 0.445$ --- and \emph{ends below where it started}. Optimising the format actively
+damaged arithmetic before partially recovering it.
+
+\textbf{The completions make it unambiguous.} On \texttt{875 + 812} (answer: $1687$), the policy at
+step 150 emitted \texttt{<answer>1677</answer>}, \texttt{<answer>1707</answer>},
+\texttt{<answer>1677</answer>}, \texttt{<answer>1756</answer>} --- perfectly formatted, every one
+wrong. Two hundred steps of gradient descent spent learning punctuation.
+
+\begin{aside}
+\textbf{This is why the true reward must never be trained on.} $R_{\text{binary}}$ is computed at
+every step of ablation B and thrown away --- it never touches the loss. The moment a held-out grader
+enters the objective it stops measuring generalisation and becomes a second proxy, and the gap it was
+supposed to reveal closes for the wrong reason. The asymmetry is the instrument.
+\end{aside}
 
 \begin{table}[H]
 \centering
