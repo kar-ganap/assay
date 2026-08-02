@@ -212,13 +212,21 @@ def train(
             ]
 
             losses_by_group: list[list[Any]] = []
+            # The same terms with the advantage factored out, kept only for the centred-cosine
+            # diagnostic. The loss is linear in the advantage, so a half's centred loss is
+            # ``_half(chunk) + mean_A * _half(unweighted chunk)`` — no second graph, no re-scoring.
+            unweighted_by_group: list[list[Any]] = []
             index = 0
             for advantages in advantages_by_group:
                 group_losses = []
+                group_unweighted = []
                 for advantage in advantages:
                     group_losses.append(-advantage * log_probs[index] / divisors[index])
+                    if cfg.diagnostic_centered_cosine:
+                        group_unweighted.append(log_probs[index] / divisors[index])
                     index += 1
                 losses_by_group.append(group_losses)
+                unweighted_by_group.append(group_unweighted)
 
             # --- step 6: KL to the frozen reference -------------------------------------
             # The leash. Ablation B is this term removed, so cfg.kl_coef == 0.0 is the common case
@@ -274,6 +282,37 @@ def train(
                 # averaging two half-means would quietly be wrong.
                 return sum(term for group in chunk for term in group) / total
 
+            # Measured BEFORE optimize, which steps the optimizer. Both arms of ablation A carry a
+            # confound the as-applied cosine cannot see past: baseline="none" is inflated by the
+            # shared common mode, baseline="global" is deflated by a baseline computed across the
+            # split boundary. Centring each half on its own mean advantage puts every arm on the
+            # group-baseline footing, where advantages already sum to zero per half.
+            centered_cosine: float | None = None
+            if cfg.diagnostic_centered_cosine:
+
+                def _mean_advantage(chunk: list[list[float]]) -> float:
+                    values = [a for group in chunk for a in group]
+                    return sum(values) / len(values) if values else 0.0
+
+                def _centered(
+                    lo: int,
+                    hi: int,
+                    # Bound as defaults for the same reason ``_half`` binds ``total``: these are
+                    # rebuilt every step, and a closure would capture the name rather than the
+                    # step's value.
+                    losses: list[list[Any]] = losses_by_group,
+                    advs: list[list[float]] = advantages_by_group,
+                    unweighted: list[list[Any]] = unweighted_by_group,
+                ) -> Any:
+                    chunk = slice(lo, hi)
+                    return _half(losses[chunk]) + _mean_advantage(advs[chunk]) * _half(
+                        unweighted[chunk]
+                    )
+
+                centered_cosine = policy.diagnostic_cosine(
+                    _centered(0, split), _centered(split, len(losses_by_group))
+                )
+
             grad_norm, cosine = policy.optimize(
                 _half(losses_by_group[:split]), _half(losses_by_group[split:])
             )
@@ -289,6 +328,7 @@ def train(
                 kl_loss_fraction=kl_loss_fraction,
                 grad_norm=grad_norm,
                 half_batch_grad_cosine=cosine,
+                half_batch_grad_cosine_centered=centered_cosine,
                 # Ablation C's rig-broken branch: a z-score cannot exceed sqrt(G-1) = 2.646 at
                 # G=8. If this ever does, the advantage function is not computing a z-score and
                 # the run says nothing about the science either way.

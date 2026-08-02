@@ -51,9 +51,18 @@ LADDER: dict[str, LadderConfig] = {
     # --- the ladder ---------------------------------------------------------------------
     # Rungs 1-3 build up from the defaults, which already have normalize_by_std=False and
     # kl_coef=0.0 — so **only `baseline` differs between them**, which is what ablation A needs.
-    "run1": LadderConfig(run_id="run1", baseline="none"),
-    "run2": LadderConfig(run_id="run2", baseline="global"),
-    "run3": LadderConfig(run_id="run3"),  # every default; baseline is already group_loo
+    #
+    # All three carry `diagnostic_centered_cosine` (added 2026-08-01). The as-applied cosine cannot
+    # compare baseline arms — it is inflated on `none` by the common mode a baseline exists to
+    # remove, and deflated on `global` by a baseline computed across the cosine's own split boundary
+    # (see `config.diagnostic_centered_cosine`). It is a *diagnostic*: the update is provably
+    # unchanged (`test_the_centred_cosine_does_not_change_the_update`), which is why it does not
+    # count as a ladder switch. Rung 3 carries it as the on-real-model control — the correction is a
+    # no-op under a group baseline by algebra, so a non-zero shift there means the instrument, not
+    # the arm, is wrong.
+    "run1": LadderConfig(run_id="run1", baseline="none", diagnostic_centered_cosine=True),
+    "run2": LadderConfig(run_id="run2", baseline="global", diagnostic_centered_cosine=True),
+    "run3": LadderConfig(run_id="run3", diagnostic_centered_cosine=True),  # baseline is group_loo
     "run7": RUN7,
     # --- ablations ----------------------------------------------------------------------
     # A is free: run1 vs run2, no entry of its own.

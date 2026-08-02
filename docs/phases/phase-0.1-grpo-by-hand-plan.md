@@ -399,6 +399,121 @@ against the cosine's 13%. A stays on the cosine.
 and the plan only demanded ≥2 for gate 1. **Ablation A should be run at ≥3 seeds per arm**, or its
 result reported as indicative rather than confirmatory.
 
+### ABLATION A — RESULT, and a redesign. 2026-08-01
+
+**The pre-registered signature is falsified, and it is reported as falsified.** `run1 × 2 seeds`
+vs `run2 × 3 seeds`, `add-3digit`, cosine mean over steps 50–200:
+
+| arm | cos | ρ | per-seed |
+|---|---|---|---|
+| run1 `baseline=none` | 0.0993 | 0.1103 | +0.1020 +0.0967 |
+| run2 `baseline=global` | 0.0151 | 0.0153 | −0.0279 +0.0440 +0.0291 |
+
+`ρ₂/ρ₁ = 0.14` against a gate of `≥ 2.0`. The signature's own clause — *"falsified if: ratio < 1.3,
+**or direction reverses**"* — fires on both counts. The **rig-broken branch does not fire**: grad
+norms finite on all five runs, `max|A| ≤ 1.0` inside the `√(G−1) = 2.646` bound, halves split by
+group. Note also that run2's seed band (0.0720) exceeds its own mean (0.0151), with one negative
+seed.
+
+**But the metric cannot make this comparison, and that is derivable without any data.** Two
+confounds, pointing opposite ways, neither about estimator variance:
+
+- **`baseline="none"` is inflated.** Every advantage is `≥ 0`, so both halves weight the shared
+  "push everything up" direction positively. The cosine rewards exactly the nuisance component a
+  baseline exists to delete.
+- **`baseline="global"` is deflated.** The baseline is *this batch's* mean (`loop.py`, rung 2) while
+  the cosine splits that same batch. With `b = (b_A + b_B)/2`, each half carries
+  `±(b_A − b_B)/2 · Σ ∇log π` — an anti-correlated term manufactured by the split boundary.
+- **`group_*` was always clean.** Advantages sum to zero inside a group, groups are never split, so
+  each half sums to zero independently. run3, run7 and ablations B/C/D are unaffected.
+
+Synthetic gradients reproduce the whole ordering from artifact alone (`none` 0.84, `global` 0.039,
+`global` with a per-half baseline 0.084, `group_loo` 0.074, at p=0.7).
+
+`policy.py`'s `Policy.optimize` docstring already stated this mechanism, reasoned for a *within-group*
+split. A baseline computed *across* the split boundary does the same thing one scope up. **The code
+contained the correct argument at too narrow a scope.**
+
+**The obvious repair fails, and was discarded before it was run.** Centring each half on its own mean
+advantage erases the contrast rather than the confound: `none` gives `R_i − mean_A(R)` and `global`
+gives `(R_i − b) − (mean_A(R) − b)` — the *same* estimator. Confirmed numerically (identical to six
+decimals at a shared policy state). The centred cosine is retained as a **control**, since a
+statistic that is identical across arms by construction is what proves any observed difference is
+trajectory rather than estimator.
+
+**Deeper reading, and the one worth the paper.** The half-batch cosine measures directional
+*reproducibility of the applied update*. A degenerate estimator that always points the same way
+scores near 1.0 while learning nothing from reward — so a metric that rewards a large common-mode
+component will always report that removing it hurt. That is Goodhart inside the diagnostic itself,
+which is this project's thesis applied to its own instrument.
+
+#### A's replacement — paired fixed-policy probe. Pre-registered before it runs.
+
+A's question cannot be answered by comparing **training arms** at all: they follow different
+trajectories, so any difference confounds the estimator with the policy state it is measured at.
+
+Fix one policy state. Draw N batches. Grade each batch once, then score those *same rollouts* under
+`none` / `global` / `group_loo`. Only the baseline differs; sampling noise is shared, so the
+comparison is paired. Statistic per baseline, scale-free because the arms' gradient magnitudes differ
+by ~3× (`grad_norm` 0.77 vs 0.23):
+
+```
+NSR_b = V_b / ||ḡ_b||²        V_b = mean_n ||g_n − ḡ_b||²
+```
+
+**Prediction (H_A):** `NSR_none > NSR_global ≥ NSR_group_loo`, and the *size* of the reduction is a
+**point prediction, not a threshold**. With binary reward and `P(R=1) = p`, the per-sample second
+moment is `p·E` at `b=0` and `p(1−p)²E + (1−p)p²E = p(1−p)E` at `b=p`, so
+
+```
+NSR_none / NSR_global  =  1 / (1 − p)
+```
+
+Both estimators are unbiased, so `||ḡ||` cancels and the variance ratio *is* the NSR ratio. Verified
+by simulation with `E[∇log π] = 0` enforced: **1.74 observed vs 1.75 predicted at p=0.43**, and
+**3.87 vs 4.00 at p=0.75**. The simulation also confirms unbiasedness directly — `||ḡ||²` is
+1.205e-3 / 1.206e-3 / 1.183e-3 across the three, the last ~2% low, which is exactly the O(1/n)
+self-inclusion bias `loop.py` flagged for the batch-mean baseline.
+
+| verdict | condition |
+|---|---|
+| **rig_broken** | any statistic non-finite, **or** pairwise cosine between the three mean gradients < 0.90 — all three estimate the same expected gradient, so disagreement means this is not a variance measurement |
+| **confirmed** | ordering holds **and** `1/(1−p)` falls inside the observed 95% CI |
+| **partial** | ordering holds and the CI clears 1.0, but misses `1/(1−p)` |
+| **falsified** | the ordering reverses |
+| **not_measurable** | the paired bootstrap 95% CI for the ratio spans 1.0 |
+
+> **AMENDED 2026-08-01, before the probe ran** — a flat `≥ 2.0` pass mark was carried over from the
+> training-arm design and is **mis-set for this measurement**. The predicted ratio depends on the
+> operating point, and at the base policy's measured `p ≈ 0.43` theory predicts **1.75 — below its
+> own pass mark**. A perfectly correct result would have been scored "partial". Pinned by
+> `test_a_correct_result_at_the_base_policy_would_have_failed_the_old_gate`.
+>
+> The point prediction is also a **strictly stronger test**: it can fail *upward*. A ratio far above
+> `1/(1−p)` disconfirms the theory exactly as much as one far below, and the old one-sided threshold
+> would have scored that `confirmed` (`test_the_gate_can_fail_upward`).
+>
+> `global` vs `group_loo` is **reported, never gated on**. The group baseline wins only when prompts
+> differ enough in difficulty to repay estimating it from `G−1 = 7` samples instead of the batch's
+> 127 — a bias/variance crossover this probe measures rather than assumes.
+
+`not_measurable` is a distinct outcome on purpose — it is what the training-arm design could not
+express. *"The baseline does not reduce variance"* and *"this rig cannot tell"* are different claims,
+and only the second is fixed by drawing more batches. `tasks/todo.md` pre-committed exactly this
+distinction on 2026-07-29, before any of it was measured.
+
+**Grid:** 3 seeds × {base policy, 50-step warmup}, N=40 batches, bootstrap 2000. Two operating points
+because A's original metric was defined over steps 50–200 and the variance story depends on `p`,
+which moves ~0.43 → ~0.75 across that window; one point could not separate *"baselines do not help"*
+from *"baselines do not help here"*. **Estimated ~$0.30 on L4**, against ~$0.80 for the six training
+runs it replaces.
+
+**Why this is not tuning until it agrees.** The correction is derived from algebra that holds a
+priori and was verified on synthetic gradients before the redesign; the falsified result above stands
+as reported and is not withdrawn; the new gate was written and committed before the probe ran; and
+the probe's own rig-broken branch can fail it. The one thing that would make this p-hacking —
+replacing a result with a friendlier one — is specifically what the two-result presentation prevents.
+
 ### Learning-rate probe — declared 2026-07-28, before it runs
 
 **The learning rate is the one unpinned number that can silently void the whole phase.** Too low and

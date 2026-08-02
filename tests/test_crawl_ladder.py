@@ -13,8 +13,15 @@ from assay.crawl.ladder import ABLATION_B_CONTROL, ABLATION_C, BETA, LADDER, RUN
 
 
 def _differences(a: LadderConfig, b: LadderConfig) -> set[str]:
-    """Fields that differ, ignoring identity fields overwritten at dispatch."""
-    ignore = {"run_id", "setting", "seed"}
+    """Fields that differ, ignoring identity fields overwritten at dispatch.
+
+    ``diagnostic_centered_cosine`` is ignored because it is *provably* not a switch: it adds two
+    backward passes on an already-built graph and restores the gradient buffer, and
+    ``test_the_centred_cosine_does_not_change_the_update`` asserts bit-identical parameters with it
+    on and off. Counting it as a difference would make rungs 1-3 look non-comparable to run 7 over a
+    field that cannot affect any of them.
+    """
+    ignore = {"run_id", "setting", "seed", "diagnostic_centered_cosine"}
     return {
         f.name
         for f in fields(a)
@@ -64,6 +71,12 @@ def test_the_leash_is_on_where_it_should_be_and_off_where_it_should_not() -> Non
     assert LADDER["run7"].kl_coef == BETA
     for rung in ("run1", "run2", "run3"):
         assert LADDER[rung].kl_coef == 0.0, "the leash arrives at rung 5, which is cut"
+
+
+def test_the_centred_cosine_is_on_exactly_where_ablation_a_needs_it() -> None:
+    """Rungs 1-3 only. Ignored by ``_differences``, so nothing else would catch it drifting."""
+    on = {key for key, cfg in LADDER.items() if cfg.diagnostic_centered_cosine}
+    assert on == {"run1", "run2", "run3"}
 
 
 def test_every_entry_carries_the_pinned_task_and_rate() -> None:

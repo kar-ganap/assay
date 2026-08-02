@@ -347,3 +347,37 @@ class HFPolicy:
         grad_norm = float(torch.nn.utils.clip_grad_norm_(self.params, max_norm=1.0))
         self.opt.step()
         return grad_norm, cosine
+
+    def flat_gradient(self, loss: Any, *, retain_graph: bool = False) -> Any:
+        """See ``Policy.flat_gradient``. Returned on CPU — ablation A's probe holds ~120 of these.
+
+        At LoRA r=16 over q/k/v/o across 16 layers that is ~3.4M parameters, 13.6 MB per vector, so
+        keeping them on the GPU alongside a model that already peaks at 14.5 GB would OOM the L4 for
+        no reason. They are only ever consumed as dot products afterwards.
+        """
+        self.opt.zero_grad(set_to_none=True)
+        loss.backward(retain_graph=retain_graph)
+        grad = self._flat_grad().clone().detach().to("cpu", copy=True).float()
+        self.opt.zero_grad(set_to_none=True)
+        return grad
+
+    def diagnostic_cosine(self, loss_first_half: Any, loss_second_half: Any) -> float:
+        """See ``Policy.diagnostic_cosine`` — measures, restores, never steps.
+
+        No ``clip_grad_norm_`` here: clipping rescales, and the cosine is scale-invariant per half,
+        so it would cost a pass over every parameter to change nothing.
+        """
+        import torch
+
+        self.opt.zero_grad(set_to_none=True)
+        loss_first_half.backward(retain_graph=True)
+        grad_a = self._flat_grad().clone()
+
+        loss_second_half.backward(retain_graph=True)
+        grad_b = self._flat_grad() - grad_a
+        self.opt.zero_grad(set_to_none=True)
+
+        norm_a, norm_b = grad_a.norm(), grad_b.norm()
+        if float(norm_a) < 1e-12 or float(norm_b) < 1e-12:
+            return 0.0
+        return float(torch.dot(grad_a, grad_b) / (norm_a * norm_b))

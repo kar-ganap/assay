@@ -94,6 +94,31 @@ class Policy(Protocol):
         """
         ...
 
+    def diagnostic_cosine(self, loss_first_half: Any, loss_second_half: Any) -> float:
+        """The same cosine on an alternative weighting, **without stepping the optimizer**.
+
+        The contract that makes this a diagnostic rather than a switch: it must leave parameters,
+        optimizer state and accumulated gradients exactly as it found them. Implementations zero the
+        gradient buffer at both ends and never call ``opt.step()``; ``retain_graph=True`` is required
+        on both backwards because ``optimize`` traverses the same graph afterwards.
+
+        Used for ablation A's centred cosine — see ``config.diagnostic_centered_cosine`` for why the
+        as-applied cosine cannot compare baseline arms.
+        """
+        ...
+
+    def flat_gradient(self, loss: Any, *, retain_graph: bool = False) -> Any:
+        """One flattened gradient of ``loss``, **on CPU**, without stepping the optimizer.
+
+        Ablation A's probe needs the gradient vector itself rather than a summary of it, so that the
+        same rollouts can be scored under several baselines and compared as vectors. Same contract
+        as ``diagnostic_cosine``: zero at both ends, never step.
+
+        ``retain_graph`` must be True for every call but the last on a given graph — the probe
+        backwards the *same* log-probs once per baseline.
+        """
+        ...
+
 
 class ToyPolicy:
     """Test double with **real autograd** and *scripted* generation.
@@ -230,6 +255,31 @@ class ToyPolicy:
         grad_norm = float(self._flat_grad().norm())
         self.opt.step()
         return grad_norm, cosine
+
+    def diagnostic_cosine(self, loss_first_half: Any, loss_second_half: Any) -> float:
+        import torch
+
+        self.opt.zero_grad()
+        loss_first_half.backward(retain_graph=True)
+        grad_a = self._flat_grad().clone()
+
+        loss_second_half.backward(retain_graph=True)
+        grad_b = self._flat_grad() - grad_a
+        # Restored before returning, so the caller's optimize() starts from the same state it would
+        # have had if this were never called. That equivalence is the whole contract.
+        self.opt.zero_grad()
+
+        norm_a, norm_b = grad_a.norm(), grad_b.norm()
+        if float(norm_a) < 1e-12 or float(norm_b) < 1e-12:
+            return 0.0
+        return float(torch.dot(grad_a, grad_b) / (norm_a * norm_b))
+
+    def flat_gradient(self, loss: Any, *, retain_graph: bool = False) -> Any:
+        self.opt.zero_grad()
+        loss.backward(retain_graph=retain_graph)
+        grad = self._flat_grad().clone().detach().to("cpu", copy=True).float()
+        self.opt.zero_grad()
+        return grad
 
     def _flat_grad(self) -> Any:
         import torch

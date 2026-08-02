@@ -315,3 +315,104 @@ def test_the_loop_calls_logprobs_before_the_other_readouts(tmp_path: Path) -> No
 
     assert order.index("logprobs") < order.index("kl")
     assert order.index("logprobs") < order.index("entropy")
+
+
+# --------------------------------------------------------------------------------------
+# Ablation A's centred cosine — the metric fix (2026-08-01)
+# --------------------------------------------------------------------------------------
+#
+# The as-applied cosine cannot compare baseline arms, for two reasons pointing opposite ways:
+#
+#   baseline="none"    every advantage is >= 0, so BOTH halves weight the shared "push everything
+#                      up" direction positively. The cosine is inflated by exactly the nuisance
+#                      component a baseline exists to delete.
+#   baseline="global"  the baseline is the FULL-BATCH mean while the cosine splits that batch, so
+#                      with b = (b_A + b_B)/2 each half carries +/-(b_A - b_B)/2 * sum(grad log pi).
+#                      An anti-correlated term manufactured by the split boundary.
+#   baseline="group_*" advantages sum to zero inside each group and groups are never split, so each
+#                      half sums to zero independently. No coupling. This arm is already clean.
+#
+# The fix puts every arm on the group-baseline footing *for the diagnostic only*: subtract each
+# half's own mean advantage before measuring. The applied update is untouched.
+
+
+def _cosines(tmp_path: Path, **kw: object) -> list:
+    cfg = LadderConfig(
+        run_id="t", steps=4, prompts_per_step=6, group_size=8,
+        diagnostic_centered_cosine=True, **kw,  # type: ignore[arg-type]
+    )
+    return train(cfg, tmp_path, policy=ToyPolicy(p_correct=0.6, seed=1, reward_from_tokens=True))
+
+
+def test_the_centred_cosine_is_absent_unless_requested(tmp_path: Path) -> None:
+    assert all(log.half_batch_grad_cosine_centered is None for log in _run(tmp_path))
+
+
+def test_the_centred_cosine_does_not_change_the_update(tmp_path: Path) -> None:
+    """Diagnostic-only, proven rather than asserted: it costs two extra backwards and nothing else.
+
+    If this ever fails, every arm measured with the flag on is incomparable to one measured with it
+    off, and the fix has silently become a seventh ladder switch.
+    """
+    def _final_logits(flag: bool) -> torch.Tensor:
+        policy = ToyPolicy(p_correct=0.6, seed=1, reward_from_tokens=True)
+        cfg = LadderConfig(
+            run_id="t", steps=4, prompts_per_step=6, group_size=8, baseline="none",
+            diagnostic_centered_cosine=flag,
+        )
+        train(cfg, tmp_path / str(flag), policy=policy)
+        return policy.logits.detach().clone()
+
+    assert torch.equal(_final_logits(True), _final_logits(False))
+
+
+def test_the_centred_cosine_is_a_no_op_under_a_group_baseline(tmp_path: Path) -> None:
+    """The algebraic check: group advantages already sum to zero in every half, so nothing moves.
+
+    This is what makes the fix a *correction* rather than a different statistic — it changes the two
+    confounded arms and provably leaves the clean one alone.
+    """
+    for log in _cosines(tmp_path, baseline="group_loo"):
+        assert log.half_batch_grad_cosine_centered == pytest.approx(
+            log.half_batch_grad_cosine, abs=1e-6
+        )
+
+
+@pytest.mark.parametrize("baseline", ["none", "global"])
+def test_the_centred_cosine_moves_the_confounded_arms(tmp_path: Path, baseline: str) -> None:
+    logs = _cosines(tmp_path / baseline, baseline=baseline)
+    moved = [
+        abs(log.half_batch_grad_cosine_centered - log.half_batch_grad_cosine)  # type: ignore[operator]
+        for log in logs
+    ]
+    assert max(moved) > 1e-6, f"{baseline}: the correction did nothing on a confounded arm"
+
+
+def test_the_correction_is_ordered_by_how_far_each_arm_is_from_zero_mean(
+    tmp_path: Path,
+) -> None:
+    """``none`` is corrected hardest, ``global`` less, ``group_loo`` not at all.
+
+    True by algebra on any policy, which is what makes it worth asserting: the shift applied to a
+    half is exactly ``mean(A over that half) * sum(grad log pi over that half)``, so it is ordered
+    by how far each arm's per-half mean advantage sits from zero. ``none`` leaves it at ~p,
+    ``global`` centres on the full batch so only the half-to-half difference survives, and
+    ``group_loo`` is zero in every half by construction.
+
+    The *direction* of the correction is deliberately not asserted anywhere. It depends on whether
+    the removed common mode is a shared bias (lowers the cosine) or an independent fluctuation
+    (raises it), and ``ToyPolicy`` has only the latter: ``grad log pi = c - n*p``, so dividing by
+    ``n`` gives ``c/n - p`` and ``E[c/n] = p`` for *any* length when tokens are iid from the policy.
+    No choice of completion length can give the double a common-mode bias. That is precisely why
+    the toy read ablation A forwards while Llama read it backwards, and why the direction is a
+    pre-registered prediction about the real model rather than a unit test.
+    """
+    def _shift(baseline: str) -> float:
+        logs = _cosines(tmp_path / baseline, baseline=baseline)
+        return sum(
+            abs(log.half_batch_grad_cosine_centered - log.half_batch_grad_cosine)  # type: ignore[operator]
+            for log in logs
+        ) / len(logs)
+
+    assert _shift("none") > _shift("global") > _shift("group_loo")
+    assert _shift("group_loo") == pytest.approx(0.0, abs=1e-6)

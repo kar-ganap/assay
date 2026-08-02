@@ -213,6 +213,20 @@ def live_steps(logs: Sequence[StepLog]) -> int:
     return sum(1 for log in logs if log.frac_degenerate_groups < 1.0)
 
 
+def _centered_cosine_mean(logs: Sequence[StepLog]) -> float | None:
+    """Mean centred cosine, or ``None`` when the run did not record one.
+
+    Silently treating a missing reading as 0.0 would put every pre-2026-08-01 run at the bottom of
+    an ablation-A ranking it was never measured for.
+    """
+    values = [
+        x.half_batch_grad_cosine_centered
+        for x in logs
+        if x.half_batch_grad_cosine_centered is not None
+    ]
+    return sum(values) / len(values) if values else None
+
+
 def summarize_run(cfg: LadderConfig, logs: Sequence[StepLog]) -> dict[str, Any]:
     """Derived metrics for ``results/<run_id>.json`` — what every figure regenerates from."""
     if not logs:
@@ -264,6 +278,20 @@ def summarize_run(cfg: LadderConfig, logs: Sequence[StepLog]) -> dict[str, Any]:
         ),
         # A's threshold is on the ratio of these between run 1 and run 2, not on raw cosines.
         "gradient_snr": gradient_snr(sum(x.half_batch_grad_cosine for x in logs) / len(logs)),
+        # The same pair on within-half-centred advantages, present only when the run requested it.
+        #
+        # **This is a control, NOT ablation A's metric.** Centring subtracts each half's own mean
+        # advantage, and a constant cancels: baseline="none" gives `R_i - mean_A(R)` and
+        # baseline="global" gives `(R_i - b) - (mean_A(R) - b)` — the *same* estimator. So this
+        # statistic is identical across rungs 1-3 at any shared policy state, and any difference
+        # between arms is attributable to their trajectories having diverged rather than to the
+        # baseline. That is exactly what makes it useful: it separates trajectory from estimator,
+        # and it is why the as-applied comparison cannot be read as estimator variance.
+        # A's own measurement is the paired fixed-policy probe (``config`` for the derivation).
+        "half_batch_grad_cosine_centered_mean": _centered_cosine_mean(logs),
+        "gradient_snr_centered": (
+            None if (c := _centered_cosine_mean(logs)) is None else gradient_snr(c)
+        ),
         "grad_norm_mean": sum(x.grad_norm for x in logs) / len(logs),
         "grad_norm_cv": _coefficient_of_variation([x.grad_norm for x in logs]),
         "grad_norm_cv_detrended": _detrended_cv(

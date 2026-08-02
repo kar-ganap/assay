@@ -112,6 +112,44 @@ class LadderConfig:
     #: Force every group to be unanimous, to demonstrate the zero-gradient step directly.
     force_unanimous_groups: bool = False
 
+    # --- diagnostics (never applied to the update) --------------------------------------
+    #: Additionally log the half-batch cosine measured on **within-half-centred** advantages.
+    #:
+    #: Added 2026-08-01, after ablation A came back reversed (``rho_2/rho_1 = 0.14`` against a
+    #: pre-registered gate of ``>= 2.0``). The as-applied cosine cannot compare baseline arms,
+    #: because two confounds push it in opposite directions and neither is about estimator variance:
+    #:
+    #: - ``baseline="none"``: every advantage is >= 0, so both halves weight the shared
+    #:   "push everything up" direction *positively*. The cosine is **inflated** by precisely the
+    #:   nuisance component a baseline exists to remove.
+    #: - ``baseline="global"``: the baseline is this batch's mean while the cosine splits that same
+    #:   batch, so writing ``b = (b_A + b_B)/2`` each half carries ``+/-(b_A - b_B)/2 * sum(grad log
+    #:   pi)`` — an anti-correlated term **manufactured by the split boundary**. Cosine **deflated**.
+    #: - ``baseline="group_*"``: advantages sum to zero inside each group and groups are never
+    #:   split, so each half sums to zero on its own. No coupling — this arm was always clean.
+    #:
+    #: ``policy.py``'s ``Policy.optimize`` docstring already states this mechanism, reasoned for a
+    #: *within-group* split; a baseline computed *across* the split boundary does the same thing one
+    #: scope up. Provably a no-op on ``group_loo``
+    #: (``test_the_centred_cosine_is_a_no_op_under_a_group_baseline``) and provably not a seventh
+    #: ladder switch (``test_the_centred_cosine_does_not_change_the_update``).
+    #:
+    #: **It is a control, not ablation A's metric — and it cannot be.** Centring subtracts each
+    #: half's own mean advantage, so the constant a baseline contributes cancels exactly:
+    #: ``none`` yields ``R_i - mean_A(R)`` and ``global`` yields ``(R_i - b) - (mean_A(R) - b)``,
+    #: the *same* estimator. Verified numerically — at a shared policy state rungs 1 and 2 agree to
+    #: six decimals. That makes it the right instrument for one job only: **separating trajectory
+    #: from estimator**, since any residual difference between arms must come from the policies
+    #: having diverged. It is what demonstrates that comparing the as-applied cosine across arms is
+    #: not a measurement of estimator variance.
+    #:
+    #: A's actual question — *does a baseline reduce gradient variance?* — cannot be answered by
+    #: comparing training arms at all, because their trajectories differ. It needs the same rollouts
+    #: scored under every baseline at one fixed policy state.
+    #:
+    #: Costs two extra backward passes on an already-built graph, so it is off by default.
+    diagnostic_centered_cosine: bool = False
+
     # --- sizes -------------------------------------------------------------------------
     #: k = G in the calibration screen for exactly this reason: the measured dead-group rate is
     #: the rate this run will see at step 0.

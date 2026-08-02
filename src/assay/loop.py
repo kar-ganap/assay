@@ -75,6 +75,17 @@ class StepLog:
     tokens: int
     wall_clock_s: float
 
+    #: The same cosine measured on **within-half-centred** advantages, or ``None`` when
+    #: ``LadderConfig.diagnostic_centered_cosine`` is off. Diagnostic only — never applied.
+    #:
+    #: ``half_batch_grad_cosine`` above measures the reproducibility of the update *as applied*,
+    #: which is the honest reading of what the optimizer did but **not** a measure of estimator
+    #: quality: an estimator dominated by a large reward-independent common mode scores near 1.0
+    #: while learning nothing from reward. Since removing that common mode is exactly a baseline's
+    #: job, the as-applied cosine reports every baseline as harmful. Report both, never one alone.
+    #: Rationale and the two confounds in ``config.diagnostic_centered_cosine``.
+    half_batch_grad_cosine_centered: float | None = None
+
     @property
     def gap(self) -> float:
         """The cheap outcome: how much reward comes from the proxy that the truth does not endorse."""

@@ -111,6 +111,36 @@ def _git_sha() -> str:
         return "unknown"
 
 
+def _require_clean_tree(provenance: dict, *, allow_dirty: bool) -> None:  # type: ignore[type-arg]
+    """Refuse to launch from a dirty tree. **A check that reports instead of blocking is not a check.**
+
+    This was a ``print("WARNING: ...")`` that fell straight through into the launch loop, and on
+    2026-08-01 it let ``run3`` and ablations B/C/D run at a ``git_sha`` that does not identify their
+    code — four 200-step runs, ~$2.50, unusable for strict reproduction under
+    ``experiments/README.md``. Three compounding failures, all now fixed by raising:
+
+    - a ``print`` does not stop anything;
+    - it fired **once**, before a loop that then launched N runs;
+    - it was paired with ``--detach``, whose whole purpose is that nobody is watching the terminal.
+
+    Third instance of this pattern in Phase 0.1, after ``make check | tail && git commit`` swallowing
+    the exit code and the ``--setting`` default silently overriding the pinned ladder table.
+
+    ``--allow-dirty`` exists for deliberate throwaway smoke tests, and stamps the artifacts so they
+    can never be mistaken for the real thing.
+    """
+    if not provenance["git_dirty"]:
+        return
+    if allow_dirty:
+        print("WARNING: --allow-dirty — git_sha does NOT identify this code. Throwaway runs only.")
+        return
+    raise SystemExit(
+        "refusing to launch from a dirty working tree: git_sha would not identify the code "
+        "producing these runs, so their artifacts cannot enter analysis.\n"
+        "  commit first, or pass --allow-dirty for a throwaway smoke test."
+    )
+
+
 def _git_dirty() -> bool:
     """True if the working tree differs from HEAD.
 
@@ -367,6 +397,98 @@ if modal is not None:
         print(f"committed artifacts to volume {VOLUME_NAME}:/{cfg.run_id}")
         return payload
 
+    @app.function(
+        gpu=TRAIN_GPU,
+        timeout=TRAIN_TIMEOUT_S,
+        image=_image(),
+        secrets=[modal.Secret.from_dict({"HF_TOKEN": _dotenv().get("HF_TOKEN", "")})],
+        volumes={VOLUME_PATH: artifacts},
+    )
+    def probe_remote(config: dict, provenance: dict) -> dict:
+        """Ablation A's paired fixed-policy probe. See ``assay.crawl.probe`` for why it exists.
+
+        Same image, secret and volume as ``train_remote`` — the probe reuses the ladder's sampler
+        and grader, and its whole point is that it draws from the same distribution the ladder
+        trains on.
+        """
+        from pathlib import Path
+
+        import torch
+
+        from assay.crawl import runlog
+        from assay.crawl.hf_policy import HFPolicy
+        from assay.crawl.probe import ProbeConfig, probe
+
+        cfg = ProbeConfig(**config)
+        ladder = cfg.as_ladder_config()
+        run_dir = Path("/tmp/run") / cfg.run_id
+        runlog.write_manifest({**provenance, "config": config}, run_dir)
+
+        policy = HFPolicy(
+            MODEL_ID,
+            revision=MODEL_REVISION,
+            learning_rate=ladder.learning_rate,
+            max_new_tokens=ladder.max_new_tokens,
+            temperature=ladder.temperature,
+            top_p=ladder.top_p,
+            seed=cfg.seed,
+        )
+        result = probe(cfg, run_dir, policy=policy)
+        result["peak_memory_gb"] = float(torch.cuda.max_memory_allocated()) / 1e9
+        result["provenance"] = {**provenance, "config": config}
+        print(f"peak CUDA memory: {result['peak_memory_gb']:.2f} GB")
+        print(f"verdict: {result['verdict']['verdict']}")
+
+        artifact_dir = Path(VOLUME_PATH) / cfg.run_id
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "probe.json").write_text(
+            json.dumps(result, indent=2, sort_keys=True) + "\n"
+        )
+        artifacts.commit()
+        print(f"committed artifacts to volume {VOLUME_NAME}:/{cfg.run_id}")
+        return result
+
+    @app.local_entrypoint()
+    def probe_a(
+        seeds: str = "0,1,2", warmups: str = "0,50", batches: int = 40,
+        allow_dirty: bool = False,
+    ) -> None:
+        """``modal run --detach src/assay/modal_app.py::probe_a``.
+
+        The pre-registered grid is 3 seeds x {base policy, 50-step warmup}; the gate lives in
+        ``assay.crawl.probe.probe_verdict`` and was written before this ever ran.
+        """
+        import dataclasses as dc
+
+        from assay.crawl.probe import ProbeConfig
+
+        provenance = _provenance()
+        _require_clean_tree(provenance, allow_dirty=allow_dirty)
+
+        grid = [
+            ProbeConfig(
+                run_id=f"probeA-w{warmup}-seed{seed}",
+                seed=seed,
+                warmup_steps=warmup,
+                batches=batches,
+            )
+            for warmup in (int(w) for w in warmups.split(",") if w.strip())
+            for seed in (int(s) for s in seeds.split(",") if s.strip())
+        ]
+        for cfg in grid:
+            print(f"\n=== {cfg.run_id} ===")
+            result = probe_remote.remote(dc.asdict(cfg), provenance)
+
+            run_dir = RAW_DIR / cfg.run_id
+            run_dir.mkdir(parents=True, exist_ok=True)
+            (run_dir / "probe.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+            RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+            (RESULTS_DIR / f"{cfg.run_id}.json").write_text(
+                json.dumps(result, indent=2, sort_keys=True) + "\n"
+            )
+            verdict = result["verdict"]
+            print(f"  verdict {verdict['verdict']}  NSR {verdict.get('nsr')}")
+
     @app.local_entrypoint()
     def main(n_prompts: int = 64, k: int = 8, seed: int = 0, max_new_tokens: int = 256) -> None:
         """Coarse pass defaults to 64 prompts; rerun with ``--n-prompts 200`` for the fine pass.
@@ -515,7 +637,10 @@ if modal is not None:
             runlog.write_results(result["summary"], RESULTS_DIR)
 
     @app.local_entrypoint()
-    def ladder(runs: str = "", setting: str = "", seeds: str = "0") -> None:
+    def ladder(
+        runs: str = "", setting: str = "", seeds: str = "0", suffix: str = "",
+        allow_dirty: bool = False,
+    ) -> None:
         """Launch ladder runs: ``modal run ... ::ladder --runs run1,run7 --seeds 0,1``.
 
         The ladder table lives in ``assay.crawl.ladder`` and is **the user's** (§7). This entry
@@ -532,6 +657,12 @@ if modal is not None:
         swapped to ``add-3digit`` this entry point kept dispatching ``add-2digit``, and the test
         asserting the pinned arm still passed because it checked the *table* rather than what
         actually ran.
+
+        ``--suffix`` appends to the run tag, so re-measuring an arm cannot overwrite the artefacts
+        of an earlier one (``docs/desiderata.md`` — raw rollouts are never modified). Required when
+        a table entry changes what it *records* while leaving what it *does* untouched, as the
+        centred-cosine diagnostic did on rungs 1-3: same update, same seed, same curve, but the old
+        run has no ``half_batch_grad_cosine_centered`` and both readings must survive.
         """
         from assay.crawl import runlog
         from assay.crawl.ladder import LADDER
@@ -539,8 +670,7 @@ if modal is not None:
         wanted = [r.strip() for r in runs.split(",") if r.strip()] or sorted(LADDER)
         seed_list = [int(s) for s in seeds.split(",") if s.strip()]
         provenance = _provenance()
-        if provenance["git_dirty"]:
-            print("WARNING: dirty tree — git_sha does not identify the code producing these runs.")
+        _require_clean_tree(provenance, allow_dirty=allow_dirty)
 
         for run_id in wanted:
             for seed in seed_list:
@@ -549,7 +679,7 @@ if modal is not None:
                 if setting:
                     overrides["setting"] = setting
                 resolved = dataclasses.replace(LADDER[run_id], **overrides)
-                tag = f"{run_id}-{resolved.setting}-seed{seed}"
+                tag = f"{run_id}-{resolved.setting}-seed{seed}" + (f"-{suffix}" if suffix else "")
                 cfg = dataclasses.replace(resolved, run_id=tag)
                 print(f"\n=== {tag} ===")
                 result = train_remote.remote(dataclasses.asdict(cfg), provenance)
