@@ -208,6 +208,26 @@ These get used loosely in the literature. In this project they mean:
         $\times\ 8$ rollouts $= 128$ rollouts per step.
 \end{itemize}
 
+\subsection{Notation for averages}
+\label{sec:rbar}
+
+Two different averages of reward appear throughout, over the two units just defined. They are
+\emph{always} subscripted here, because conflating them is an easy and consequential mistake --- it
+is the entire difference between rung 2 and rung 3 of the ladder.
+
+\begin{align}
+  \bar{r}_{\text{group}} \;&=\; \frac{1}{G}\sum_{j=1}^{G} r_j
+    &&\text{mean over the $G$ rollouts of \emph{one} prompt,} \\
+  \bar{r}_{\text{batch}} \;&=\; \frac{1}{N}\sum_{i=1}^{N} r_i
+    &&\text{mean over all $N$ rollouts in a gradient step.}
+\end{align}
+
+Distinguish both from $p$, which denotes the \emph{true} success probability $\Pr[R = 1]$ --- a
+property of the policy and the task, not of any particular sample. We never observe $p$; we observe
+$\bar{r}$, which is an unbiased but noisy estimate of it. At $G = 8$, $\bar{r}_{\text{group}}$ takes
+only nine possible values, so it is a \emph{very} noisy estimate of that prompt's difficulty. This
+matters more than it looks (\cref{sec:varcalc,sec:eweight}).
+
 % ══════════════════════════════════════════════════════════════════
 \section{REINFORCE: the score-function estimator}
 \label{sec:reinforce}
@@ -359,10 +379,17 @@ Minimising over $b$ gives the optimal baseline
 \end{equation}
 
 \begin{aside}
-\textbf{\Cref{eq:optb} is not $\bar{r}$.} The optimal baseline equals the mean reward $p$ only in the
-special case $E_c = E_w$ --- when correct and incorrect completions carry equally large score
-vectors. Everyone uses $\bar{r}$ anyway, because it is trivial to compute. \Cref{sec:eweight} is
-about what our own measurements say when that assumption fails, and it turns out to fail badly.
+\textbf{\Cref{eq:optb} is not the thing anyone actually computes.} Look at what $b^\star$ requires:
+$p$, $E_c$ and $E_w$ --- the true success probability and two conditional second moments of the
+score. None of the three is observable. So every implementation substitutes the one quantity that is
+free, the sample mean reward $\bar{r}$ (\cref{sec:rbar}), which is a plug-in estimate of $p$.
+
+That substitution is exact only when $E_c = E_w$: setting them equal in \cref{eq:optb} collapses it
+to $b^\star = p$, estimated by $\bar{r}$. Otherwise using $\bar{r}$ is a heuristic --- a
+\emph{reasonable} one, since the correction factor is bounded and the resulting estimator is still
+unbiased by \cref{claim:unbiased}, but a heuristic nonetheless. \Cref{sec:eweight} is what our own
+measurements say when that assumption fails, and here it fails badly enough to erase the entire
+benefit.
 \end{aside}
 
 Setting $E_c = E_w$ and comparing $b = 0$ against $b = p$:
@@ -449,7 +476,7 @@ it to show up as a visible effect.
 \label{sec:worked}
 
 This is the table that makes the difference concrete. Take $G = 8$, a batch whose overall pass rate is
-$\bar{r} = 0.43$, and three groups of differing difficulty.
+$\bar{r}_{\text{batch}} = 0.43$, and three groups of differing difficulty.
 
 \begin{table}[H]
 \centering
@@ -508,7 +535,7 @@ the same algorithm.
 Published GRPO divides the centred advantage by the group's standard deviation:
 \begin{equation}
   \tilde{\Adv}_i \;=\; \frac{\Adv_i}{\sigma_{\text{group}} + \varepsilon},
-  \qquad \sigma^2_{\text{group}} = \frac{1}{G}\sum_j \big(r_j - \bar{r}\big)^2 .
+  \qquad \sigma^2_{\text{group}} = \frac{1}{G}\sum_j \big(r_j - \bar{r}_{\text{group}}\big)^2 .
   \label{eq:znorm}
 \end{equation}
 Combined with mean-centring, this makes $\tilde{\Adv}$ a \emph{$z$-score} within the group.
@@ -789,7 +816,7 @@ A group is dead when all its advantages are zero. Under which baselines does tha
 
 \begin{itemize}
   \item \texttt{none}: $\Adv_i = r_i$, so the group is dead only if \emph{every} rollout failed.
-  \item \texttt{global}: $\Adv_i = r_i - \bar{r}_{\text{batch}}$. Since $\bar{r}$ is a batch mean and
+  \item \texttt{global}: $\Adv_i = r_i - \bar{r}_{\text{batch}}$. Since $\bar{r}_{\text{batch}}$ is an average over 128 rollouts and
         $r_i$ is binary, $\Adv_i$ is essentially \emph{never} exactly zero. Dead groups cannot occur.
   \item \texttt{group\_loo}: $\Adv_i = 0$ for all $i$ exactly when the group is unanimous, either way.
 \end{itemize}
@@ -962,7 +989,7 @@ confound is about variance.
         shared component of $\score$ positively. The cosine is \textbf{inflated} by precisely the
         nuisance direction a baseline exists to remove.
   \item \texttt{baseline="global"} --- the baseline is the \emph{full-batch} mean while the cosine
-        splits that same batch. Writing $b = (b_A + b_B)/2$ for the two half-means, each half carries
+        splits that same batch. Writing $b = (b_A + b_B)/2$, where $b_A, b_B$ are the two \emph{half}-batch mean rewards, each half carries
         a term $\pm (b_A - b_B)/2 \cdot \sum \score$: an anti-correlated component
         \textbf{manufactured by the split boundary}. The cosine is \textbf{deflated}.
   \item \texttt{baseline="group\_*"} --- advantages sum to zero \emph{within} each group and groups
@@ -972,7 +999,7 @@ confound is about variance.
 
 The obvious repair --- centre each half on its own mean advantage before measuring --- does not work,
 and the reason is worth internalising. Under \texttt{none} the centred advantage is
-$r_i - \bar{r}_A$; under \texttt{global} it is $(r_i - b) - (\bar{r}_A - b) = r_i - \bar{r}_A$. The
+$r_i - \bar{r}_A$ (writing $\bar{r}_A$ for the mean reward over half $A$); under \texttt{global} it is $(r_i - b) - (\bar{r}_A - b) = r_i - \bar{r}_A$. The
 constant cancels: \textbf{centring makes the two arms the same estimator}, erasing the contrast
 instead of the confound. Verified numerically --- at a shared policy state the two agree to six
 decimal places.
