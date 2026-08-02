@@ -2,6 +2,7 @@
   "config": {
     "baseline": "group_loo",
     "clip_epsilon": null,
+    "diagnostic_centered_cosine": false,
     "epochs_per_batch": 1,
     "family": "arithmetic",
     "force_unanimous_groups": true,
@@ -36,6 +37,8 @@
   "grad_norm_cv_detrended": null,
   "grad_norm_mean": 0.0,
   "gradient_snr": 0.0,
+  "gradient_snr_centered": null,
+  "half_batch_grad_cosine_centered_mean": null,
   "half_batch_grad_cosine_mean": 0.0,
   "live_fraction_in_slope_window": 0.0,
   "live_steps": 0,
@@ -47,5 +50,5 @@
   "total_tokens": 313312,
   "true_reward_first": 0.515625,
   "true_reward_last": 0.4296875,
-  "wall_clock_s": 2403.6200673990043
+  "wall_clock_s": 2389.8625584930305
 }
