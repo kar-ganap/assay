@@ -104,6 +104,20 @@ def _image():  # type: ignore[no-untyped-def]
     )
 
 
+def _vllm_image():  # type: ignore[no-untyped-def]
+    """M2 only. Separate from ``_image()`` on purpose.
+
+    vLLM pins its own ``torch``, and folding it into the shared image would silently change the
+    torch version underneath **every** Phase 0.1 artifact's code path — the scorer M2 exists to
+    measure. Two images cost a build; one image would cost the comparison.
+    """
+    return (
+        modal.Image.debian_slim(python_version="3.12")
+        .pip_install("vllm==0.26.0", "transformers", "accelerate", "huggingface_hub")
+        .add_local_python_source("assay")
+    )
+
+
 def _git_sha() -> str:
     try:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
@@ -599,6 +613,232 @@ if modal is not None:
                 print(f"  {s['setting']:<8} pass@1 {s['pass_at_1']:.3f}  "
                       f"dead {s['dead_group_fraction']:.3f}  "
                       f"parse_fail {s['parse_fail_rate']:.3f}")
+
+    @app.function(
+        gpu=SCREEN_GPU,
+        timeout=TIMEOUT_S,
+        image=_vllm_image(),
+        secrets=[modal.Secret.from_dict({"HF_TOKEN": _dotenv().get("HF_TOKEN", "")})],
+        volumes={VOLUME_PATH: artifacts},
+    )
+    def mismatch_remote(
+        model_id: str,
+        model_revision: str,
+        n_prompts: int,
+        seed: int,
+        max_new_tokens: int,
+        provenance: dict,
+    ) -> dict:
+        """M2 — sample with vLLM, score the *same token ids* with our HF scorer.
+
+        The comparison is only interpretable at ``temperature=1.0, top_p=1.0``. vLLM returns the
+        log-probs of the **processed** distribution — after temperature scaling and any top-p mask —
+        so at any other setting the difference would be dominated by our own sampler config rather
+        than by the two implementations, and M2 would answer a question nobody asked. Both are
+        asserted below rather than trusted, since the failure is silent and the number still looks
+        plausible.
+
+        Two rig checks ride along, because a mismatch number with no control is unfalsifiable:
+
+        1. **HF vs HF** on the same ids must be *identically* zero. If it is not, the harness is
+           wrong and no vLLM figure from this code path means anything.
+        2. **pass@1 against M1**, which measured this exact model, task, setting and seed at 0.024.
+           A vLLM sampler producing a wildly different pass rate is broken in a way the log-prob
+           statistics might not reveal.
+        """
+        import json as _json
+        from pathlib import Path
+
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from vllm import LLM, SamplingParams
+
+        from assay.crawl import tasks
+        from assay.crawl.logprob import (
+            _token_logprobs,
+            build_attention_mask,
+            build_completion_mask,
+        )
+        from assay.crawl.mismatch import mismatch_statistics, mismatch_verdict
+        from assay.crawl.rewards import Outcome, grade_countdown, grader_fingerprint
+
+        temperature, top_p = 1.0, 1.0
+        assert temperature == 1.0 and top_p == 1.0, (
+            "vLLM reports log-probs of the post-processing distribution; away from T=1/top_p=1 "
+            "this measures our sampler config, not the two implementations"
+        )
+
+        countdown = next(f for f in tasks.all_families() if f.name == "countdown")
+        prompts = countdown.generate("cd-3", n_prompts, seed=seed)
+
+        # --- sample with vLLM -------------------------------------------------------------
+        # gpu_memory_utilization is held low on purpose: the HF scorer has to load into the *same*
+        # container afterwards, and vLLM's default (~0.9) would leave it nothing.
+        llm = LLM(
+            model=model_id, revision=model_revision, dtype="bfloat16",
+            gpu_memory_utilization=0.40, max_model_len=1024, seed=seed, enforce_eager=True,
+        )
+        params = SamplingParams(
+            temperature=temperature, top_p=top_p, max_tokens=max_new_tokens, logprobs=0, seed=seed,
+        )
+        outputs = llm.generate([p.question for p in prompts], params)
+
+        sampled = []
+        for prompt, out in zip(prompts, outputs, strict=True):
+            gen = out.outputs[0]
+            if not gen.token_ids:
+                continue
+            # logprobs[i] maps token_id -> Logprob for position i; the sampled token is always
+            # present at logprobs=0, so this reads the chosen token's own log-prob.
+            per_token = [float(lp[tid].logprob) for tid, lp in zip(gen.token_ids, gen.logprobs,
+                                                                   strict=True)]
+            sampled.append({
+                "prompt_id": prompt.prompt_id, "question": prompt.question, "answer": prompt.answer,
+                "prompt_token_ids": list(out.prompt_token_ids),
+                "completion_token_ids": list(gen.token_ids),
+                "text": gen.text, "vllm_logprobs": per_token,
+            })
+
+        del llm
+        torch.cuda.empty_cache()
+
+        # --- score the same ids with the HF path the loss actually differentiates ----------
+        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=model_revision)
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id, revision=model_revision, torch_dtype=torch.bfloat16, device_map="cuda"
+        ).eval()
+
+        def hf_score(rows: list[dict]) -> list[list[float]]:
+            """Per-token HF log-probs for exactly the ids vLLM emitted. Never re-tokenizes.
+
+            Round-tripping vLLM's *text* through the tokenizer can change the ids, which would make
+            this a measurement of re-tokenization rather than of the two samplers.
+            """
+            out: list[list[float]] = []
+            for chunk in [rows[i : i + 16] for i in range(0, len(rows), 16)]:
+                prompt_len = max(len(r["prompt_token_ids"]) for r in chunk)
+                comp_lens = [len(r["completion_token_ids"]) for r in chunk]
+                total = prompt_len + max(comp_lens)
+                ids = torch.full((len(chunk), total), tokenizer.pad_token_id, dtype=torch.long)
+                prompt_attn = torch.zeros((len(chunk), prompt_len), dtype=torch.long)
+                for row, r in enumerate(chunk):
+                    p, c = r["prompt_token_ids"], r["completion_token_ids"]
+                    ids[row, prompt_len - len(p) : prompt_len] = torch.tensor(p)  # left-pad
+                    prompt_attn[row, prompt_len - len(p) :] = 1
+                    ids[row, prompt_len : prompt_len + len(c)] = torch.tensor(c)
+                mask = build_completion_mask(prompt_len, comp_lens, total)
+                attention = build_attention_mask(prompt_attn, comp_lens, total)
+                with torch.no_grad():
+                    logits = model(
+                        input_ids=ids.cuda(), attention_mask=attention.cuda()
+                    ).logits.float()
+                    tok, m = _token_logprobs(logits, ids.cuda(), mask.cuda())
+                tok, m = tok.cpu(), m.cpu()
+                for row, n in enumerate(comp_lens):
+                    keep = m[row].bool()
+                    out.append([float(x) for x in tok[row][keep][:n]])
+            return out
+
+        hf_logprobs = hf_score(sampled)
+        # The vLLM side is truncated to match: the shift in `_token_logprobs` drops a completion's
+        # first token when it begins at position 0, and alignment is asserted, never assumed.
+        vllm_logprobs = [
+            r["vllm_logprobs"][len(r["vllm_logprobs"]) - len(h) :]
+            for r, h in zip(sampled, hf_logprobs, strict=True)
+        ]
+
+        control = hf_score(sampled)  # rig check 1: HF vs HF must be identically zero
+        control_stats = mismatch_statistics(hf_logprobs, control)
+
+        stats = mismatch_statistics(hf_logprobs, vllm_logprobs)
+        verdict = mismatch_verdict(stats, operating_length=max_new_tokens)
+
+        # `grade_countdown` returns a Grade, not a float — read `.outcome`, exactly as
+        # `calibrate` does, so this pass@1 is the same quantity M1 reported.
+        grades = [grade_countdown(r["text"], r["question"]) for r in sampled]
+        pass_at_1 = sum(g.outcome is Outcome.CORRECT for g in grades) / max(1, len(grades))
+        parse_fail = sum(g.outcome is Outcome.PARSE_FAIL for g in grades) / max(1, len(grades))
+
+        payload = {
+            "verdict": verdict,
+            "control": {
+                "max_abs": control_stats["max_abs"],
+                "mean_abs": control_stats["mean_abs"],
+                "is_exactly_zero": control_stats["max_abs"] == 0.0,
+            },
+            "sampler_cross_check": {
+                "vllm_pass_at_1": pass_at_1,
+                "vllm_parse_fail_rate": parse_fail,
+                "m1_hf_pass_at_1": 0.024375,
+                "m1_hf_parse_fail_rate": 0.271875,
+                "note": "M1 measured this model/task/setting/seed with the HF sampler.",
+            },
+            "raw": [{k: v for k, v in r.items() if k != "prompt_token_ids"} for r in sampled[:32]],
+            "peak_memory_gb": float(torch.cuda.max_memory_allocated()) / 1e9,
+            "provenance": {
+                **provenance,
+                "model_id": model_id,
+                "model_revision": model_revision,
+                "sampler": {
+                    "temperature": temperature, "top_p": top_p,
+                    "max_new_tokens": max_new_tokens, "seed": seed,
+                },
+                "task": {"family": "countdown", "setting": "cd-3", "n_prompts": n_prompts},
+                "prompt_template_sha256": tasks.template_fingerprint(),
+                "grader": grader_fingerprint(),
+                "use_chat_template": False,
+                "gpu": SCREEN_GPU,
+            },
+        }
+        tag = f"mismatch-vllm-{model_id.split('/')[-1]}-seed{seed}"
+        out_dir = Path(VOLUME_PATH) / tag
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "result.json").write_text(_json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        artifacts.commit()
+        print(f"committed artifacts to volume {VOLUME_NAME}:/{tag}")
+        return payload
+
+    @app.local_entrypoint()
+    def measure_mismatch(
+        model: str = "qwen2.5-1.5b",
+        n_prompts: int = 128,
+        seed: int = 0,
+        max_new_tokens: int = 512,
+        allow_dirty: bool = False,
+    ) -> None:
+        """``modal run --detach src/assay/modal_app.py::measure_mismatch``.
+
+        Pre-registered band on the implied sequence ratio at the operating length lives in
+        ``docs/phases/phase-0.3-r0-plan.md`` §M2: inside [0.9, 1.1] negligible, outside not free.
+        """
+        provenance = _provenance()
+        _require_clean_tree(provenance, allow_dirty=allow_dirty)
+
+        model_id, revision = SCREEN_MODELS[model]
+        print(f"=== M2: vLLM vs HF log-probs, {model_id} ===")
+        result = mismatch_remote.remote(
+            model_id, revision, n_prompts, seed, max_new_tokens, provenance
+        )
+
+        out_dir = Path("experiments/phase-0.3-r0/results")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tag = f"mismatch-vllm-{model_id.split('/')[-1]}-seed{seed}"
+        (out_dir / f"{tag}.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+
+        v, s = result["verdict"], result["verdict"]["stats"]
+        print(f"\n  control (HF vs HF)   max|delta| = {result['control']['max_abs']:.2e}  "
+              f"exactly zero: {result['control']['is_exactly_zero']}")
+        print(f"  pass@1  vLLM {result['sampler_cross_check']['vllm_pass_at_1']:.4f}  "
+              f"vs M1 HF {result['sampler_cross_check']['m1_hf_pass_at_1']:.4f}")
+        print(f"  per-token  mean {s['mean']:+.5f}  std {s['std']:.5f}  "
+              f"max|d| {s['max_abs']:.4f}  max_off_policy {s['max_off_policy']:.4f}")
+        print(f"  independence_ratio {s['independence_ratio']:.2f}  (1 = iid; >>1 = correlated)")
+        for length, r in sorted(v["by_length"].items()):
+            print(f"  ratio @ {length:<5} median {r['median']:.4f}  "
+                  f"[{r['lo']:.4f}, {r['hi']:.4f}]")
+        print(f"\n  VERDICT: {v['verdict']}  (band {v['band']} at L={v['operating_length']})")
 
     @app.local_entrypoint()
     def probe_a(
