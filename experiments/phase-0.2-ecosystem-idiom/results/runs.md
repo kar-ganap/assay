@@ -7,7 +7,7 @@ staying awake; recover any run at any time with `prime train logs <id>`.
 |---|---|---|---|---|---|
 | `im5b1e6g4a559lnsurg7rmla` | `train-binary.toml` | `sprints/Llama-3.2-1B-Instruct` | $0 | G4, first attempt | completed 200 steps — **unscoreable**, see below |
 | `aw5lbjwnwksb9xwq1vzbaopb` | `train-binary-eval.toml` | `sprints/Llama-3.2-1B-Instruct` | $0 | G4, with unfiltered eval | **PASSED** — eval 0.9980 at step 200 |
-| `xqju72r2dxmeyee19kkrght7` | `train-binary-nofilter.toml` | `sprints/Llama-3.2-1B-Instruct` | $0 | follow-up A/B: `zero_advantage` filter `enforce = false` | running |
+| `xqju72r2dxmeyee19kkrght7` | `train-binary-nofilter.toml` | `sprints/Llama-3.2-1B-Instruct` | $0 | follow-up A/B: `zero_advantage` filter `enforce = false` | completed — **prediction falsified** |
 
 Dashboard: `https://app.primeintellect.ai/dashboard/training/<id>`
 
@@ -83,3 +83,42 @@ Run `xqju72r2dxmeyee19kkrght7` tests it: identical config with `enforce = false`
 `zero_advantage` filter, one field changed. Prediction recorded before launch — filter off should
 fall materially toward 0.923, and the generated pool should stop exceeding `batch_size`. The
 discriminator only becomes visible late, once the dead fraction is high enough to force oversampling.
+
+## Follow-up A/B — PREDICTION FALSIFIED
+
+| step | filter ON | filter OFF |
+|---|---|---|
+| 1 | 0.5879 | 0.6113 |
+| 25 | 0.7246 | 0.7266 |
+| 75 | — | 0.9766 |
+| 150 | — | 1.0000 |
+| 200 | **0.9980** | **1.0000** |
+
+Predicted: filter OFF falls materially toward Phase 0.1's 0.923. **It did not.** If anything the
+unfiltered arm converged faster.
+
+**Mechanism caveat — the lever only partially took.** Oversampling dropped sharply but did not stop
+(`enforce = false` steps 193–200: `128, 128, 256, 256, 128, 128, 128, 128`, against the filtered
+run's `256, 128, 128, 256, 384, 256, 384, 128, 128`). So the filter was weakened, not removed. That
+cuts *against* the hypothesis rather than rescuing it: batches then held ~104 dead rollouts of 128 —
+our loop's exact situation — and performance did not degrade.
+
+**Conclusion: the filter is not why an independent trainer scored higher.** Dead groups still cost
+*compute*, exactly as Phase 0.1 measured. What is now unsupported is that reclaiming them explains
+the performance difference.
+
+The tidy arc this kills is worth naming: "dead groups are a pathology, and here is the production
+mitigation that fixes it" was the write-up that had already half-formed. The data does not support it.
+
+## What must NOT be claimed from this
+
+**Both prime runs are n=1.** `CLAUDE.md` §10.3, added at the end of Phase 0.1, says *no directional
+claim from n=1* — earned when three claims reversed, flattened or narrowed between n=1 and n=3.
+
+So: **"prime-rl trains better than our hand-rolled loop" is not an assertion this phase is entitled
+to make.** G4 is a *threshold* (0.998 ≥ 0.85), which one seed can settle; the ~0.07 comparison
+against 0.923 ± 0.018 is a *direction*, and it cannot.
+
+Remaining untested differences: no KL term in the prime configs (our run 7 carried β = 0.04, and
+ablation B found the leash made things worse), optimizer, schedule, warmup, LoRA rank, on-policy
+discipline. Candidates, not conclusions.

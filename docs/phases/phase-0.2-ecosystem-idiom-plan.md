@@ -12,8 +12,10 @@ must be expressed in that stack's idiom.
 
 0.2 performs that translation on the one task we understand completely.
 
-**Why this is more than a port.** Phase 0.1 measured `add-3digit` exhaustively: base rate **0.433**,
-run 7 reaching **0.923 ± 0.018** (n=3), three grader variants, four ablations. It is therefore the
+**Why this is more than a port.** Phase 0.1 measured `add-3digit` exhaustively: run 7 going
+**0.571 ± 0.019 → 0.923 ± 0.018** (n=3), three grader variants, four ablations. (A *calibration
+sweep* separately measured a 0.433 pass rate at `max_new_tokens=256` on a different prompt set —
+a different quantity, and not the comparator for a training run. See G4.) It is therefore the
 only task where an *independent trainer's* result is checkable. If `prime-rl`'s GRPO learns from our
 `verifiers` environment, that validates the port **and** retroactively cross-checks the hand-rolled
 loop. No later phase gets that check as cheaply.
@@ -23,7 +25,9 @@ loop. No later phase gets that check as cheaply.
 ### The environment package
 
 ```
-environments/assay-add3digit/
+environments/assay_add3digit/          # UNDERSCORES: `prime env install` resolves a local env by
+                                       # directory name and requires Python package convention,
+                                       # while the project name stays dashed (assay-add3digit)
   pyproject.toml          name, tags, pinned verifiers, [tool.verifiers.eval] defaults
   README.md               datasets / task / rubric / metrics, per the vf-init template
   assay_add3digit.py      load_environment(...) -> vf.SingleTurnEnv
@@ -86,13 +90,23 @@ anticipated now.
 agreeing with its `rewards.py` counterpart on the Phase 0.1 fixtures, `grader_fingerprint()`
 asserted, rubric weights matching the requested variant. No GPU, no network.
 
-**G2 — eval.** `prime eval run assay-add3digit -n 20 -r 3` gives pass rate ≈ **0.43** and parse-fail
-≈ **0**, matching the calibration sweep.
+**G2 — eval.** The environment loads and scores under real `verifiers`.
+
+> **Adapted 2026-08-03, recorded as a deviation.** A pass-rate eval needs paid inference against a $0
+> wallet, and `verifiers` cannot be installed locally (it needs `numpy>=2.1`; `torch<2.3` needs
+> `numpy<2`). The check became "loads and scores under real `verifiers`", with the pass-rate
+> comparison folded into G4's step-1 eval reading — which is stronger anyway: held out, 512 rollouts.
 
 **G3 — published.** `prime env push -v PUBLIC` succeeds and `prime env info assay-add3digit` resolves
 from the Hub.
 
-**G4 — trained (the real gate).** Final true reward **≥ 0.85** against the base rate of 0.433.
+**G4 — trained (the real gate).** Final true reward **≥ 0.85**.
+
+> **Comparator corrected 2026-08-03, and the old one deleted.** This gate originally read "against
+> the base rate of 0.433". That number is a real measurement of a *different thing* — the calibration
+> sweep at `max_new_tokens=256` on a different prompt set — and scoring a training run against it
+> compares two quantities. The like-for-like figure is Phase 0.1 run 7's own first-ten-step true
+> reward, **0.571 ± 0.019**. The measured step-1 eval was **0.5879**, inside that band.
 
 > The threshold sits below 0.1's `0.923 ± 0.018` on purpose: `prime-rl`'s GRPO is not our GRPO and
 > the hyperparameters will not match exactly. The claim under test is *"an independent implementation
@@ -114,7 +128,7 @@ ablation-D-style measurements on this stack. Outcome becomes a design pin in
 
 ## Outputs
 
-- `environments/assay-add3digit/` — the package, published to the Hub.
+- `environments/assay_add3digit/` — the package, published to the Hub.
 - Tests under `tests/`, running with zero GPU and zero network.
 - Training result + curve, compared against Phase 0.1's.
 - The `zero_advantage` finding, recorded as a Stage-2 design pin.

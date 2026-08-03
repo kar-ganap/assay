@@ -192,3 +192,28 @@ Stated in advance, so it is a decision and not a mood:
 | Date | Change | Reason |
 |---|---|---|
 | 2026-07-26 | Document created (DRAFT) | Scaffold. Hypotheses ported from `../../explore/rl-envs-onramp.md`. |
+
+## Design pin — `prime-rl` pre-batch filters (added 2026-08-03, Phase 0.2)
+
+**Any Stage-2 grid run on `prime-rl` MUST override the default pre-batch filter list.**
+
+`prime-rl` applies a `zero_advantage` filter by default: unanimous groups produce all-zero advantages
+and are dropped before they fill a batch slot, and the trainer then **keeps sampling to refill** —
+observed generating 384 rollouts to obtain 24 live ones. Measured directly in run
+`aw5lbjwnwksb9xwq1vzbaopb`: `Trainable` fell `120/128 → 8/128` across 200 steps, always in exact
+multiples of `G = 8`.
+
+Two consequences, both load-bearing:
+
+1. **Ablation-D-style dead-group measurements are invisible on this stack by default.** The pathology
+   is removed before it can be counted, so a grid would measure a filtered world and report no cost.
+2. **`prime-rl`'s reported `Reward` is a mean over the surviving rollouts**, not over the batch —
+   verified by integrality (`reward × trainable` is an integer on 24/24 steps; `reward × 128` is not).
+   Since the filter removes unanimous groups, and a unanimous group late in training is overwhelmingly
+   an all-*correct* one, the metric excludes the policy's successes with a bias that grows as it
+   improves. **Never compare it to a mean computed over a full batch.** Use an `[eval]` block, which
+   is unfiltered.
+
+*Not* implied by this: that the filter explains any performance difference between stacks. A one-field
+A/B (`enforce = false`, run `xqju72r2dxmeyee19kkrght7`) **falsified** that hypothesis — the unfiltered
+arm reached 1.0000, if anything converging faster.
