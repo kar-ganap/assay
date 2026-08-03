@@ -120,7 +120,7 @@
 \DeclareMathOperator*{\argmin}{arg\,min}
 
 \title{\textbf{From REINFORCE to GRPO\\[4pt]
-\large A worked tutorial, with the four things that actually bit us}}
+\large A worked tutorial, with the five things that actually bit us}}
 \author{\texttt{assay} --- Phase 0.1 companion document}
 \date{2026-08-02}
 
@@ -134,13 +134,15 @@ broke. It is written to be read linearly. \Cref{sec:setup,sec:reinforce,sec:base
 the ladder: the objective, the score-function estimator, the baseline, and the group baseline that
 gives GRPO its name. \Cref{sec:norm,sec:kl} add the two remaining pieces of full GRPO.
 \Cref{sec:ladder,sec:ablations} map all of it onto the seven-run ladder and four ablations of Phase
-0.1. \Cref{sec:surprises} is the part worth the most: four places where the standard account is
+0.1. \Cref{sec:surprises} is the part worth the most: five places where the standard account is
 either incomplete or wrong at our scale, each one found by a measurement in this phase rather than
 taken from the literature.
 
-Every numerical claim in \cref{sec:ablations,sec:surprises} comes from the clean ladder run of
-2026-08-02 --- ten arms, one commit, one GPU tier, 200 steps each --- and regenerates from committed
-artefacts.
+Every numerical claim in \cref{sec:ablations,sec:surprises} comes from the clean ladder of
+2026-08-02 --- ten arms on one training-path fingerprint and one GPU tier, 200 steps each --- and
+regenerates from committed artefacts via \texttt{assay.crawl.figures}. Arms carrying a claimed
+\emph{difference} were run at three seeds and are reported as mean $\pm$ half the min--max envelope;
+rungs 1--3 are $n=1$ by design and say so where they appear.
 \end{abstract}
 
 \tableofcontents
@@ -205,8 +207,8 @@ across arms.}
 \textbf{Variant} & \textbf{Used by} & \textbf{$R_{\text{proxy}}$} & \textbf{Gap} \\
 \midrule
 \texttt{binary}   & ladder runs 1--7 & $R_{\text{binary}}$ & $\equiv 0$ by construction \\
-\texttt{format}   & ablation B & shape only; the answer is discarded & grows: measured $+0.507$ \\
-\texttt{tiebreak} & ablation C & $R_{\text{binary}} + 0.001\,|y|$ & exactly $0.001\,|y|$: measured $+0.042$ \\
+\texttt{format}   & ablation B & shape only; the answer is discarded & grows: $0.519 \pm 0.011$ \\
+\texttt{tiebreak} & ablation C & $R_{\text{binary}} + 0.001\,|y|$ & exactly $0.001\,|y|$: $0.039 \pm 0.002$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -219,8 +221,8 @@ and C do.
 
 \textbf{Ablation C doubles as a calibration of the instrument.} Its gap is analytically known ---
 the tie-breaker pays exactly $0.001$ per token, so the gap \emph{must} equal $0.001\,|y|$. Measured
-over the final ten steps: gap $= 0.04188$ against $0.001 \times 41.88 = 0.04188$, a ratio of
-$1.0000$. When a measurement has a closed form, check it.
+over the final ten steps of three seeds: gap $= 0.03899$ against $0.001 \times 38.99 = 0.03899$, a
+ratio of $1.0000$. When a measurement has a closed form, check it.
 
 \begin{aside}
 \textbf{Why the true reward must never be trained on.} This is a contamination argument, not a cost
@@ -796,31 +798,41 @@ known answer --- otherwise a null result cannot be interpreted, since ``the diag
 
 \begin{table}[H]
 \centering
-\caption{Ablation B's control arm over training. The proxy is learned in ten steps; the skill never is.}
+\caption{Ablation B's control arm over training, mean of three seeds. The proxy is learned in ten
+steps; the skill never moves at all.}
 \label{tab:bgap}
 \small
 \begin{tabular}{@{}rrrrr@{}}
 \toprule
 \textbf{step} & \textbf{proxy} & \textbf{true} & \textbf{gap} & \textbf{distinct completions} \\
 \midrule
-0   & 0.102 & 0.516 & $-0.414$ & 97 \\
-5   & 0.453 & 0.352 & $+0.102$ & 97 \\
-10  & 0.961 & 0.484 & $+0.477$ & 51 \\
-20  & 0.992 & 0.297 & $\mathbf{+0.695}$ & 66 \\
-199 & 0.984 & 0.445 & $+0.539$ & 80 \\
+0   & 0.143 & 0.471 & $-0.328$ & 101 \\
+5   & 0.380 & 0.367 & $+0.013$ & 95 \\
+10  & 0.917 & 0.477 & $+0.440$ & 61 \\
+20  & 0.984 & 0.422 & $\mathbf{+0.562}$ & 66 \\
+199 & 0.990 & 0.523 & $+0.466$ & 71 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Three things to read off \cref{tab:bgap}.
 
-\textbf{The gap starts negative.} The base model already solves $51.6\%$ of the additions but emits
-the required tag only $10.2\%$ of the time, so initially the proxy \emph{understates} true ability.
+\textbf{The gap starts negative.} The base model already solves $47.1\%$ of the additions but emits
+the required tag only $14.3\%$ of the time, so initially the proxy \emph{understates} true ability.
 Reward hacking is not visible at step 0; it has to be trained in.
 
-\textbf{The proxy saturates in ten steps and the skill never moves.} True reward wanders --- $0.516
-\to 0.297 \to 0.445$ --- and \emph{ends below where it started}. Optimising the format actively
-damaged arithmetic before partially recovering it.
+\textbf{The proxy saturates in ten steps and the skill does not move.} Averaged over the first and
+last ten steps of three seeds, the proxy goes $0.397 \to 0.993$ while true reward goes $0.453 \to
+0.474$ --- a change of $+0.021$ whose sign flips across seeds ($+0.032$, $-0.004$, $+0.034$), which
+is to say: nothing. Two hundred steps bought sixty points of proxy and zero points of arithmetic.
+
+\begin{aside}
+\textbf{A seed-0 artefact, corrected.} At $n=1$ this arm's true reward appeared to \emph{fall}
+($0.516 \to 0.445$), and an earlier draft of this document said optimising the format ``actively
+damaged arithmetic''. At $n=3$ it is flat. The single-seed dip was noise, and the flat version is the
+stronger claim anyway --- a degenerate grader does not need to damage the skill to be worth
+worrying about; it only needs to stop teaching it.
+\end{aside}
 
 \textbf{The completions make it unambiguous.} On \texttt{875 + 812} (answer: $1687$), the policy at
 step 150 emitted \texttt{<answer>1677</answer>}, \texttt{<answer>1707</answer>},
@@ -836,29 +848,43 @@ supposed to reveal closes for the wrong reason. The asymmetry is the instrument.
 
 \begin{table}[H]
 \centering
-\caption{Ablation B. Proxy is what is optimised; true is $R_{\text{binary}}$, measured and never
-trained on. The gap is the Goodhart quantity.}
+\caption{Ablation B, three seeds, mean $\pm$ half the min--max envelope. Proxy is what is optimised;
+true is $R_{\text{binary}}$, measured and never trained on. The gap is the Goodhart quantity.}
 \label{tab:abB}
 \small
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
 \textbf{Arm} & \textbf{proxy} & \textbf{true} & \textbf{gap} & \textbf{KL end} & \textbf{KL share of loss} \\
 \midrule
-control ($\beta = 0.04$) & 0.993 & 0.486 & $+0.507$ & 2.68 & 0.490 \\
-ablation B ($\beta = 0$) & 0.999 & 0.510 & $+0.489$ & 2.45 & 0.000 \\
+control ($\beta = 0.04$) & $0.993 \pm 0.002$ & $0.474 \pm 0.010$ & $\mathbf{0.519 \pm 0.011}$ & $2.87$ & $0.544$ \\
+ablation B ($\beta = 0$)  & $0.999 \pm 0.001$ & $0.517 \pm 0.015$ & $\mathbf{0.482 \pm 0.014}$ & $3.04$ & $0.000$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Two things to take from \cref{tab:abB}. First, the degenerate grader is \emph{comprehensively} hacked:
-the policy scores $0.993$ on the proxy while true performance sits at $0.486$ --- it learned the
-format and not the task. That $+0.507$ gap is the largest in the whole ladder. Second, and against the
-pre-registered prediction, \textbf{removing the leash changes the gap by $-0.018$, i.e.\ nothing} ---
-despite the KL term carrying $49\%$ of the loss in the control arm.
+Two things to take from \cref{tab:abB}. First, the degenerate grader is \emph{comprehensively}
+hacked: the policy scores $0.993$ on the proxy while true performance sits at $0.474$ --- it learned
+the format and not the task. That $+0.519$ gap is the largest in the whole ladder.
 
-The mechanism turns out to run through ablation D: the degenerate reward drives the dead-group
-fraction to $0.888$, so there is almost no policy gradient left for the leash to restrain. A leash is
-irrelevant when the horse has stopped.
+Second, and this is the reverse of what the leash is for: \textbf{removing the KL penalty made the
+gap \emph{smaller}}. Paired by seed, the difference is $+0.037$ with the same sign on all three
+($+0.018$, $+0.036$, $+0.058$), and the leashed arm also ends with lower true reward on every seed
+($0.474$ vs $0.517$) --- below the base model's own $\approx 0.47$. At $\beta = 0.04$, carrying
+$54\%$ of the loss, the leash is not restraining anything; it is costing true performance and
+slightly widening the gap.
+
+Part of the mechanism runs through ablation D: the degenerate reward drives the dead-group fraction
+to $0.895$, so there is very little policy gradient left for a leash to restrain --- a leash is
+irrelevant when the horse has stopped. That explains why the effect is \emph{small}. It does not
+explain why it is \emph{backwards}, and this document does not have that answer. The obvious probe
+is to sweep $\beta$: if the leash genuinely hurts here, the gap should grow with $\beta$.
+
+\begin{aside}
+\textbf{This is the finding that most needed three seeds.} At $n=1$ the two arms read $0.507$ and
+$0.489$, and an earlier draft reported ``removing the leash changes the gap by $-0.018$, i.e.\
+nothing''. That single seed happened to be the smallest of the three differences. The null was an
+artefact of $n=1$, and the effect it hid points the opposite way to the intervention's purpose.
+\end{aside}
 
 \subsection{Ablation C --- add a tiny tie-breaker}
 \label{sec:abC}
@@ -880,22 +906,24 @@ gradient magnitude}, with the advantages ordered entirely by completion length.
 
 \begin{table}[H]
 \centering
-\caption{Ablation C against its parent. Goodhart emerging from the optimiser's own arithmetic.}
+\caption{Ablation C against its parent, three seeds each. Goodhart emerging from the optimiser's own
+arithmetic.}
 \label{tab:abC}
 \small
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
 \textbf{Arm} & \textbf{true reward} & \textbf{gap} & \textbf{dead groups} & \textbf{tokens/rollout} \\
 \midrule
-run 7 (binary)     & $0.592 \to 0.907$ & $+0.000$ & 0.468 & 17.2 \\
-ablation C (tiebreak) & $0.598 \to 0.728$ & $+0.042$ & \textbf{0.008} & \textbf{35.5} \\
+run 7 (binary)        & $0.571 \to 0.923$ & $0.000$ & $0.472 \pm 0.016$ & $18.6 \pm 1.4$ \\
+ablation C (tiebreak) & $0.567 \to 0.716$ & $0.039 \pm 0.002$ & $\mathbf{0.009 \pm 0.002}$ & $\mathbf{34.7 \pm 0.6}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All four predicted signatures fire: dead groups collapse $0.468 \to 0.008$, completions double, the
-true-reward gain falls from $+0.315$ to $+0.130$, and a real proxy--true gap of $+0.042$ opens on a
-task where run 7's gap is identically zero.
+All four predicted signatures fire, and every one of them clears its seed band: dead groups collapse
+$0.472 \to 0.009$, completions nearly double ($18.6 \to 34.7$ tokens), the true-reward gain falls
+from $+0.352$ to $+0.149$, and a real proxy--true gap of $0.039 \pm 0.002$ opens on a task where run
+7's gap is identically zero by construction.
 
 \subsection{Ablation D --- force every group unanimous}
 \label{sec:abD}
@@ -925,10 +953,10 @@ $p = 0.5$ but $0.66$ at $p = 0.05$ \emph{or} $p = 0.95$. Two consequences that a
         why Phase 0.1's task was selected on the dead-group fraction rather than on pass rate.
 \end{itemize}
 
-Measured: with every group forced unanimous, \texttt{frac\_degenerate\_groups} $= 1.000$ on all $200$
-steps, \texttt{grad\_norm} $= 0.0000$ on all $200$ steps, true reward flat at $0.503 \to 0.509$, and
-$313{,}312$ tokens generated at the parent's rate. \textbf{Thirty-eight minutes of GPU for exactly
-zero gradient.}
+Measured, three seeds: with every group forced unanimous, \texttt{frac\_degenerate\_groups} $= 1.000$
+and \texttt{grad\_norm} $= 0.0000$ on all $200$ steps of all three runs --- exactly, with a seed band
+of zero. True reward flat at $0.471 \to 0.477$, and tokens generated at the parent's rate.
+\textbf{Roughly forty minutes of GPU per seed for exactly zero gradient.}
 
 \subsection{C and D are one event with two faces}
 
@@ -950,7 +978,7 @@ carrying any tie-breaker  & full-magnitude gradient chasing noise (C) \\
 \end{table}
 
 % ══════════════════════════════════════════════════════════════════
-\section{Four things the standard account gets wrong at this scale}
+\section{Five things the standard account gets wrong at this scale}
 \label{sec:surprises}
 
 This section is the reason the document exists. Each subsection is a place where the clean derivation
@@ -972,7 +1000,10 @@ Measured on the clean ladder:
 
 \begin{table}[H]
 \centering
-\caption{Dead-group fraction by baseline, averaged over 200 steps. The analytical prediction, exactly.}
+\caption{Dead-group fraction by baseline, averaged over 200 steps. The analytical prediction,
+exactly. Rungs 1--3 are $n=1$: they were excluded from the seed pass because these numbers are a
+consequence of the advantage arithmetic rather than an empirical effect, so a seed band would measure
+noise around a derived value. Ablation D is $n=3$ with a band of exactly zero.}
 \label{tab:dead}
 \small
 \begin{tabular}{@{}llr@{}}
@@ -993,10 +1024,11 @@ the prompt --- the thing that makes GRPO better --- is \emph{also} what creates 
 pathology.
 
 And it \emph{worsens as training succeeds}: under \texttt{group\_loo} the dead fraction climbs from
-$0.244$ over the first ten steps to $0.606$ over the last ten, because the policy is solving more
-prompts unanimously. Full GRPO (run 7) is worse still, $0.300 \to 0.694$. The better the policy gets,
-the larger the share of each batch that produces no gradient at all --- a built-in brake that tightens
-exactly as the task is being learned.
+$0.244$ over the first ten steps to $0.606$ over the last ten ($n=1$), because the policy is solving
+more prompts unanimously. Full GRPO is worse still --- $0.260 \pm 0.044 \to 0.715 \pm 0.028$ across
+three seeds. The better the policy gets, the larger the share of each batch that produces no gradient
+at all: a built-in brake that tightens exactly as the task is being learned. \Cref{sec:underpowered}
+follows that brake into the gradient itself.
 
 This is not a curiosity: \texttt{prime-rl}, Prime Intellect's production RL stack, ships a
 \texttt{zero\_advantage} pre-batch filter \emph{on by default} to drop exactly these rollouts. The
@@ -1053,10 +1085,16 @@ makes ablation A a well-posed question at all.
 \textbf{This has teeth beyond ablation A.} The ladder's primary arms all run with
 \texttt{length\_normalize=True}. In that configuration the rungs are not estimating a common quantity,
 so ``does the baseline reduce variance'' has no well-defined answer --- \emph{that} is the finding,
-not a failure to measure. Separately, removing length normalisation improved the noise-to-signal ratio
-of \emph{every} arm ($0.45$--$0.94 \to 0.30$--$0.33$) and improved final true reward on both arms
-tested ($0.907 \to 0.927$ and $0.728 \to 0.844$), with the proxy--true gap unchanged. Two independent
-lines of support for Dr.\ GRPO's position, arrived at by measurement.
+not a failure to measure.
+
+Separately, removing length normalisation improved the noise-to-signal ratio of \emph{every} arm in
+the probe ($0.45$--$0.94 \to 0.30$--$0.33$). Its effect on training is more selective than an earlier
+$n=1$ draft of this document claimed. On ablation C --- the arm being actively Goodharted --- final
+true reward rises $0.716 \to 0.849$, a gain of $+0.134$ with the same sign on all three seeds
+($+0.116$, $+0.159$, $+0.126$). On run 7, with a clean binary reward, the gain is $+0.017$ and the
+\emph{sign flips} on one seed ($+0.020$, $-0.004$, $+0.034$): no reliable effect. So the honest
+version is that removing length normalisation helps where the reward is degenerate and does nothing
+detectable where it is not --- support for Dr.\ GRPO's position, but narrower than ``it helps''.
 \end{aside}
 
 \subsection{The variance reduction does not materialise}
@@ -1077,23 +1115,27 @@ $p = 0.466$ that is $1.87$.
 
 \begin{table}[H]
 \centering
-\caption{Observed ratio against the point prediction, $N=40$ batches, paired bootstrap.}
+\caption{Observed ratio against the point prediction, base policy, $N=160$ batches, paired
+bootstrap. An earlier draft reported the $N=40$ run; quadrupling the batches roughly halved every
+interval and did not move the conclusion.}
 \label{tab:nsr}
 \small
 \begin{tabular}{@{}rrrr@{}}
 \toprule
 \textbf{Seed} & \textbf{ratio} & \textbf{95\% CI} & \textbf{predicted $1/(1-p)$} \\
 \midrule
-0 & 0.859 & $[0.616,\ 1.219]$ & 1.869 \\
-1 & 0.921 & $[0.704,\ 1.155]$ & 1.825 \\
-2 & 1.350 & $[0.969,\ 1.873]$ & 1.922 \\
+0 & 0.931 & $[0.787,\ 1.091]$ & 1.868 \\
+1 & 1.112 & $[0.939,\ 1.308]$ & 1.850 \\
+2 & 1.142 & $[0.975,\ 1.315]$ & 1.864 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Every interval contains $1.0$ --- no reduction is demonstrated --- and every interval \emph{excludes}
-the prediction. Mean ratio $1.04$. \textbf{At $p \approx 0.47$ on this task, the baseline delivers no
-detectable variance reduction, and the textbook magnitude is ruled out.}
+the prediction. Mean ratio $1.06$, seed band $0.21$. \textbf{At $p \approx 0.47$ on this task, the
+baseline delivers no detectable variance reduction, and the textbook magnitude is ruled out on 3/3
+seeds.} The mean-gradient cosines here are $0.987$--$0.990$, so this is a comparison between
+estimators that genuinely do share a mean.
 
 Why? Recall from \cref{sec:varcalc} that \cref{eq:ratio} assumed $E_c = E_w$. Solve
 \cref{eq:secondmoment} for the ratio at which the benefit vanishes entirely:
@@ -1118,6 +1160,52 @@ coincidental: theory predicts \emph{signal unchanged, noise down $1.87\times$}, 
 happened was \emph{noise up $2.34\times$, signal up $4.16\times$}. Two effects the theory does not
 contain, pulling in opposite directions, landing on the right number. The rig check --- ``do these
 three estimators even share a mean?'' --- is the only thing that caught it.
+\end{aside}
+
+
+\subsection{GRPO starves its own gradient as it converges}
+\label{sec:underpowered}
+
+The probe of \cref{sec:eweight} was run at two operating points: the base policy ($p \approx 0.47$)
+and after 50 steps of training ($p \approx 0.69$). At the second, \textbf{it stops working} --- and
+why it stops is a result about GRPO rather than about the probe.
+
+\begin{table}[H]
+\centering
+\caption{The same probe at two operating points, three seeds each, $N=160$ batches.}
+\label{tab:underpowered}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+& \textbf{$p$} & \textbf{dead groups} & \textbf{$\|\bar{g}\|^2$} & \textbf{NSR} \\
+\midrule
+base policy      & 0.465 & 0.19 & $594$ & $0.37$--$0.41$ \\
+after 50 steps   & 0.694 & 0.46 & $3.1$ & $\mathbf{55}$--$\mathbf{83}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Across fifty training steps the \emph{signal} collapsed by roughly $600\times$ while the noise fell
+only $3\times$: the noise-to-signal ratio rose by more than two orders of magnitude, tracking the
+dead-group fraction from $0.19$ to $0.46$. The batch gradient at the later point is overwhelmingly
+noise.
+
+This has a sharp consequence for any diagnostic built on comparing gradient \emph{directions}.
+$\bar{g}$ is itself an average of $N$ draws, so its own squared relative error is $\mathrm{NSR}/N$,
+and two estimates of the \emph{same} vector have expected cosine $\approx 1/(1 + \mathrm{NSR}/N)$.
+At $\mathrm{NSR}/N = 0.38$ that ceiling is $0.72$ --- below the $0.90$ agreement floor of
+\cref{sec:lennorm}. The floor is unreachable \emph{however perfectly the estimators agree}, so the
+check that fires there is vacuous, and reporting it as ``the baselines disagree'' would blame the
+estimators for what is a sample-size problem. The probe's verdict at this operating point is
+therefore \texttt{underpowered}, not \texttt{rig\_broken}: distinct outcomes, because only the first
+is fixed by drawing more batches. Reaching the floor here would need $N \approx 550$--$750$.
+
+\begin{aside}
+\textbf{Read this next to \cref{sec:deadintro}.} Dead groups do not merely waste compute --- they
+degrade the \emph{quality} of the gradient computed from what remains, and they do so fastest exactly
+when the policy is succeeding. The dead-group fraction and the noise-to-signal ratio are two views of
+one mechanism, and both get worse as the task is learned. Whether that is why RL runs at this scale
+plateau, this phase cannot say; it is the obvious next question.
 \end{aside}
 
 \subsection{The half-batch cosine cannot compare baseline arms}
@@ -1183,17 +1271,33 @@ that gap in our own instrument is not an embarrassment. It is the thesis.
         reward, or the group baseline subtracts it away.
 \end{enumerate}
 
-And the four things measurement changed:
+And the five things measurement changed:
 
 \begin{enumerate}
   \item Dead groups are a pathology the \emph{group} baseline introduces --- $0.000$ under a global
         baseline, $0.454$ under GRPO's.
   \item Length normalisation breaks $\E[\score] = 0$, so under the ladder's primary configuration the
         rungs do not estimate a common quantity at all.
-  \item Once they do, the predicted variance reduction \textbf{does not appear} --- consistent with
-        $E_w/E_c \approx 2.9$, a derived and testable number.
+  \item Once they do, the predicted variance reduction \textbf{does not appear} on 3/3 seeds ---
+        consistent with $E_w/E_c \approx 2.9$, a derived and testable number.
+  \item As GRPO converges it \textbf{starves its own gradient}: across fifty steps the noise-to-signal
+        ratio rose from $\approx 0.4$ to $55$--$83$ as dead groups went $0.19 \to 0.46$.
   \item The half-batch cosine cannot compare baseline arms, and the obvious fix erases the contrast
         rather than the confound.
 \end{enumerate}
+
+And three claims that an earlier $n=1$ draft of this document got wrong, all corrected by running two
+more seeds:
+
+\begin{enumerate}
+  \item Ablation B's leash was reported as having \emph{no} effect on the gap. It has a small one, in
+        the \emph{opposite} direction to its purpose (3/3 seeds).
+  \item Ablation B's true reward was reported as \emph{falling}. It is flat.
+  \item Removing length normalisation was reported as helping \emph{both} arms tested. It reliably
+        helps only the arm being Goodharted.
+\end{enumerate}
+
+Each was a plausible reading of one seed. None survived three. Every table in
+\cref{sec:ablations,sec:surprises} now carries its $n$.
 
 \end{document}
