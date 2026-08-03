@@ -72,6 +72,48 @@ def arm_of(run_name: str) -> str:
 #: remove — reintroduced silently at plot time, which is worse, because the plot looks fine.
 COHORT_FILE = "_cohort.json"
 
+#: Every file whose contents determine what a ladder run *does*. A cohort is defined by the hash of
+#: these, **not** by the commit SHA.
+#:
+#: The distinction is not pedantic. On 2026-08-02 the seed pass ran at ``48b900f9`` while seed 0 sat
+#: at ``f1cc4048``, and keying on the SHA would have discarded seed 0 as a minority cohort — from
+#: three seeds back to two, on arms that had just cost $7 to produce. The only difference between
+#: those commits inside ``src/`` was ``probe_a``'s entry point, which a ladder run never executes.
+#: A commit SHA answers "was the tree identical?"; a run needs "was the code that produced me
+#: identical?", and those diverge the moment anything else in the repo is edited.
+TRAINING_PATH = (
+    "src/assay/crawl/loop.py",
+    "src/assay/crawl/advantage.py",
+    "src/assay/crawl/hf_policy.py",
+    "src/assay/crawl/policy.py",
+    "src/assay/crawl/config.py",
+    "src/assay/crawl/ladder.py",
+    "src/assay/crawl/rewards.py",
+    "src/assay/crawl/tasks.py",
+    "src/assay/crawl/logprob.py",
+)
+
+
+def code_fingerprint(git_sha: str) -> str:
+    """Hash of ``TRAINING_PATH`` as it stood at ``git_sha``. Falls back to the SHA itself.
+
+    Backfilled from git for runs recorded before this existed. The fallback is deliberately the raw
+    SHA rather than a constant: an unresolvable commit must never silently pool with anything.
+    """
+    import hashlib
+    import subprocess
+
+    digest = hashlib.sha256()
+    for path in TRAINING_PATH:
+        try:
+            blob = subprocess.check_output(
+                ["git", "show", f"{git_sha}:{path}"], stderr=subprocess.DEVNULL
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return f"unresolved-{git_sha}"
+        digest.update(blob)
+    return digest.hexdigest()[:12]
+
 
 def export_series(phase_dir: Path) -> list[Path]:
     """Rebuild ``results/series/<run>.csv`` + ``_cohort.json`` from ``raw/``."""
@@ -101,10 +143,12 @@ def export_series(phase_dir: Path) -> list[Path]:
 
         manifest_path = run_dir / "manifest.json"
         manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+        sha = str(manifest.get("git_sha", "unknown"))
         cohort[run_dir.name] = {
-            "git_sha": str(manifest.get("git_sha", "unknown"))[:8],
+            "git_sha": sha[:8],
             "git_dirty": bool(manifest.get("git_dirty", True)),
             "backend": str(manifest.get("backend", "unknown")),
+            "code_fingerprint": code_fingerprint(sha),
         }
     (out_dir / COHORT_FILE).write_text(json.dumps(cohort, indent=2, sort_keys=True) + "\n")
     return written
@@ -124,7 +168,8 @@ def _as_float(value: str | None) -> float | None:
 def load_series(phase_dir: Path) -> Series:
     """Per-step series for every run, **restricted to one comparable cohort**.
 
-    A cohort is a ``(git_sha, backend)`` pair with a clean tree. Runs outside the dominant cohort are
+    A cohort is a ``(code_fingerprint, backend)`` pair with a clean tree — the *training path's*
+    content hash, not the commit SHA (see ``TRAINING_PATH``). Runs outside the dominant cohort are
     dropped and named on stdout, never silently pooled: seeds produced at different commits or on
     different GPU tiers are not replicates of each other, and averaging them would launder the exact
     provenance problem the 2026-08-02 clean rerun was run to remove.
@@ -154,7 +199,7 @@ def load_series(phase_dir: Path) -> Series:
         meta = cohort.get(name)
         if not meta or meta["git_dirty"]:
             continue
-        key = (meta["git_sha"], meta["backend"])
+        key = (meta.get("code_fingerprint", meta["git_sha"]), meta["backend"])
         tally[key] = tally.get(key, 0) + 1
     if not tally:
         print("WARNING: no clean-tree runs in the cohort file; plotting everything unfiltered")
@@ -165,15 +210,17 @@ def load_series(phase_dir: Path) -> Series:
     dropped: list[str] = []
     for name, series in runs.items():
         meta = cohort.get(name, {})
-        if meta and not meta["git_dirty"] and (meta["git_sha"], meta["backend"]) == chosen:
+        fp = meta.get("code_fingerprint", meta.get("git_sha")) if meta else None
+        if meta and not meta["git_dirty"] and (fp, meta["backend"]) == chosen:
             kept[name] = series
         else:
             dropped.append(name)
 
-    print(f"cohort: git {chosen[0]} on {chosen[1]} — {len(kept)} runs")
+    print(f"cohort: training-path {chosen[0]} on {chosen[1]} — {len(kept)} runs")
     for name in sorted(dropped):
         meta = cohort.get(name, {})
-        why = "dirty tree" if meta.get("git_dirty") else f"{meta.get('git_sha')}/{meta.get('backend')}"
+        why = ("dirty tree" if meta.get("git_dirty")
+               else f"{meta.get('code_fingerprint', '?')}/{meta.get('backend')}")
         print(f"  excluded {name}  ({why})")
     return kept
 
@@ -283,7 +330,13 @@ def figure_ladder(runs: Series, out: Path) -> Path:
 
 
 def figure_ablation_b(runs: Series, out: Path) -> Path:
-    """Ablation B: a degenerate grader hacked, and a leash that does not stop it."""
+    """Ablation B: a degenerate grader hacked, and a leash that makes it marginally worse.
+
+    At n=1 the two arms looked identical (gap 0.507 vs 0.489) and were reported as "no effect". At
+    n=3 the paired difference is +0.037 with the same sign on 3/3 seeds, and the leashed arm also
+    ends with LOWER true reward (0.474 vs 0.517) — below the base model's own 0.516. Whatever
+    beta=0.04 is buying here, it is not restraint.
+    """
     import matplotlib.pyplot as plt
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.0))
@@ -313,7 +366,7 @@ def figure_ablation_b(runs: Series, out: Path) -> Path:
             ax2.plot(s, smooth([x - y for x, y in zip(p, t)]), color=colour, lw=1.6,
                      label=label + (f"  (n={n})" if n > 1 else ""))
     ax2.axhline(0, ls="--", lw=1.0, color="#9CA3AF")
-    ax2.set_title("Removing the leash does not change the gap", fontsize=10)
+    ax2.set_title("The leash makes the gap slightly WORSE (3/3 seeds)", fontsize=10)
     ax2.set_ylabel("gap  (proxy − true)")
     ax2.legend(fontsize=8, frameon=False, loc="lower right")
     for ax in (ax1, ax2):

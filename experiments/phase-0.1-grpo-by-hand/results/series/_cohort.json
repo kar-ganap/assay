@@ -1,122 +1,224 @@
 {
   "ablation_b-add-3digit-seed0": {
     "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
     "git_sha": "f1cc4048"
+  },
+  "ablation_b-add-3digit-seed1": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
+  },
+  "ablation_b-add-3digit-seed2": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
   },
   "ablation_b_control-add-3digit-seed0": {
     "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
     "git_sha": "f1cc4048"
+  },
+  "ablation_b_control-add-3digit-seed1": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
+  },
+  "ablation_b_control-add-3digit-seed2": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
   },
   "ablation_c-add-3digit-seed0": {
     "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
     "git_sha": "f1cc4048"
+  },
+  "ablation_c-add-3digit-seed1": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
+  },
+  "ablation_c-add-3digit-seed2": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
   },
   "ablation_c_nolennorm-add-3digit-seed0": {
     "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
     "git_sha": "f1cc4048"
+  },
+  "ablation_c_nolennorm-add-3digit-seed1": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
+  },
+  "ablation_c_nolennorm-add-3digit-seed2": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
   },
   "ablation_d-add-3digit-seed0": {
     "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
     "git_sha": "f1cc4048"
   },
+  "ablation_d-add-3digit-seed1": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
+  },
+  "ablation_d-add-3digit-seed2": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
+  },
   "overfit-check": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "1d67db045438",
     "git_dirty": false,
     "git_sha": "e2a79644"
   },
   "probe-add-3digit-lr0.0001": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "0d531cbf23b6",
     "git_dirty": false,
     "git_sha": "a7f0d897"
   },
   "probe-add-3digit-lr1e-05": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "0d531cbf23b6",
     "git_dirty": false,
     "git_sha": "a7f0d897"
   },
   "probe-add-3digit-lr3e-05": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "0d531cbf23b6",
     "git_dirty": false,
     "git_sha": "a7f0d897"
   },
   "probe-lr0.0001": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "1d67db045438",
     "git_dirty": false,
     "git_sha": "e2a79644"
   },
   "probe-lr0.0003": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "1d67db045438",
     "git_dirty": false,
     "git_sha": "e2a79644"
   },
   "probe-lr1e-05": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "1d67db045438",
     "git_dirty": false,
     "git_sha": "e2a79644"
   },
   "probe-lr3e-05": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "1d67db045438",
     "git_dirty": false,
     "git_sha": "e2a79644"
   },
   "run1-add-3digit-seed0": {
     "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
     "git_sha": "f1cc4048"
   },
   "run1-add-3digit-seed1": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "97f166e7124e",
     "git_dirty": false,
     "git_sha": "a9322218"
   },
   "run2-add-3digit-seed0": {
     "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
     "git_sha": "f1cc4048"
   },
   "run2-add-3digit-seed1": {
     "backend": "modal-L4",
+    "code_fingerprint": "97f166e7124e",
     "git_dirty": false,
     "git_sha": "54403b7f"
   },
   "run2-add-3digit-seed2": {
     "backend": "modal-L4",
+    "code_fingerprint": "97f166e7124e",
     "git_dirty": false,
     "git_sha": "54403b7f"
   },
   "run3-add-3digit-seed0": {
     "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
     "git_sha": "f1cc4048"
   },
   "run7-add-2digit-seed0": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "97f166e7124e",
     "git_dirty": false,
     "git_sha": "e12e169a"
   },
   "run7-add-2digit-seed1": {
     "backend": "modal-A100-40GB",
+    "code_fingerprint": "97f166e7124e",
     "git_dirty": false,
     "git_sha": "e12e169a"
   },
   "run7-add-3digit-seed0": {
     "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
     "git_sha": "f1cc4048"
   },
   "run7-add-3digit-seed1": {
-    "backend": "modal-A100-40GB",
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
-    "git_sha": "fe047ab5"
+    "git_sha": "48b900f9"
+  },
+  "run7-add-3digit-seed2": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
   },
   "run7_nolennorm-add-3digit-seed0": {
     "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
     "git_dirty": false,
     "git_sha": "f1cc4048"
+  },
+  "run7_nolennorm-add-3digit-seed1": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
+  },
+  "run7_nolennorm-add-3digit-seed2": {
+    "backend": "modal-L4",
+    "code_fingerprint": "853fc41ac949",
+    "git_dirty": false,
+    "git_sha": "48b900f9"
   }
 }
