@@ -6,7 +6,8 @@ staying awake; recover any run at any time with `prime train logs <id>`.
 | id | config | model | cost | purpose | status |
 |---|---|---|---|---|---|
 | `im5b1e6g4a559lnsurg7rmla` | `train-binary.toml` | `sprints/Llama-3.2-1B-Instruct` | $0 | G4, first attempt | completed 200 steps — **unscoreable**, see below |
-| `aw5lbjwnwksb9xwq1vzbaopb` | `train-binary-eval.toml` | `sprints/Llama-3.2-1B-Instruct` | $0 | G4, with unfiltered eval | running |
+| `aw5lbjwnwksb9xwq1vzbaopb` | `train-binary-eval.toml` | `sprints/Llama-3.2-1B-Instruct` | $0 | G4, with unfiltered eval | **PASSED** — eval 0.9980 at step 200 |
+| `xqju72r2dxmeyee19kkrght7` | `train-binary-nofilter.toml` | `sprints/Llama-3.2-1B-Instruct` | $0 | follow-up A/B: `zero_advantage` filter `enforce = false` | running |
 
 Dashboard: `https://app.primeintellect.ai/dashboard/training/<id>`
 
@@ -46,3 +47,39 @@ independently published environment, reproducing our measured starting point to 
 is stronger evidence for the port than matching 0.433 would have been.
 
 Endpoint target is unchanged: run 7's **0.923 ± 0.018**, with the gate at **≥ 0.85**.
+
+## G4 — PASSED (run `aw5lbjwnwksb9xwq1vzbaopb`)
+
+Unfiltered eval on **held-out** prompts (seed 999 vs training's seed 0; 1 shared prompt in 512
+against 1.26 expected by chance, so no leakage):
+
+| step | eval reward | comparator |
+|---|---|---|
+| 1 | **0.5879** | Phase 0.1 run 7, first 10 steps: 0.571 ± 0.019 — **inside the band** |
+| 25 | 0.7246 | |
+| 175 | 1.0000 | 512/512 |
+| 200 | **0.9980** | 511/512. Phase 0.1 run 7, last 10 steps: 0.923 ± 0.018 |
+
+Gate was ≥ 0.85. An independent trainer, on an independently published environment, starts inside
+our measured band and finishes **above** our endpoint. Validates the port *and* cross-checks the
+hand-rolled loop, which is what this phase existed to do.
+
+## The mechanism, and the follow-up it prompted
+
+`prime-rl` does not merely *drop* dead groups — it **keeps sampling to refill the batch**. Late in
+the reference run the denominator stops being `batch_size`:
+
+```
+step 196   trainable  24 of 384 generated   (94% discarded)
+step 198   trainable  24 of 384 generated
+step 200   trainable   8 of 128 generated
+```
+
+Phase 0.1's loop took the 128 rollouts it got and let ~70% contribute nothing. This one pays up to
+3× the sampling cost to keep every gradient step at full strength. **That is the leading explanation
+for 0.998 vs 0.923** — not a better optimiser, but a refusal to spend a step on a starved batch.
+
+Run `xqju72r2dxmeyee19kkrght7` tests it: identical config with `enforce = false` on the
+`zero_advantage` filter, one field changed. Prediction recorded before launch — filter off should
+fall materially toward 0.923, and the generated pool should stop exceeding `batch_size`. The
+discriminator only becomes visible late, once the dead fraction is high enough to force oversampling.
