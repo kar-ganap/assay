@@ -17,6 +17,8 @@ re-runs.
 | 2026-07-27 | 0 · Crawl | 0.1 | Calibration sweep — 5 runs (n=4/16/16/64/200, k=4–8) | Modal L4 | ~45 min GPU | **~$0.60 (est.)** | ~$0.60 | ~19,000 completions ≤256 tok, Llama-3.2-1B. Pinned Phase 0.1's task. Still an estimate — the sweep predates the artifact volume, so there is no per-step wall clock to reconcile from. |
 | 2026-07-28 | 0 · Crawl | 0.1 | Bringing up `HFPolicy`: ~12 invocations, mostly failures | Modal A10G → A100-40GB | ~1–1.5 h GPU + image builds | **~$2–4 (est.)** | ~$3–5 | 6 OOM/crash failures. **Cannot be reconciled** — a crashed run writes no artifact, so these leave no measurable trace. |
 | 2026-07-28→08-01 | 0 · Crawl | 0.1 | **All 22 surviving runs** — LR probes ×7, overfit, run7 ×4, run1 ×2, run2 ×3, run3, ablations B/B-control/C/D | Modal A100-40GB + L4 | **8.0 h GPU, measured** from per-step wall clock + 2 min/run container overhead | **$8.41 (measured)** | ~$12–13 | A100-40GB $4.26 · L4 $4.15. Per-run breakdown regenerates from the volume. |
+| 2026-08-03 | 0 · Crawl | 0.2 | Ecosystem-idiom port — 3 hosted GRPO runs (G4 binary, G4 unfiltered A/B, filter probe) | Prime Sprints free queue | ~3 × 200 steps | **$0.00** | ~$12–13 | Free tier, Llama-3.2-1B-Instruct. All five gates met at zero spend. |
+| 2026-08-03 | 0 · Crawl | 0.3 | **M1 — Countdown base-rate screen.** Qwen2.5-1.5B + Qwen2.5-3B, 4 settings each, n=200, k=8, 512 tok — 12,800 completions | Modal L4 | **1 h 58 m app wall clock, measured** (13:48→15:46 PDT, `ap-ZFGqkvE6gZKI5QYK2ArRsN`) | **$1.57 (measured, upper bound)** | ~$14–15 | Wall clock includes image build and model downloads, so charged GPU time is at most this. Verdict **starved at both scales** — see below. |
 
 ### RECONCILED 2026-08-01 — measured, not reconstructed
 
@@ -106,6 +108,42 @@ ablations (L4, `54403b7f`, **dirty**) are not comparable to each other. Ablation
 against run2 across *different hardware and different code* — a second reason that comparison was
 void, independent of the metric confound. `experiments/README.md` already says a run whose manifest
 does not identify its code cannot enter analysis.
+
+## M1 — what $1.57 bought (2026-08-03)
+
+R0's line is **$10**. The screen spent **$1.57** of it to find out that the other **$8.43** would have
+bought an uninterpretable result.
+
+| model | setting | pass@1 | **dead groups** | parse_fail | wrong_answer | med tok | verdict |
+|---|---|---|---|---|---|---|---|
+| Qwen2.5-1.5B | cd-3 | 0.024 | **0.845** | 0.272 | 0.704 | 189 | starved |
+| Qwen2.5-1.5B | cd-4 | 0.006 | **0.950** | 0.244 | 0.750 | 261 | starved |
+| Qwen2.5-1.5B | cd-5 | 0.004 | **0.965** | 0.236 | 0.760 | 304 | starved |
+| Qwen2.5-1.5B | cd-6 | 0.001 | **0.995** | 0.221 | 0.779 | 346 | starved |
+| Qwen2.5-3B | cd-3 | 0.059 | **0.620** | 0.151 | 0.789 | 138 | marginal |
+| Qwen2.5-3B | cd-4 | 0.009 | **0.925** | 0.170 | 0.821 | 189 | starved |
+| Qwen2.5-3B | cd-5 | 0.007 | **0.950** | 0.171 | 0.822 | 184 | starved |
+| Qwen2.5-3B | cd-6 | 0.006 | **0.955** | 0.168 | 0.826 | 202 | starved |
+
+Pre-registered band: **≤ 0.50 workable · 0.50–0.75 marginal · > 0.75 starved**. **Nothing clears it at
+either scale.** The cheapest cell in the grid — 3B on the easiest setting — is 0.620, and it is the
+*most expensive* model we can afford.
+
+**This is a result about the task, not a broken rig.** The pre-registered rig-broken branch fires at
+`parse_fail > 0.5`; observed is 0.15–0.27, and `wrong_answer` carries 0.70–0.83. The models emit legal
+arithmetic that misses the target — reasoning and failing, not failing to format.
+
+**The prediction was free and it was right.** `dead = p⁸ + (1−p)⁸` at `G = 8` is Phase 0.1's own
+task-selection criterion. Applied to the ~2% pass rate secondary sources report for 1.5B, it
+predicted 0.851 before any GPU was booked; measured 0.845. `add-3digit` — the task that criterion
+*chose* — sits at 0.012.
+
+**Peak memory validated the L4 choice by measurement**: 5.93 GB (1.5B) and 9.79 GB (3B) against 24 GB.
+No repeat of Phase 0.1's A100 tier-creep, which cost $4.26 for headroom never used.
+
+**Spend impact:** the screen is *inside* R0's line, not additional to it. What it changes is that the
+remaining $8.43 is not yet committed to anything, because R0's scale is now an open question rather
+than a settled one.
 
 ## Replan triggers
 

@@ -541,13 +541,18 @@ if modal is not None:
             "raw": raw,
             "peak_memory_gb": float(torch.cuda.max_memory_allocated()) / 1e9,
             "provenance": {
-                "model_id": model_id, "model_revision": model_revision,
+                # Caller provenance FIRST, then the screen's own values. Spread last, `_provenance()`
+                # clobbers `model_id` with the module-level MODEL_ID — which on 2026-08-03 made both
+                # screen artifacts claim they ran Llama-3.2-1B-Instruct when they ran Qwen. The
+                # numbers were right and the label was wrong, which is the worse failure.
+                **provenance,
+                "model_id": model_id,
+                "model_revision": model_revision,
                 "sampler": dataclasses.asdict(cfg),
                 "prompt_template_sha256": tasks.template_fingerprint(),
                 "grader": grader_fingerprint(),
                 "use_chat_template": False,
                 "gpu": SCREEN_GPU,
-                **provenance,
             },
         }
         tag = f"screen-countdown-{model_id.split('/')[-1]}-seed{seed}"
@@ -584,8 +589,10 @@ if modal is not None:
             )
 
             tag = f"screen-countdown-{model_id.split('/')[-1]}-seed{seed}"
-            RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-            (RESULTS_DIR / f"{tag}.json").write_text(
+            # RESULTS_DIR is Phase 0.1's; a 0.3 artifact belongs under 0.3.
+            screen_dir = Path("experiments/phase-0.3-r0/results")
+            screen_dir.mkdir(parents=True, exist_ok=True)
+            (screen_dir / f"{tag}.json").write_text(
                 json.dumps(result, indent=2, sort_keys=True) + "\n"
             )
             for s in result["summaries"]:
@@ -699,8 +706,16 @@ if modal is not None:
             if not entry.path.endswith("result.json"):
                 continue
             payload = json.loads(b"".join(artifacts.read_file(entry.path)).decode())
+            summary = payload.get("summary")
+            if summary is None:
+                # Not a ladder run — the volume also holds screens and probes, whose payloads have a
+                # different shape. Recovery must not abort on the first one it does not recognise:
+                # before this guard, one screen artifact raised KeyError and stopped the whole fetch,
+                # which is the opposite of what a recovery path is for.
+                name = entry.path.rsplit("/", 1)[0].strip("/") or "root"
+                print(f"  {name:<40} (not a ladder run — skipped)")
+                continue
             _fetch_into(payload, phase_dir)
-            summary = payload["summary"]
             print(
                 f"  {summary['run_id']:<28} steps={summary['n_steps']:<4} "
                 f"live={summary['live_fraction_in_slope_window']} "

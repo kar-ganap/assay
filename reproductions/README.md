@@ -19,8 +19,33 @@ project's biggest risk into Crawl, where finding out costs a day instead of a st
 
 ## Scale caveats — read before running
 
-- **TinyZero: Qwen2.5-0.5B *fails* to learn reasoning on Countdown. 1.5B learns search and
-  self-verification. 3B for the headline, <$30 on veRL.** Budget R0 at **1.5B**; do not attempt 0.5B.
+- **MEASURED 2026-08-03, and it overturns the caveat this line used to carry.** The scaffold said
+  *"1.5B learns search and self-verification; budget R0 at 1.5B"*. That came from an LLM-assisted
+  research pass and is **wrong**. A base-rate screen (n=200 prompts, k=G=8, T=1.0, 512 tokens, base
+  checkpoints, raw prompts) measured:
+
+  | model | setting | pass@1 | dead groups | parse_fail | verdict |
+  |---|---|---|---|---|---|
+  | Qwen2.5-1.5B | cd-3 | 0.024 | **0.845** | 0.272 | starved |
+  | Qwen2.5-1.5B | cd-4 | 0.006 | **0.950** | 0.244 | starved |
+  | Qwen2.5-3B | cd-3 | 0.059 | **0.620** | 0.151 | marginal |
+  | Qwen2.5-3B | cd-4 | 0.009 | **0.925** | 0.170 | starved |
+
+  Against the pre-registered band (`<=0.50` workable), **nothing clears it at either scale.** The
+  measured 1.5B pass rate of 0.024 matches the ~2% that secondary sources reported, so that figure
+  is now first-hand.
+
+  **Not a grader artifact:** `parse_fail` is 0.15-0.27 against a 0.5 rig-broken threshold, and
+  `wrong_answer` runs 0.70-0.83. The models emit legal expressions that miss — reasoning and
+  failing, not failing to format.
+
+  **Consequence:** R0 is **not well-posed at either affordable scale**. A training failure would be
+  attributable to reward sparsity in the task, not to the loop, so it could not retire *"my loop
+  actually learns."* Screen cost ~$1.50 against R0's $10 line; artifacts in
+  `experiments/phase-0.3-r0/results/`, method in `docs/phases/phase-0.3-r0-plan.md`.
+
+  The prediction came free: `dead = p^8 + (1-p)^8` at `G=8` is Phase 0.1's own task-selection
+  criterion, and `add-3digit` — the task it chose — sits at 0.012.
   Corollary: 0.6B is fine for Phase 0.1's *plumbing* smoke tests on a task where the base policy
   already has nonzero pass rate, but not for reasoning emergence.
 - **R3's published config is 3B.** Run at 1.7B and **report the scale delta honestly rather than
