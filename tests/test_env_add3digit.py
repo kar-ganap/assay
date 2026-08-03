@@ -2,7 +2,7 @@
 
 **Why these tests carry more weight than they look like they should.** A published environment runs
 on Prime's infrastructure and may import only what its own ``pyproject.toml`` declares. This repo is
-private, so ``environments/assay-add3digit/`` cannot ``from assay.crawl import ...`` — the generator
+private, so ``environments/assay_add3digit/`` cannot ``from assay.crawl import ...`` — the generator
 and the graders have to be **vendored** into the env module.
 
 That makes drift the central risk. Phase 0.2's gate compares an independent trainer's result against
@@ -24,7 +24,7 @@ import pytest
 from assay.crawl import rewards as crawl_rewards
 from assay.crawl.tasks import ArithmeticFamily
 
-ENV_DIR = Path(__file__).resolve().parents[1] / "environments" / "assay-add3digit"
+ENV_DIR = Path(__file__).resolve().parents[1] / "environments" / "assay_add3digit"
 ENV_MODULE = ENV_DIR / "assay_add3digit.py"
 
 
