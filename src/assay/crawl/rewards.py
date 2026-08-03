@@ -12,9 +12,13 @@ therefore structural, not inferred after the fact.
 
 from __future__ import annotations
 
+import ast
 import re
+from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
+
+from assay.crawl.tasks import parse_countdown_question
 
 #: An integer, with optional thousands separators (the model emits ``1,125`` for 4-digit results).
 _INTEGER_RE = re.compile(r"-?\d{1,3}(?:,\d{3})+|-?\d+")
@@ -166,3 +170,114 @@ def grade_tiebroken(completion: str, expected: str, *, completion_tokens: int) -
         extracted=base.extracted,
         reward=base.reward + TIEBREAK_WEIGHT * completion_tokens,
     )
+
+
+# --------------------------------------------------------------------------------------
+# Countdown (Phase 0.3 / R0)
+# --------------------------------------------------------------------------------------
+
+#: An arithmetic expression: digits and operators, at least one operator. Anchored on a digit or
+#: open-paren at each end so trailing prose does not get swept in.
+_EXPRESSION_RE = re.compile(r"[\d(][\d\s,()+\-*/.]*[\d)]")
+
+#: Unicode operators and separators small models emit. Normalised rather than rejected, because a
+#: strict grader filters HARD problems rather than badly-formatted ones — measured in Phase 0.1,
+#: where parse-failure rose monotonically as pass rate fell.
+_OPERATOR_ALIASES = {"×": "*", "x": "*", "X": "*", "÷": "/", "−": "-", "–": "-", "—": "-"}
+
+
+def _normalise_expression(text: str) -> str:
+    for old, new in _OPERATOR_ALIASES.items():
+        text = text.replace(old, new)
+    return text
+
+
+def _eval_arithmetic(expr: str) -> float | None:
+    """Evaluate under an operator allowlist. **Never ``eval``.**
+
+    A grader runs on text a model chose, so arbitrary-code execution is a real exposure rather than a
+    hypothetical one. Returns ``None`` on anything it cannot evaluate — bad syntax, an unsupported
+    node, division by zero — so the caller can report PARSE_FAIL rather than a spurious wrong answer.
+    """
+    expr = _normalise_expression(expr).replace(",", "")
+    if not re.fullmatch(r"[\d\s()+\-*/.]+", expr):
+        return None
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError:
+        return None
+
+    def walk(node: ast.AST) -> float | None:
+        if isinstance(node, ast.Expression):
+            return walk(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, int | float):
+            return float(node.value)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.UAdd | ast.USub):
+            inner = walk(node.operand)
+            return None if inner is None else (inner if isinstance(node.op, ast.UAdd) else -inner)
+        if isinstance(node, ast.BinOp):
+            left, right = walk(node.left), walk(node.right)
+            if left is None or right is None:
+                return None
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.Div):
+                return None if abs(right) < 1e-12 else left / right
+        return None
+
+    return walk(tree)
+
+
+def _literals(expr: str) -> list[int] | None:
+    """Integer literals in the expression, for the used-at-most-once check."""
+    cleaned = _normalise_expression(expr).replace(",", "")
+    try:
+        tree = ast.parse(cleaned, mode="eval")
+    except SyntaxError:
+        return None
+    return [
+        int(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, int)
+    ]
+
+
+def grade_countdown(completion: str, question: str, *, tol: float = 1e-6) -> Grade:
+    """``R_countdown`` — reach the target using each offered number at most once.
+
+    Two failure modes are kept structurally distinct, as everywhere in this project:
+
+    - **PARSE_FAIL** — no expression was found, or one was found and could not be evaluated. The
+      model said nothing gradeable.
+    - **WRONG_ANSWER** — an expression was evaluated and is *illegal or off-target*: it reuses a
+      number, uses one that was never offered, or simply misses.
+
+    Reusing a number scores zero even when the arithmetic hits the target. ``5 * 5 = 25`` is not a
+    solution when only one 5 was offered, and a grader that accepted it would be measuring something
+    easier than the task.
+
+    The **last** parseable expression wins: small models restate their working, and the last thing
+    they write is what they commit to — the same convention ``extract_final_integer`` uses.
+    """
+    numbers, target = parse_countdown_question(question)
+
+    candidates = _EXPRESSION_RE.findall(_normalise_expression(completion))
+    for raw in reversed(candidates):
+        expr = raw.strip()
+        if not re.search(r"[+\-*/]", expr):
+            continue  # a bare number is not an expression
+        used = _literals(expr)
+        value = _eval_arithmetic(expr)
+        if used is None or value is None:
+            continue
+        available = Counter(numbers)
+        if Counter(used) - available:
+            return Grade(outcome=Outcome.WRONG_ANSWER, extracted=expr, reward=0.0)
+        if abs(value - target) < tol:
+            return Grade(outcome=Outcome.CORRECT, extracted=expr, reward=1.0)
+        return Grade(outcome=Outcome.WRONG_ANSWER, extracted=expr, reward=0.0)
+    return Grade(outcome=Outcome.PARSE_FAIL, extracted=None, reward=0.0)
