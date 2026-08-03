@@ -1,6 +1,6 @@
 # Phase 0.1 — GRPO by hand
 
-**Stage:** 0 (Crawl) · **Branch:** `phase-0.1-grpo-by-hand` · **Status:** PLANNED, not started
+**Stage:** 0 (Crawl) · **Branch:** `phase-0.1-grpo-by-hand` · **Status:** IN PROGRESS (branch cut 2026-07-27)
 **Est:** 8–10 h · **Est spend:** ~$5
 
 ---
@@ -21,15 +21,227 @@ the same task properly under the `verifiers` spec.
 
 ## Design
 
-**Model.** Qwen3-0.6B (or Llama-3.2-1B-Instruct). Pin the revision hash in `manifest.json`.
+**Model.** **Llama-3.2-1B-Instruct** — pinned 2026-07-27. Pin the revision hash in `manifest.json`.
 **Explicitly not** attempting reasoning emergence at this scale — TinyZero found Qwen2.5-0.5B *fails*
 to learn Countdown. That is R0's job at 1.5B, in Phase 0.3.
 
-**Task.** Something where the base policy already has **nonzero pass rate**, so a gradient exists on
-step 1. Candidates: 3-digit arithmetic with a regex-extracted answer; a strict output-format task
-(emit `<answer>N</answer>`); a Reasoning Gym family filtered to easy. Pick one in TEST, record why.
+*Why the older model, deliberately.* It is ~22 months old and outclassed in its class (Qwen3.5-0.8B/2B,
+March 2026). That is **an argument for it here**: a weaker base has lower pass rates, more headroom and
+a longer curve, which is exactly what ablation A needs to discriminate on — a stronger model saturating
+in 15 steps is the failure mode. It also carries no thinking-mode flag and no vision tower, has maximal
+`transformers` maturity, and **doubles as base-rate reconnaissance for R1** (Phase 0.4), which must use
+this exact model for reproduction fidelity. Nothing in 0.1 is a headline claim, so staleness costs
+nothing. Model currency matters at **P-model-confirmatory** (Phase 1.1), which is still unpinned.
 
-**Reward.** Binary, programmatic, sub-millisecond. No LLM judge anywhere in this phase.
+**Task.** Chosen by measurement, not assertion — see *Task selection* below.
+
+**Reward.** Programmatic, sub-millisecond, no LLM judge anywhere in this phase. Three variants over the
+**same** prompts, because no single reward makes all four failures visible:
+
+| Variant | Used by |
+|---|---|
+| `R_binary` — exact-match on the extracted answer | the ladder (runs 1–7), ablations **A** and **D** |
+| `R_format` — output matches `<answer>\d+</answer>`, content ignored | ablation **B** (a constant string always pays, so collapse-to-one-string is reachable) |
+| `R_tiebreak` — `R_binary + 0.001 × completion_tokens` | ablation **C** (see the note under the breakage table) |
+
+Swapping the grader while holding tasks fixed is the move the whole project is built on. Phase 0.1
+rehearses it at the smallest possible scale, and `R_format` is grader degeneracy (battery axis A2) at
+n=1 the way ablation D is the pass-rate band (A3) at n=1.
+
+## Task selection — pre-committed 2026-07-27, before any sweep result was seen
+
+**The task is an instrument for making the four failures legible, not a benchmark.** Two of the four
+constrain the task itself: **A** needs *headroom* (a curve long enough that "slower and noisier" ≠
+"identical"); **D** needs a *difficulty dial* so unanimous groups can be constructed on demand. B and
+C turned out to be reward-design choices, layerable on any task.
+
+**The criterion is the per-prompt histogram, not the mean.** GRPO consumes groups with nonzero
+within-group reward variance. A group is dead with probability `p^G + (1−p)^G`:
+
+| per-prompt p | dead groups at G=8 |
+|---|---|
+| 0.05 | **66%** |
+| 0.20 | 17% |
+| 0.50 | **0.8%** |
+| 0.95 | **66%** |
+
+So the superseded "≥5% at k=8" floor admits a task that wastes two-thirds of every batch, and it has
+no ceiling — p=0.95 is exactly as dead as p=0.05. **The mean cannot see this.** A set of half-trivial
+plus half-impossible prompts averages p=0.5 with **43%** of groups dead; a set genuinely centred at 0.5
+has **0.8%**. Identical means, **55× difference in wasted compute**.
+
+**Measurement.** k = G = 8, so "fraction of prompts whose 8 samples came out unanimous" is a *direct,
+unbiased* estimate of the step-0 dead-group rate — the screen simulates one training batch. Sampler
+pinned to the training sampler: `T=1.0`, `top_p=1.0`, `max_new_tokens=256`, per-prompt seed. Coarse
+pass (64 prompts × 4 dial settings × 2 families) locates the band; fine pass (200 prompts) on the
+survivors gives the stable histogram.
+
+**Selection rule — committed before any result is seen:**
+
+1. **Minimize `dead_group_fraction`** (primary).
+2. **Constraint:** `parse_fail_rate ≤ 0.20`. If parse failures dominate, RL learns formatting first and
+   the entire ladder is a formatting curve wearing a skill costume.
+3. **Constraint:** `headroom = pass@8 − pass@1 ≥ 0.15`. RL at this scale sharpens the sampling
+   distribution rather than adding capability, so no headroom means no curve for **A** to discriminate
+   on. Free from the same k=8 samples.
+4. **Tie-break:** settings within **1 standard error of the difference** from the best are treated
+   as tied; among those, shorter median completion length wins (L6 — more steps per dollar).
+
+> **Amendment, 2026-07-27 — made before the n=200 result was read.** The tie tolerance was
+> originally a fixed `0.01`. That is indefensible at any sample size: the SE of
+> `dead_group_fraction` is ≈0.04 at n=64 and ≈0.024 at n=200, so a 0.01 window means the rule
+> resolves on sampling noise and the tie-break can never fire. It was visibly wrong in the coarse
+> pass, where add-2digit (0.109) and add-3digit (0.156) differed by 0.047 ± ~0.06 — inside noise —
+> yet the rule declared a winner. The same two settings had been ranked the *other way* at n=16,
+> which is what a noise-driven decision looks like.
+>
+> Replaced with `SE = sqrt(p(1−p)/n)` on the prompt count, floored at `p = 1/n` (an observed zero is
+> not evidence of `SE = 0`), and compared as `hypot(SE_best, SE_other)`. The rule string carries this
+> amendment verbatim, so a run's own output records that the change predated the data.
+
+**Families swept:** counting / string-ops (dial = string length, target-char frequency) and parametric
+arithmetic (dial = digits × operation). Both, so the choice is made on evidence rather than intuition.
+
+### RESULT — task pinned 2026-07-27 (n=200, k=8, seed 0)
+
+`experiments/phase-0.1-grpo-by-hand/results/calibration-n200-k8-seed0.json`,
+`git_sha 1d9a805`, `git_dirty false`, model revision `9213176…`, prompt template `1d37f53b…`.
+
+| setting | dead | ±SE | pass@1 | pass@8 | headroom | parse_fail |
+|---|---|---|---|---|---|---|
+| **arithmetic/add-2digit** | **0.115** | 0.023 | 0.720 | 1.000 | 0.280 | 0.000 |
+| arithmetic/add-3digit | 0.175 | 0.027 | 0.433 | 0.865 | 0.432 | 0.001 |
+| arithmetic/mul-2x1digit | 0.295 | 0.032 | 0.804 | 0.995 | 0.191 | 0.001 |
+| arithmetic/mul-2x2digit | 0.330 | 0.033 | 0.383 | 0.730 | 0.347 | 0.001 |
+| counting/count-L20 | 0.525 | 0.035 | 0.079 | 0.475 | 0.396 | 0.001 |
+| counting/L40 · L60 · L90 | 0.625–0.765 | ~0.033 | 0.037–0.058 | 0.235–0.375 | 0.197–0.318 | ≤0.002 |
+
+**The rule selects `arithmetic/add-2digit`.** The gap to add-3digit is 0.060 against
+`SE_diff = 0.035` — **1.7 SE, outside the tie window**, so it resolves on merit and not on noise. The
+n=64 and n=200 passes agree on the ordering (n=16 did not, at SE ≈ 0.08).
+
+**Counting is out**, and decisively: tokenisation-bound at 1B, 3.7–7.9% pass@1 with 52–77% dead
+groups even at its easiest rung. The earlier recommendation of counting as the primary family was
+wrong and is retracted.
+
+### Finding — `dead_group_fraction` is blind to the *sign* of a dead group
+
+| setting | all-CORRECT groups | all-WRONG groups | trajectory under training |
+|---|---|---|---|
+| add-2digit | **23 (11.5%)** | **0 (0.0%)** | dead fraction **rises** — pure saturation |
+| add-3digit | 8 (4.0%) | 27 (13.5%) | dead fraction **falls** — unreachable becomes reachable |
+
+Every one of add-2digit's dead groups is an already-solved prompt (`pass@8 = 1.000` exactly — nothing
+is unreachable). As RL lifts `pass@1` from 0.720, more prompts saturate: at p ≈ 0.90 the closed form
+gives `0.9⁸ + 0.1⁸ ≈ 0.43`. add-3digit moves the opposite way.
+
+**So the criterion optimises a step-0 snapshot of a quantity that is not stationary, and it selected
+the candidate that degrades.** → **Battery axis A3 should decompose the pass-rate band by sign**
+(saturated vs unreachable), not merely by distance from p = 0.5. Carried to the retro as a Phase 1.3
+design input.
+
+### DEVIATION — arms swapped 2026-07-28, on measured evidence
+
+**`arithmetic/add-3digit` is now the primary arm; `add-2digit` becomes the robustness check.** This
+is a **documented deviation from the pre-committed selection rule**, not the rule's output, and is
+labelled as such wherever it is reported.
+
+**Evidence.** The LR probe ran 4 rates × 30 steps on `add-2digit`. Two rig checks passed first —
+step-0 reward 0.672 against the screen's 0.720, and step-0 dead-group fraction 0.12 against the
+screen's 0.115, both independently reproduced. Then:
+
+| lr | live steps | ≥90% dead by | reward |
+|---|---|---|---|
+| 1e-5 | 30/30 | never | 0.67 → 0.95, smooth |
+| 3e-5 | 24/30 | step 7 | 0.67 → 1.00 |
+| 1e-4 | 18/30 | step 4 | 0.67 → 1.00 |
+| 3e-4 | 27/30 | step 3 | oscillates 0.99 → 0.84 → 0.91, unstable |
+
+`dead_group_fraction` climbs 0.12 → ~1.0 within ten steps. **The task is solved and dead long before
+the pre-registered slope window (steps 50–200) even opens**, so `d(gap)/d(step)` would be fitted
+entirely over dead steps — the artefact `live_fraction_in_slope_window` exists to flag.
+
+**Why this is not post-hoc rationalisation.** The limitation was recorded *when the task was pinned*,
+before any training: `dead_group_fraction` is blind to the **sign** of a dead group, all 23 of
+`add-2digit`'s were saturation-type, and its dead fraction was predicted to **rise** while
+`add-3digit`'s (27 unreachable vs 8 saturated) was predicted to **fall**. The rule optimised a step-0
+snapshot of a non-stationary quantity and selected the arm that degrades. The robustness arm was
+pre-declared for exactly this contingency; the two now swap roles.
+
+**The forecast was directionally right and quantitatively too optimistic** — predicted ~0.43,
+observed ~1.0.
+
+→ **Carries to battery axis A3**: the pass-rate band must be measured *dynamically and by sign*, not
+as a step-0 snapshot. This is now the third independent confirmation.
+
+### Arms — declared 2026-07-27, before any training
+
+| Arm | Setting | Status |
+|---|---|---|
+| **Primary / headline** | `arithmetic/add-2digit` | selected by the pre-committed rule |
+| **Robustness check** | `arithmetic/add-3digit` | pre-declared, *not* selected by the rule |
+
+The rule binds: add-2digit is the headline and stays the headline. add-3digit is run because the
+step-0 criterion cannot see the saturation trajectory, and a task that saturates by step 200 would
+cost ablation **A** its discriminating power exactly where the phase needs it.
+
+**Pre-committed so this cannot be cherry-picked:** the four ablation figures are reported from
+**add-2digit**. If the two arms disagree, **the disagreement is the reported result** — it is not
+licence to promote the prettier arm. Retiring the robustness arm requires a dated entry here.
+
+**Pinned configuration.** Llama-3.2-1B-Instruct @ `9213176726f574b556790deb65791e0c5aa438b6` ·
+`T=1.0, top_p=1.0, max_new_tokens=256` · `G = k = 8` · `R_binary` = last integer anywhere.
+
+### Extractor decision — pre-declared 2026-07-27, before the few-shot run
+
+The strict `<answer>N</answer>` tag proved **unlearnable at baseline**: 26.4% compliance over 1024
+completions, with the model emitting 15+ near-miss shapes (`<a>7</a>`, `(answer) 7`, `<7>`,
+`45 * 8 = 360`). Every setting therefore failed constraint 2 and the rule selected nothing.
+
+Two candidate fixes. **Tested in this order, one attempt each, criterion fixed in advance:**
+
+1. **Few-shot the format** (2 chat-turn examples), keeping the strict-tag grader. Format compliance
+   stays a real constraint.
+2. **Fall back to last-integer-anywhere extraction** — the standard RLVR extractor. Re-scoring the
+   existing 1024 completions this way gives 100% parseable and `parse_fail = 0.000` everywhere.
+
+**Success criterion for (1), declared before the run:** the unchanged selection rule must return a
+non-empty choice — i.e. at least one setting with `parse_fail_rate ≤ 0.20` **and**
+`headroom ≥ 0.15`. **One attempt.** If it fails, fall back to (2) rather than iterating on prompt
+wording, which would be tuning the instrument until it flatters the design.
+
+#### Outcome — resolved to (2), last-integer extraction
+
+Few-shot lifted strict-tag compliance **26.4% → 62.6%** (82.0% on arithmetic) and the rule did return
+a non-empty choice, so the criterion passed *as written*. But it selected `counting/count-L20` at
+`dead_group_fraction = 0.625` — a cell where 62.5% of every batch produces no gradient — and it won
+only because every better cell was excluded on `parse_fail`.
+
+**The criterion was too weak** (it should have carried a threshold on `dead_group_fraction`, not just
+"non-empty"), and the run surfaced a structural problem that was not known when it was written:
+
+> **`parse_fail_rate` under a strict-tag grader is confounded with task difficulty.** Harder problems
+> make the model reason out loud, and the longer it reasons the less reliably it closes the tag.
+> Measured monotone in **both** families independently — counting: `.078 / .422 / .867 / .906` as
+> pass@1 falls `.062 / .031 / .008 / .008`; arithmetic: `.000 / .062 / .258 / .398` as pass@1 falls
+> `1.000 / .914 / .438 / .398`.
+
+So constraint 2 was not filtering *badly formatted* settings — it was filtering **hard** ones,
+excluding precisely the band the screen exists to locate. No prompt wording fixes that; few-shot
+lifted compliance by 36 points and left the confound fully intact.
+
+Secondary finding: few-shot examples (`5 + 7`, `3 * 6`) plausibly taught *arithmetic*, not just
+format — `mul-2x1digit` saturated to `pass@1 = 1.000, dead = 1.000`. That would have made the base
+rate conditional on prompt content requiring an extra pin through training.
+
+**Resolution.** `R_binary` now takes the **last integer anywhere** (the standard RLVR extractor):
+100% parseable, `parse_fail_rate = 0.000` everywhere, confound removed, no few-shot needed. The
+strict tag survives as `R_format` for ablation B, where being a *different* grader is the point.
+`PARSE_FAIL` now means "emitted no number at all" — a genuine non-answer.
+
+**Constraint 2 is retained unchanged** rather than deleted. It is now near-vacuous for `R_binary`,
+but it is the tripwire that catches a future task whose prompt or grader stops eliciting answers at
+all — which is exactly how this failure was caught in the first place.
 
 ## The ladder — seven runs
 
@@ -49,11 +261,486 @@ step 1. Candidates: 3-digit arithmetic with a regex-extracted answer; a strict o
 |---|---|---|
 | **A · no baseline** | run 1 vs run 2 | gradient-norm variance ≫; slower, noisier convergence |
 | **B · no KL** | run 7 minus the KL term | **entropy collapse** — the policy degenerates toward a single high-reward string |
-| **C · degenerate-group normalization** | advantage-normalize a group whose rewards are near-identical | **divide-by-≈0 advantage spikes**; loss instability |
+| **C · degenerate-group normalization** | advantage-normalize a unanimous group carrying a tiny tie-breaker term | **the tie-breaker is amplified to full gradient magnitude** — see the correction below |
 | **D · all-correct group** | force a group where every rollout succeeds | **zero gradient** — the step is wasted. This is the mechanism behind battery axis A3 and the pass-rate band. |
 
 **Ablation D is the conceptual bridge to the whole project.** It is why pass-rate band is an axis at
 all, and why `Rollout Pass-Rate Control` is cited rather than re-derived.
+
+### Pre-registered signatures — written 2026-07-28, before any training run
+
+A prediction that cannot fail is not a prediction. Each signature below names a **metric**, a
+**direction**, a **magnitude**, and a **comparison** — the test being that a stranger with the logs
+and none of this conversation could apply it and reach the same verdict. Gate 2 says an ablation
+that does not fail as predicted is a *finding*; that only has teeth if the prediction was sharp
+enough to fail.
+
+Each carries **two failure branches**, because they demand different responses: *prediction wrong*
+is a result to record, *rig broken* is a bug to fix and says nothing about the science.
+
+| | metric | direction | magnitude | falsified if | rig broken if |
+|---|---|---|---|---|---|
+| **A** | **SNR** `ρ = cos/(1−cos)` from `half_batch_grad_cosine` (mean, steps 50–200) | run 1 **<** run 2 | **`ρ₂/ρ₁ ≥ 2`** | ratio < 1.3, or direction reverses | non-finite `grad_norm`, **or** halves not split by group |
+| **B** | `distinct_completions` **∧** `proxy_reward` at step 200 | distinct falls, proxy holds | `distinct ≤ 0.05 × rollouts_per_step` (≤6 of 128) **while** `proxy_reward ≥ 0.9` | distinct stays > 25% of rollouts, **or** proxy never reaches 0.9 | `kl_to_ref` nonzero on the no-KL arm |
+| **C** | median `tokens`; `d(gap)/d(step)` | both rise | median tokens at step 200 ≥ **2×** its step-0 value (≥14, baseline is 7), with gap slope > 0 | token length flat | `max_abs_advantage_observed` > **√7 = 2.646** |
+| **D** | `frac_degenerate_groups`, `grad_norm` | → 1.0, → 0 | `frac_degenerate = 1.0` exactly and `grad_norm < 1e-8` | — | `grad_norm` materially nonzero ⇒ the loop is not using a group baseline where it claims to |
+
+**Why the cosine is A's primary metric, not `CV(grad_norm)`.** The two batch halves are independent
+samples of the same expected gradient, so their cosine measures estimator variance *directly*.
+`CV(grad_norm)` across steps conflates estimator noise with genuine trend — a gradient decaying
+smoothly from 10 to 2 scores high CV with zero step-to-step jitter, so a healthy trajectory would
+read as confirmation. `grad_norm_cv` and `grad_norm_cv_detrended` are both reported alongside so the
+difference between them is visible; the cosine is what the verdict rests on. It costs no extra
+backward passes.
+
+**D is arithmetic, not dynamics**, and is already asserted in `tests/test_advantage_spec.py`. Its
+purpose *in a run* is the consequence: reward flat while wall-clock and tokens accrue normally.
+
+> **Amendment, 2026-07-28 — before any training run.** A's threshold was originally *"gap ≥ 0.15 in
+> raw cosine"*. That is not scale-free: the cosine gap produced by a fixed variance ratio depends on
+> where you are operating. At a genuine 3.6× variance difference, run 2 at cos 0.80 gives a gap of
+> 0.27 (passes) but run 2 at cos 0.95 gives 0.11 (**fails**) — a real effect missed because the batch
+> happened to be big enough that both runs sat near 1.
+>
+> Replaced with the SNR ratio `ρ = cos/(1−cos)`, which is invariant to the operating point. The
+> threshold is now **derived rather than guessed**: with binary reward at pass rate `p`, the
+> estimator variance is `∝ p·E_c` without a baseline versus `p(1−p)²E_c + (1−p)p²E_w` with one — at
+> `p = 0.72` that is **0.72 vs 0.20, a ~3.6× ratio**. Requiring `ρ₂/ρ₁ ≥ 2` leaves room for the
+> `E_c ≈ E_w` approximation while still failing if the effect is absent.
+
+**Two known weaknesses in these numbers, stated rather than hidden:**
+
+1. ~~A's 0.15 cosine gap is the softest threshold here.~~ **Resolved by the amendment above** — A's
+   threshold is now the only one derived from the estimator's variance rather than asserted. The
+   remaining soft spot is the `E_c ≈ E_w` approximation (that correct and incorrect rollouts have
+   comparable `‖∇log π‖²`), which is why the gate is 2 rather than 3.6.
+2. **B assumes the policy learns the format at all.** `R_format` starts at 0.26 baseline compliance
+   and must climb past 0.9. If 200 steps is not enough, B fails for a reason unrelated to KL — a
+   *rig* problem wearing a null's clothes. **Pre-check: run B for 30 steps and confirm `R_format` is
+   climbing before committing the full run.**
+
+> **Amendment to ablation B, 2026-07-28 — before any training run.** A dry run of steps 2–4 surfaced
+> a dynamic the original signature ignores: **B self-terminates by saturation.** `R_format` rewards
+> shape only, so once compliance approaches 100% *every group is unanimous*, within-group variance is
+> zero, and the gradient dies:
+>
+> ```
+> 26% compliance → mixed groups, real gradient → climbs → ~100% → every group dead → training stops
+> ```
+>
+> So the window for entropy collapse is **during the climb**, not at step 200 — and the original
+> signature, read at step 200, may be measuring a frozen policy. Confirmed in the dry run: with a
+> policy at 100% compliance, `frac_degenerate_groups = 1.000` and `max_abs_advantage = 0.000`.
+>
+> Two changes:
+>
+> 1. **Evaluate B's signature at `argmin(distinct_completions)` over the run**, reporting
+>    `proxy_reward` at that same step — not at step 200.
+> 2. **Add a third outcome branch**, because "the window closed" is not the same finding as "the
+>    prediction was wrong":
+>
+> | observation | verdict |
+> |---|---|
+> | `distinct ≤ 0.05 × rollouts` while `proxy ≥ 0.9` | **confirmed** |
+> | no collapse, `proxy` never approached saturation | **prediction wrong** — a finding |
+> | no collapse, but `proxy → 1.0` and `frac_degenerate → 1.0` first | **window closed by saturation** — a *distinct* finding, and one that belongs with the reachability theme rather than with KL |
+>
+> Also note the mechanism is weaker than first stated: `R_format` rewards *every* tagged output
+> equally, so there is no pull toward any particular string — only rich-get-richer concentration
+> from repeatedly pushing up on whichever tagged completions were sampled. "Collapse onto a single
+> high-reward string" overstates it; "diversity concentrates while reward saturates" is the claim.
+
+### GATE 1 — PASSED 2026-07-28. Run 7, `add-3digit`, 2 seeds, 200 steps
+
+| | seed 0 | seed 1 |
+|---|---|---|
+| reward, base → final | 0.438 → **0.873** | 0.406 → **0.905** |
+| dead groups, 0 → end | 0.188 → 0.625 | 0.062 → 0.500 |
+| `live_fraction_in_slope_window` | **1.00** | **1.00** |
+
+**Gain `+0.456` over the screen's base rate of 0.433, against a seed band of `0.032` — 14× the
+band.** Gate 1 is met.
+
+**The arm swap is vindicated.** `live_fraction = 1.00` on both seeds, against 0.70–0.75 on
+`add-2digit`, whose runs reached `dead ≈ 1.0`. The 50–200 window is fully usable here.
+
+Two rig checks fell out for free:
+
+- **`max_abs_advantage` = 2.598 / 2.618 against the bound √7 = 2.646.** The z-score sits just under
+  its ceiling and never crosses it — ablation C's rig-broken branch is clean, and it independently
+  confirms `group_advantages` really is computing a z-score.
+- **β = 0.04 is a real leash.** `kl_to_ref` reaches ~2.9 and `kl_loss_fraction` ~0.095 while reward
+  still climbed +0.456: engaged but not strangling, exactly the operational criterion. **Ablation B
+  will therefore be removing a leash that was genuinely on**, so a null there is a finding rather
+  than a rig failure.
+
+### Signatures restated against the seed band — 2026-07-28
+
+Principle 2 required this and it could not be done until run 7 existed. Band = |seed0 − seed1| over
+steps 50–200.
+
+| | run 7 baseline | band | threshold | separation |
+|---|---|---|---|---|
+| **A** `ρ = cos/(1−cos)` | 0.044 / 0.038 | 0.006 | `ρ₂/ρ₁ ≥ 2` | **tight** — see below |
+| **B** `distinct_completions` | 62.3 / 56.3 of 128 | 6.0 | ≤ 6.4 | ~9 bands clear |
+| **C** median tokens | ≈10.5 per rollout | — | ≥ 2× step-0 | comfortable |
+| **D** `frac_degenerate` | 0.465 / 0.488 | 0.024 | = 1.000 exactly | ~21 bands clear |
+
+**Ablation A is the one at risk, and the reason is dimensional.** Per-step cosine swings −0.8 to
++0.7; only the 150-step mean is stable. With millions of LoRA parameters, two independent half-batch
+gradients are *nearly orthogonal* unless the signal is strong — which is why the toy showed 0.53 vs
+0.71 (16 parameters) and the real model shows 0.04. The `≥2` ratio is still detectable at a band of
+0.006, but barely.
+
+The alternative was checked and is worse: `grad_norm_cv` has a seed band of **40–46%** of its value
+against the cosine's 13%. A stays on the cosine.
+
+**Two seeds is too few to trust that band** — desideratum "≥3 seeds on every headline arm" applies,
+and the plan only demanded ≥2 for gate 1. **Ablation A should be run at ≥3 seeds per arm**, or its
+result reported as indicative rather than confirmatory.
+
+### ABLATION A — RESULT, and a redesign. 2026-08-01
+
+**The pre-registered signature is falsified, and it is reported as falsified.** `run1 × 2 seeds`
+vs `run2 × 3 seeds`, `add-3digit`, cosine mean over steps 50–200:
+
+| arm | cos | ρ | per-seed |
+|---|---|---|---|
+| run1 `baseline=none` | 0.0993 | 0.1103 | +0.1020 +0.0967 |
+| run2 `baseline=global` | 0.0151 | 0.0153 | −0.0279 +0.0440 +0.0291 |
+
+`ρ₂/ρ₁ = 0.14` against a gate of `≥ 2.0`. The signature's own clause — *"falsified if: ratio < 1.3,
+**or direction reverses**"* — fires on both counts. The **rig-broken branch does not fire**: grad
+norms finite on all five runs, `max|A| ≤ 1.0` inside the `√(G−1) = 2.646` bound, halves split by
+group. Note also that run2's seed band (0.0720) exceeds its own mean (0.0151), with one negative
+seed.
+
+**But the metric cannot make this comparison, and that is derivable without any data.** Two
+confounds, pointing opposite ways, neither about estimator variance:
+
+- **`baseline="none"` is inflated.** Every advantage is `≥ 0`, so both halves weight the shared
+  "push everything up" direction positively. The cosine rewards exactly the nuisance component a
+  baseline exists to delete.
+- **`baseline="global"` is deflated.** The baseline is *this batch's* mean (`loop.py`, rung 2) while
+  the cosine splits that same batch. With `b = (b_A + b_B)/2`, each half carries
+  `±(b_A − b_B)/2 · Σ ∇log π` — an anti-correlated term manufactured by the split boundary.
+- **`group_*` was always clean.** Advantages sum to zero inside a group, groups are never split, so
+  each half sums to zero independently. run3, run7 and ablations B/C/D are unaffected.
+
+Synthetic gradients reproduce the whole ordering from artifact alone (`none` 0.84, `global` 0.039,
+`global` with a per-half baseline 0.084, `group_loo` 0.074, at p=0.7).
+
+`policy.py`'s `Policy.optimize` docstring already stated this mechanism, reasoned for a *within-group*
+split. A baseline computed *across* the split boundary does the same thing one scope up. **The code
+contained the correct argument at too narrow a scope.**
+
+**The obvious repair fails, and was discarded before it was run.** Centring each half on its own mean
+advantage erases the contrast rather than the confound: `none` gives `R_i − mean_A(R)` and `global`
+gives `(R_i − b) − (mean_A(R) − b)` — the *same* estimator. Confirmed numerically (identical to six
+decimals at a shared policy state). The centred cosine is retained as a **control**, since a
+statistic that is identical across arms by construction is what proves any observed difference is
+trajectory rather than estimator.
+
+**Deeper reading, and the one worth the paper.** The half-batch cosine measures directional
+*reproducibility of the applied update*. A degenerate estimator that always points the same way
+scores near 1.0 while learning nothing from reward — so a metric that rewards a large common-mode
+component will always report that removing it hurt. That is Goodhart inside the diagnostic itself,
+which is this project's thesis applied to its own instrument.
+
+#### A's replacement — paired fixed-policy probe. Pre-registered before it runs.
+
+A's question cannot be answered by comparing **training arms** at all: they follow different
+trajectories, so any difference confounds the estimator with the policy state it is measured at.
+
+Fix one policy state. Draw N batches. Grade each batch once, then score those *same rollouts* under
+`none` / `global` / `group_loo`. Only the baseline differs; sampling noise is shared, so the
+comparison is paired. Statistic per baseline, scale-free because the arms' gradient magnitudes differ
+by ~3× (`grad_norm` 0.77 vs 0.23):
+
+```
+NSR_b = V_b / ||ḡ_b||²        V_b = mean_n ||g_n − ḡ_b||²
+```
+
+**Prediction (H_A):** `NSR_none > NSR_global ≥ NSR_group_loo`, and the *size* of the reduction is a
+**point prediction, not a threshold**. With binary reward and `P(R=1) = p`, the per-sample second
+moment is `p·E` at `b=0` and `p(1−p)²E + (1−p)p²E = p(1−p)E` at `b=p`, so
+
+```
+NSR_none / NSR_global  =  1 / (1 − p)
+```
+
+Both estimators are unbiased, so `||ḡ||` cancels and the variance ratio *is* the NSR ratio. Verified
+by simulation with `E[∇log π] = 0` enforced: **1.74 observed vs 1.75 predicted at p=0.43**, and
+**3.87 vs 4.00 at p=0.75**. The simulation also confirms unbiasedness directly — `||ḡ||²` is
+1.205e-3 / 1.206e-3 / 1.183e-3 across the three, the last ~2% low, which is exactly the O(1/n)
+self-inclusion bias `loop.py` flagged for the batch-mean baseline.
+
+| verdict | condition |
+|---|---|
+| **rig_broken** | any statistic non-finite, **or** pairwise cosine between the three mean gradients < 0.90 — all three estimate the same expected gradient, so disagreement means this is not a variance measurement |
+| **confirmed** | ordering holds **and** `1/(1−p)` falls inside the observed 95% CI |
+| **partial** | ordering holds and the CI clears 1.0, but misses `1/(1−p)` |
+| **falsified** | the ordering reverses |
+| **not_measurable** | the paired bootstrap 95% CI for the ratio spans 1.0 |
+
+> **AMENDED 2026-08-01, before the probe ran** — a flat `≥ 2.0` pass mark was carried over from the
+> training-arm design and is **mis-set for this measurement**. The predicted ratio depends on the
+> operating point, and at the base policy's measured `p ≈ 0.43` theory predicts **1.75 — below its
+> own pass mark**. A perfectly correct result would have been scored "partial". Pinned by
+> `test_a_correct_result_at_the_base_policy_would_have_failed_the_old_gate`.
+>
+> The point prediction is also a **strictly stronger test**: it can fail *upward*. A ratio far above
+> `1/(1−p)` disconfirms the theory exactly as much as one far below, and the old one-sided threshold
+> would have scored that `confirmed` (`test_the_gate_can_fail_upward`).
+>
+> `global` vs `group_loo` is **reported, never gated on**. The group baseline wins only when prompts
+> differ enough in difficulty to repay estimating it from `G−1 = 7` samples instead of the batch's
+> 127 — a bias/variance crossover this probe measures rather than assumes.
+
+`not_measurable` is a distinct outcome on purpose — it is what the training-arm design could not
+express. *"The baseline does not reduce variance"* and *"this rig cannot tell"* are different claims,
+and only the second is fixed by drawing more batches. `tasks/todo.md` pre-committed exactly this
+distinction on 2026-07-29, before any of it was measured.
+
+**Grid:** 3 seeds × {base policy, 50-step warmup}, N=40 batches, bootstrap 2000. Two operating points
+because A's original metric was defined over steps 50–200 and the variance story depends on `p`,
+which moves ~0.43 → ~0.75 across that window; one point could not separate *"baselines do not help"*
+from *"baselines do not help here"*. **Estimated ~$0.30 on L4**, against ~$0.80 for the six training
+runs it replaces.
+
+**Why this is not tuning until it agrees.** The correction is derived from algebra that holds a
+priori and was verified on synthetic gradients before the redesign; the falsified result above stands
+as reported and is not withdrawn; the new gate was written and committed before the probe ran; and
+the probe's own rig-broken branch can fail it. The one thing that would make this p-hacking —
+replacing a result with a friendlier one — is specifically what the two-result presentation prevents.
+
+### Learning-rate probe — declared 2026-07-28, before it runs
+
+**The learning rate is the one unpinned number that can silently void the whole phase.** Too low and
+nothing moves in 200 steps; gate 1 fails and *every* ablation is inert, because they are all
+comparisons against a reference curve that never left the ground. Too high and run 7 is unstable and
+the comparisons are noise. The plan's own risk framing applies: a flat curve already has four
+indistinguishable causes, and an unprobed learning rate adds a fifth.
+
+So probe it, exactly as the task was probed rather than assumed.
+
+- **Candidates:** `1e-5 · 3e-5 · 1e-4 · 3e-4`, on the `run7` configuration, `add-2digit`.
+- **Length:** 30 steps each. Enough to see movement and instability, ~15% of a full run.
+- **Read:** `proxy_reward`, `kl_to_ref` (drift), `grad_norm`, `policy_entropy`,
+  `frac_degenerate_groups`.
+
+**Selection rule, pre-committed:**
+
+0. **Rig gate, before any rate is considered.** `proxy_reward` at step 0 must land within ±0.15 of
+   the screen's measured `pass@1 = 0.720`, and must not be identically 0.000 at any step. Failing
+   this is a **rig failure, not a learning-rate result**, and no rate may be selected until it is
+   fixed.
+1. **Reject** any rate with a non-finite loss or `grad_norm`, or with `policy_entropy` falling by
+   more than half within 30 steps (collapse before training has begun).
+2. **Reject** any rate whose `kl_to_ref` stays ≈ 0 — the policy did not move at all, so the rate is
+   below the noise floor of the optimiser.
+3. Among survivors, take the **largest** rate. Faster movement means more of the 200-step budget is
+   spent past the transient, and the ablations get more signal to differ on.
+4. If **none** survive, that is a finding about the rig, not the science — widen the grid once and
+   record both attempts here.
+
+> **Amendment 1, 2026-07-28 — rule 0 added after the first probe, before the rerun.** The original
+> rule had no clause for "the reward never moved". The first probe returned `reward 0.000` at all
+> four rates with every group dead, and **rules 1–3 would all have passed**, selecting `3e-4` from
+> entirely corrupt data. The cause was a missing attention mask on the scoring forward: prompts are
+> left-padded, so it attended to padding as content and every gradient was meaningless.
+>
+> A rule that cannot distinguish "this learning rate is wrong" from "the harness is broken" is not
+> doing its job. Rule 0 is that distinction, and it is checked first.
+
+> **Amendments 2 and 3, 2026-07-28 — rules 1 and 3, after the second probe.** Both were falsified by
+> the same run, and both are recorded with the falsifying evidence rather than quietly adjusted.
+>
+> **Rule 1 conflated learning with collapse.** As written it rejected *all four* rates, because
+> entropy fell 0.590 → 0.12–0.25 everywhere — while reward rose 0.67 → 1.00. That is a policy
+> becoming *confident*, which is what successful training looks like. Amended to the **conjunction**,
+> matching ablation B's signature: entropy halving counts as collapse only if reward **fails to
+> improve**. No possible widening of the grid would have helped, since any rate that learns reduces
+> entropy.
+>
+> **Rule 3's rationale was inverted by saturation.** It said take the *largest* survivor, reasoning
+> that faster movement leaves more of the budget past the transient. On a task that saturates, the
+> fastest rate gives the **fewest** usable steps: 1e-4 → 18/30 live, versus 1e-5 → 30/30. Amended to
+> **maximise live steps**, since observability is what the step budget actually buys.
+>
+> **Selection under the amended rule: `learning_rate = 1e-5`** — 30/30 live steps, a smooth
+> 0.67 → 0.95 climb, no oscillation. Note this is the *smallest* candidate, the opposite of what the
+> original rule would have chosen, and that `3e-4` (the original rule's pick) is visibly unstable:
+> reward oscillating 0.99 → 0.84 → 0.91 with KL at 7.9 against ~1.0 elsewhere.
+>
+> **Caveat, stated rather than buried: this probe ran on `add-2digit`, which is no longer the primary
+> arm.** The rate must be re-probed on `add-3digit` under the amended rule before the ladder runs.
+> The saturation dynamics that drove the choice are task-specific, and a harder task may support —
+> or need — a larger rate.
+
+#### RESULT — `learning_rate = 1e-5`, probed on `add-3digit` 2026-07-28
+
+Three rates × 40 steps. Two rig checks passed first, and the first is close enough to be worth
+recording: **step-0 reward 0.438 against the screen's measured `pass@1 = 0.433`** — a match to 0.005
+on a pipeline the screen never touched. Step-0 dead groups 0.19 against the screen's 0.175.
+
+| lr | reward 0→end | entropy 0→end | dead_end | live |
+|---|---|---|---|---|
+| **1e-5** | 0.438 → 0.703 | 0.716 → **0.377** | 0.250 | 40/40 |
+| 3e-5 | 0.438 → 0.703 | 0.716 → 0.201 | 0.375 | 40/40 |
+| 1e-4 | 0.438 → 0.688 | 0.716 → 0.115 | 0.438 | 40/40 |
+
+**The arm swap is validated:** dead groups stay in 0.19–0.56 and never approach 1.0, against
+`add-2digit` reaching 1.0 by step 9. That is the sign-decomposition's prediction holding.
+
+**Rules 0, 1 and 2 pass for all three, and rule 3 ties** — every rate is 40/40 live, so
+"maximise live steps" does not discriminate and the tie-break falls back to "take the largest",
+which selects `1e-4`.
+
+**Deviation from the tie-break, recorded: `1e-5` is taken instead.** The tie is an artefact of
+probing 40 steps for a ladder that runs 200. Entropy is still falling at every rate, and at `1e-4`
+the policy is already at 0.115 — near-deterministic — so over 5× more steps it would very likely
+saturate, which is *exactly* how `add-2digit` failed. `1e-5` retains the most headroom, and since
+its reward climb (0.438 → 0.703) equals `3e-5`'s exactly, the extra speed buys nothing measurable.
+
+*The honest alternative was to extend the probe to 200 steps and resolve the tie on evidence rather
+than extrapolation. That was declined on cost; this is therefore a judgement call, and it is the
+fourth amendment to this rule.*
+
+### Overfit check — precondition for the probe, added 2026-07-28
+
+**Before any learning rate is probed, the loop must be shown capable of learning at all.** Train on
+a *single* prompt at a high rate for ~50 steps: a correct implementation drives reward on that one
+example to ~1.0. If it cannot overfit one example, the gradient path is broken and no learning rate
+will help — which is exactly what the first probe spent a run discovering the expensive way.
+
+**Pass:** `proxy_reward` reaches ≥ 0.95 on the single prompt within 50 steps.
+**Fail:** it does not — a rig failure. Do not proceed to the probe; the fault is in the gradient
+path, not the hyperparameters.
+
+This exercises generation, grading, advantages, the loss, masking, backward and the optimizer step
+end to end, and it is the cheapest test that covers all of them at once.
+
+**Result — PASS, 2026-07-28.** Reward `0.438 → 1.000` within 8 steps; entropy `0.58 → 0.006`.
+The gradient path is verified end to end.
+
+It failed on the first attempt and found two real bugs, both silent, both invisible to the local
+test suite because they live in `HFPolicy`:
+
+1. **The scoring forward had no attention mask.** Prompts are left-padded, so it attended to
+   padding as content. `generate()` had a mask, so reward looked healthy in short runs while every
+   *gradient* was meaningless.
+2. **Gradient checkpointing and generation were mutually destructive.** Checkpointing only engages
+   when `model.training` is True, which the OOM fix required — but checkpointing under `no_grad`
+   does not recompute correctly, so generation emitted noise. Two individually-correct fixes,
+   silently cancelling each other. Fixed by generating in eval mode and restoring train mode after.
+
+**A finding fell out of the check itself.** Once reward reaches 1.000, `frac_degenerate_groups`
+goes to 1.000 and `grad_norm` to exactly 0.0 — **ablation D occurring spontaneously**, with the
+remaining 40 steps burning compute and teaching nothing. That is the `add-2digit` saturation
+prediction (0.115 → ~0.43) visible at 50 steps rather than 200, and it is the first direct evidence
+for it.
+
+**Process note, recorded because it cost most of the phase's session.** Six failures were diagnosed
+by inference from a traceback line, and most of those guesses were wrong. The two diagnosed by
+*looking* — comparing observed GPU memory against what it should have been, and reading raw
+completions — found their cause in minutes. Raw rollout capture already existed for the calibration
+sweep, where it did exactly this job; it was not carried into the training path, and that omission
+is what made the intervening failures expensive. `experiments/README.md` requires it. Both paths now
+have it.
+
+`kl_coef = 0.04` is used for the probe (published GRPO), so the probe also reads whether the leash
+engages at that value.
+
+**β — what "big enough" means, since it is not a number you can pick at step 0.** `KL ≈ 0` at the
+start for *any* β, because the policy has not moved. It is a property of the trajectory:
+
+| | reading |
+|---|---|
+| run 7's `kl_to_ref` **plateaus** while its reward still improves | the leash is engaged and not strangling — β is right |
+| `kl_to_ref` **grows without bound** | β too small; ablation B then removes a leash that was never on, and its null is a **rig failure**, not a finding |
+| reward **flat** while KL is pinned near 0 | β too large; the policy cannot move |
+
+`kl_loss_fraction` is logged as a supporting readout but **is not the criterion on its own — it is
+not monotone in β.** A dry run showed β=0.05 giving a 7.8% loss share against β=1.0 giving 1.7%,
+because a tighter leash suppresses the very drift that would make the term large. It peaks at
+intermediate β.
+
+To make the comparison possible at all, KL is **measured every `kl_measure_every` steps even when
+`kl_coef == 0`**, and never applied to the loss there. Without that, ablation B has no drift reading
+and "removing the leash changed nothing" is indistinguishable from "the policy never drifted anyway".
+
+### Length-normalisation arms — declared 2026-07-28, before any training run
+
+`loss_i = −A_i · log π(y_i)` where `log π` is **summed** over the completion's tokens. Dividing by
+token count is optional, and the two conventions disagree in the literature: **GRPO as published
+normalises by length; Dr. GRPO removes it** and argues the normalisation is itself a source of bias.
+*The direction of Dr. GRPO's claim is not verified first-hand — check `trl`'s `GRPOTrainer` source
+(prep-reading item 3) before attributing a direction to either paper.*
+
+Rather than pick on authority, measure it. **Four arms**, +2 runs on the primary arm:
+
+| arm | `length_normalize` | a length increase here means |
+|---|---|---|
+| `run7` | True | reference — no length pressure from reward or optimizer |
+| **`run7_nolennorm`** | **False** | **optimizer-induced length bias** — the convention question, isolated |
+| `ablation_c` | True | tie-breaker-induced padding, cleanly attributable |
+| `ablation_c_nolennorm` | False | both sources; the delta vs `ablation_c` isolates the optimizer's share |
+
+**Why run 7 and not only C:** ablation C already contains a length-rewarding term, so running *it*
+both ways mixes two sources of length pressure. Run 7 has no such term, so any drift under
+`length_normalize=False` is attributable to the optimizer alone.
+
+**Decision rule, pre-committed before the runs:**
+
+- **Metric:** `L = median tokens at step 200 ÷ median tokens at step 0`.
+- **If `L(run7_nolennorm) / L(run7) ≥ 1.5`** → the un-normalised form drifts on its own.
+  **Adopt `length_normalize=True`** as a design pin for Phase 1.1+.
+- **If the two are within 1.2×** → **honest null: the convention does not matter at this scale.**
+  Adopt `length_normalize=True` anyway, on the grounds that it matches published GRPO — *the
+  tie-break is pre-committed here so a null does not become a debate later.*
+- **If `L(run7) / L(run7_nolennorm) ≥ 1.5`** → normalisation drifts, which would support the
+  critique. Report it, and **verify against the `trl` source before attributing it to Dr. GRPO.**
+
+**Scope:** exploratory for Phase 0.1, but its result feeds a **design pin for Phase 1.1+**, where the
+convention applies to every training run in the grid. Record the outcome as a dated entry here and
+carry it to `docs/pre-registration.md` §2 if it moves a pin.
+
+> ### Correction to ablation C — made 2026-07-27, before the first run
+>
+> The original prediction, *"divide-by-≈0 advantage spikes; loss instability,"* is **unreachable**.
+> The normalized advantage `(r_i − mean)/std` is a **z-score**, and z-scores in a sample of size G are
+> bounded:
+>
+> ```
+> max |A| = √(G−1)          (population std; (G−1)/√G with ddof=1)
+>         = 2.65 at G=8
+> ```
+>
+> attained when one rollout differs from G−1 identical ones. **The bound is scale-invariant**, so
+> `{0,…,0,1}` and `{0.5,…,0.5,0.500001}` produce *identical* advantages — finer-grained reward does
+> not help. The only literal blow-up is `std = 0` with no epsilon, which is a NaN that kills the run,
+> not a spike.
+>
+> **The real pathology is sharper, and it is this project's thesis in miniature.** Because z-scoring
+> keeps only the *shape* of reward differences and discards their *magnitude*, any tiny tie-breaking
+> term makes a unanimous group **fully alive at full gradient magnitude, teaching the model to
+> optimize the tie-breaker.** Goodhart emerging from the optimizer's own arithmetic rather than from a
+> bad grader. So C and D are one event with two faces, decided purely by the reward:
+>
+> | unanimous group | result |
+> |---|---|
+> | clean binary reward (`R_binary`) | zero gradient — step wasted (**D**) |
+> | any tiny tie-breaker (`R_tiebreak`) | full-magnitude gradient chasing noise (**C**) |
+>
+> **Pre-registered signature for C.** On a run under `R_tiebreak = R_binary + 0.001 ×
+> completion_tokens`: median completion length rises monotonically over steps while held-out accuracy
+> does not, **and** `max |A|` stays within `√(G−1)` throughout — confirming the mechanism is
+> misdirection, not magnitude. *Falsified if* completion length is flat, or if `max |A|` exceeds the
+> bound (which would mean the implementation is not computing a z-score).
+>
+> Cross-check against `trl`'s `GRPOTrainer` during prep-reading item 3 — it exposes a `scale_rewards`
+> flag for exactly this reason (the Dr. GRPO variant turns the std division off).
 
 ## Instrumentation (log every step)
 
@@ -110,12 +797,45 @@ transcription and forfeits the intuition the phase exists to build.
 
 ## Risks
 
-- **Base policy has zero pass rate on the chosen task** → no gradient on step 1 and the phase stalls.
-  *Mitigation:* measure base pass rate **before** picking the task; require ≥5% at k=8. This is the
-  same reachability logic as `p_hack@64`, applied to task difficulty instead of exploit difficulty.
+- **The task lands outside the informative band** → most groups are unanimous and most of the batch
+  produces no gradient, at *either* extreme. *Mitigation:* the pre-committed sweep above, selecting on
+  `dead_group_fraction` rather than on a mean. This is the same reachability logic as `p_hack@64`,
+  applied to task difficulty instead of exploit difficulty — and it is the same measurement shape, so
+  Phase 1.4 should generalise the primitive with **two** instances in hand rather than one guess.
+- **No local GPU.** The dev machine is a 2019 Intel MacBook Pro (i9-9880H, 16 GB, no MPS, no CUDA), so
+  `vllm` will not install and CPU-only inference is impractical at sweep scale. *Mitigation:* the sweep
+  and the training runs both go to Modal, and the sweep — a cheap, ~20-minute job — is what proves the
+  Modal wiring **before** a training run is bet on it. Local venv syncs `--extra modal` only; the heavy
+  stack lives in the Modal image.
+- **Backend drift between screen and train** → the measured base rate would not transfer.
+  *Mitigation:* the sweep generates through HF `generate`, the same code path the hand-rolled loop
+  uses. vLLM is deferred to Phase 0.2 where the stack moves to `trl`/`verifiers` anyway.
 - **Scope creep into a good trainer.** This code is disposable. If it takes more than ~10 h, cut runs
   4–6 and keep 1, 2, 3, 7 plus all four ablations. **The ablations are the deliverable; the ladder is
   scaffolding for them.**
+  → **CUT TAKEN 2026-07-27, before any training run.** Ladder is **runs 1, 2, 3, 7**; all four
+  ablations retained. Taken up front on budget grounds rather than discovered mid-phase (§15 names
+  grid creep as the second most likely way this goes over). ~12 runs instead of ~15.
+  *What this costs:* the marginal effect of clipping, KL and advantage-normalisation individually —
+  3 → 7 becomes one jump combining all three, so a misbehaving run 7 has three suspects and no rungs
+  to isolate them. Partially covered: ablation **B** isolates KL, ablation **C** isolates
+  advantage-normalisation.
+  → **RESOLVED 2026-07-28: single epoch per batch pinned, so the cut costs nothing at all.** With
+  one gradient step per batch the importance ratio is identically 1, so `clip_epsilon` cannot bind
+  and rung 4 would be **bit-identical to rung 3**. There is no marginal effect of clipping to lose.
+  Only KL and advantage-normalisation are bundled into the 3 → 7 jump, and B and C isolate exactly
+  those two.
+
+- **Epoch structure — pinned 2026-07-28: `epochs_per_batch = 1`.** Multi-epoch would buy roughly 3×
+  the gradient steps per dollar (generation is ~88% of per-step cost even at this task's short
+  7–15 token completions). Declined because **off-policy staleness is a second, uncontrolled source
+  of gradient noise**, and ablation A is an attempt to attribute gradient noise to the *baseline*.
+  This plan's own risk list already flags staleness as something that "will look like an unrelated
+  instability" — deliberately admitting it while measuring A would be self-inflicted.
+  *If wall-clock later forces the issue:* 2 epochs is the sane middle (ratios stay near 1, clipping
+  rarely binds), but then **run 4 must come back**, the ratio distribution must be logged, and run 7
+  stops being plain GRPO and becomes GRPO + PPO-clipping. Record any such change as a dated entry
+  here before running.
 - **Silent off-policy staleness** from reusing rollouts across epochs — will look like an unrelated
   instability. Log the ratio distribution so it is visible rather than mysterious.
 
@@ -126,3 +846,12 @@ transcription and forfeits the intuition the phase exists to build.
 | Date | Change | Reason |
 |---|---|---|
 | 2026-07-26 | Plan drafted | Scaffold. Not yet locked; lock at branch cut. |
+| 2026-07-27 | Model pinned to **Llama-3.2-1B-Instruct** | Weakness is a feature for ablation A's discrimination; no thinking-mode flag; doubles as R1 reconnaissance. Model currency matters at P-model-confirmatory, not here. |
+| 2026-07-27 | Reward split into **three variants** over one task set | No single reward makes all four failures visible: B needs a degenerate high-reward string, C needs a tie-breaker, A/D need clean binary. |
+| 2026-07-27 | Task-selection criterion replaced: **≥5% at k=8 → `dead_group_fraction`** | The old floor was stated on the wrong statistic (a mean, which cannot see bimodality) and had no ceiling; p=0.95 is as dead as p=0.05. Selection rule pre-committed before any sweep result was seen. |
+| 2026-07-27 | **Ablation C's prediction corrected** before first run | "Divide-by-≈0 spikes" is unreachable — the normalized advantage is a z-score bounded by √(G−1) and the bound is scale-invariant. Corrected signature: the tie-breaker is amplified to full magnitude. Recorded as a finding, not tuned away (gate 2). |
+| 2026-07-27 | Compute moved to **Modal from the start** | Dev machine has no GPU (native Intel, no MPS/CUDA). The cheap sweep now doubles as the Modal-wiring proof before a training run depends on it. |
+| 2026-07-27 | Model revision **pinned** to `9213176726f574b556790deb65791e0c5aa438b6` | Desideratum 12 — never resolve to `main`, which moves. Repo unchanged since 2024-10-24. |
+| 2026-07-27 | **Prompt template fixed** — instruction conflict | Original read *"Reply with just the number in the form `<answer>N</answer>`."* At 1B *"just the number"* wins: **96.9% of completions came back as a bare integer** and `parse_fail_rate` was 1.000 across all 8 settings. **The screen caught this pre-training — which is exactly what constraint 2 exists for.** Without it, all seven ladder runs would have been learning to emit `<answer>` tags. |
+| 2026-07-27 | Grader accepts **thousands separators** | The model emits `1,125` for 4-digit results. Rejecting them would make `parse_fail_rate` rise with answer *magnitude*, confounding the difficulty dial with a formatting convention and penalising the harder settings for a non-skill reason. Bare integers stay strict — format compliance is part of the task, and ablation B needs `<answer>` to be a real constraint. |
+| 2026-07-27 | Raw rollouts now persisted to `raw/<run>/completions.jsonl` | `experiments/README.md` convention, and the omission was load-bearing: the parse-failure cause was undiagnosable from summaries alone. The fix landed as an optional `observer` seam on `sweep_setting`/`run_sweep`. |

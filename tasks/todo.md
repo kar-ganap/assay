@@ -4,29 +4,42 @@
 > already made so you don't relitigate them. Update the STATUS + NEXT blocks at the end of each
 > session.
 
-## STATUS (as of 2026-07-26)
+## STATUS (as of 2026-08-02 — seed pass running)
 
-- **Scaffold complete.** Repo initialised at `random_projects/assay`, `main`, no remote yet.
-- `make check` **not yet run** — `uv sync` hasn't happened. First action of the first working session.
-- `src/assay/` is **typed stubs** (`NotImplementedError`). No compute path implemented.
-- `docs/pre-registration.md` = **DRAFT, not locked.**
-- `docs/related-work.md` = **UNVERIFIED** — one LLM-assisted research pass, 0/12 papers read
-  first-hand.
-- `literature-review/README.md` gate = **0/5 Block-A papers read.**
-- `tasks/spend.md` = **$0.**
-- Origin plan (the reasoning behind all of this): `../explore/rl-envs-onramp.md`.
+- **Phase 0.1 nearly complete** on `phase-0.1-grpo-by-hand`. `make check` green (262 tests).
+- **All four breakages have clean results at n=1**, from the clean ladder of 2026-08-02: ten arms,
+  one commit (`f1cc4048`), one GPU tier (L4), 200 steps each, 410 GPU-min, **$5.45**.
+- **⏳ Seed pass running** (`4d4d64e`): seeds 1–2 on the 7 arms that carry a claimed *difference*.
+  ~8.8 h, ~$7.05. Rungs 1–3 stay at n=1 by design — their dead-group numbers match the derivation
+  exactly, so a seed band would only measure noise around a derived value.
+- **Spend reconciled from measured wall clock: $8.41** at the time of reconciliation, rising to
+  **~$21** with the clean ladder and probes, ~$28 once the seed pass lands. Modal rates verified:
+  L4 $0.799/h, A100-40GB $2.099/h. User holds ~$50 of Modal credits, so the earlier
+  "Crawl is over budget" alarm was against the *plan line*, not a wall.
 
-## NEXT ACTION (the one thing to do)
+### Results, one line each
 
-**`uv sync --extra dev && make check`** — confirm the scaffold is green.
+| | verdict |
+|---|---|
+| **A** no baseline | **Falsified, then redesigned.** The training-arm comparison is structurally void (two confounds pointing opposite ways + non-comparable trajectories). Replaced by a paired fixed-policy probe: at the base policy, **no detectable variance reduction and `1/(1-p)` excluded on 3/3 seeds**. At a converged policy the probe is `underpowered` — GRPO starves its own gradient (NSR 0.37 → 55–83). |
+| **B** no KL leash | **A finding, not the signature.** The degenerate grader is fully hacked (proxy 0.993 vs true 0.486, **gap +0.507**, the largest in the ladder), and removing the leash changes the gap by −0.018 — nothing — despite KL carrying 49% of the loss. B's mechanism runs through D's. |
+| **C** tie-breaker | **Confirmed on all four signatures.** dead 0.468→0.008, tokens 17.2→35.5, true-reward gain +0.315→+0.130, gap +0.042. |
+| **D** unanimous groups | **Confirmed exactly.** `frac_degenerate = 1.000` and `grad_norm = 0.0000` on all 200 steps; 313k tokens for zero gradient. |
 
-Then **Phase 0.1** (`docs/phases/phase-0.1-grpo-by-hand-plan.md`): pick the task, measure the base
-policy's pass rate (require ≥5% at k=8 before committing), cut `phase-0.1-grpo-by-hand`, and write the
-loop.
+**Length normalisation** breaks `E[grad log pi] = 0`, which is why A was unreadable — and removing it
+improved NSR on every arm and final true reward on both arms tested. Two independent lines toward
+Dr. GRPO, reached by measurement.
 
-**In parallel, cheap and unblocking:** apply for **Tinker credits** ($150 on waitlist clearance) and
-**check whether the Prime Sprints free queue is live and on what terms** — that second one moves $28
-of budget and determines whether Stage 2's exploratory grid is free.
+## WHAT REMAINS
+
+1. **Wait for the seed pass**, then refresh every headline number to a 3-seed mean + band.
+2. **`docs/tutorial/reinforce-to-grpo.tex`** (18 pp, builds clean) needs one consolidated revision:
+   probe table is stale at N=40 (N=160 exists), the converged/`underpowered` result is missing
+   entirely, and **no table states its `n`** — every number currently reads as settled when it is
+   n=1. User is waiting on this to print it.
+3. **Retro** + `/learn`, then merge (§13 needs both).
+4. Optional: +$3.86 for seeds on rungs 1–3, which is what the unexplained *"a baseline tripled
+   completion length"* observation (9.2 → 25.2 tokens) would need to be claimable rather than dropped.
 
 ## DECISIONS ALREADY MADE (do not relitigate — the *why* is in `docs/conceptual.md`)
 
@@ -63,16 +76,34 @@ of budget and determines whether Stage 2's exploratory grid is free.
       (Prime Sprints, closest on the prediction leg). **If #2 turns out to occupy the skill-fixed /
       authorship-varied axis, `endemic` is dead and the project reverts to gap-only `assay`** —
       record that decision in the gate.
-- [ ] **Prime Sprints free queue: live? terms?** Moves $28 and decides the Stage-2 grid model.
+- [x] ~~**Prime Sprints free queue: live? terms?**~~ — **RESOLVED 2026-08-01.** The free compute
+      is live (`sprints/Llama-3.2-1B-Instruct`, $0/$0/$0, operational) but the *sprint* closed
+      ~2026-06-20 and no new track has been announced — **`CLAUDE.md` §15's "running now" is
+      stale.** Requirement established empirically: the free tier **requires a PUBLIC
+      environment** (ownership is fine, a fork was accepted; private was rejected). So the cost
+      is publishing `bisect` before the paper. Decide at Phase 0.2. **Trap:** `prime-rl` ships a
+      `zero_advantage` pre-batch filter ON BY DEFAULT — a Stage-2 grid there would silently
+      filter away ablation D's pathology unless the filter list is overridden.
 - [ ] **Tinker waitlist** — $150 credits would make Run and Gallop materially cheaper and could put
       the confirmatory arms at 8B.
-- [ ] **Pin the confirmatory model revision hash** (Phase 1.1). Candidate: Qwen3-1.7B.
-- [ ] **Phase 0.1 task choice** — needs base pass rate ≥5% at k=8. Candidates: 3-digit arithmetic
-      with regex extraction; strict output-format; an easy Reasoning Gym family.
+- [ ] **Pin the confirmatory model revision hash** (Phase 1.1). Candidate was Qwen3-1.7B;
+      **Prime hosted training now offers Qwen3.5-2B at $0.15/1M train**, which is a live
+      alternative and ~4-8x cheaper than Modal at our measured token volumes.
+- [x] ~~Phase 0.1 task choice~~ — **DONE 2026-07-27/28.** Chosen by a calibration sweep, not
+      intuition, on `dead_group_fraction` rather than a mean. `arithmetic/add-3digit` is primary
+      after a documented deviation; `add-2digit` is the robustness arm. The ">=5% at k=8" criterion
+      in the original plan was superseded: it is stated on the wrong statistic and has no ceiling.
 - [ ] **`#11` (Anthropic natural emergent misalignment) vs the `p_hack@64` screen.** Their "no safe
       rarity threshold" is at ~1,500+ steps; ours is a 200-step budget. Expected to reconcile — but
       **if it doesn't, L1's admission band needs redesign.**
-- [ ] No remote yet. Create `github.com/kar-ganap/assay` (private) when Phase 0.1 lands.
+- [x] ~~No remote yet~~ — **DONE.** `github.com/kar-ganap/assay`, private. `main` sits at the
+      scaffold; work is on `phase-0.1-grpo-by-hand`, unmerged (§13: merge needs retro + `/learn`).
+- [x] ~~**Reconcile spend**~~ — **DONE 2026-08-01** from measured per-step wall clock, not the
+      dashboard: $8.41 across 22 runs, rates verified from modal.com/pricing.
+- [ ] **Ablation A wants >=3 seeds per arm.** `run1` has 2. Its metric sits at rho~0.04 with a seed
+      band of 0.006 — real but tight, because two half-batch gradients in a million-parameter space
+      are nearly orthogonal. If the ratio lands inside the band, the honest report is "not
+      measurable at this batch size", **not** "the baseline does not reduce variance".
 
 ## SPEND GATE
 

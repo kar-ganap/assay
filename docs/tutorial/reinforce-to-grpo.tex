@@ -1,0 +1,1303 @@
+\documentclass[11pt,letterpaper]{article}
+
+% ── Fonts ─────────────────────────────────────────────────────────
+\usepackage[T1]{fontenc}
+\usepackage{newtxtext}
+\usepackage{amssymb}
+\usepackage{newtxmath}
+\usepackage[scaled=0.85]{inconsolata}
+
+% ── Layout ────────────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\setstretch{1.08}
+\usepackage{parskip}
+\setlength{\parskip}{0.5\baselineskip plus 2pt minus 1pt}
+
+% ── Section headings ──────────────────────────────────────────────
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.8em}{}
+\titleformat{\subsubsection}{\normalsize\itshape}{\thesubsubsection}{0.8em}{}
+\titlespacing*{\section}{0pt}{1.8ex plus 0.5ex}{0.8ex plus 0.2ex}
+\titlespacing*{\subsection}{0pt}{1.4ex plus 0.3ex}{0.4ex plus 0.1ex}
+
+% ── Math ──────────────────────────────────────────────────────────
+\usepackage{amsmath}
+\usepackage{mathtools}
+% newtxmath already defines \openbox; amsthm redefines it and errors out. Releasing the name before
+% loading amsthm is the documented fix and changes nothing else.
+\let\openbox\relax
+\usepackage{amsthm}
+
+\theoremstyle{definition}
+\newtheorem{claim}{Claim}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+% ── Tables ────────────────────────────────────────────────────────
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\renewcommand{\arraystretch}{1.15}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf, labelsep=period, skip=6pt}
+\captionsetup[table]{position=above}
+
+% ── Floats ───────────────────────────────────────────────────────
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{placeins}
+\setlength{\floatsep}{6pt plus 2pt minus 2pt}
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\intextsep}{6pt plus 2pt minus 2pt}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.7}
+
+% ── Lists ─────────────────────────────────────────────────────────
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=1.5em}
+
+% ── Colors & Links ────────────────────────────────────────────────
+\usepackage{xcolor}
+\definecolor{linkblue}{HTML}{0B5394}
+\definecolor{citegreen}{HTML}{1B7340}
+\definecolor{urlgray}{HTML}{444444}
+\definecolor{boxgray}{HTML}{F4F4F2}
+\definecolor{rulegray}{HTML}{BFBFBF}
+
+% ── Boxes for the "why this matters" asides ──────────────────────
+\usepackage[framemethod=TikZ]{mdframed}
+\newmdenv[
+  backgroundcolor=boxgray,
+  linecolor=rulegray,
+  linewidth=0.4pt,
+  innertopmargin=6pt, innerbottommargin=6pt,
+  innerleftmargin=8pt, innerrightmargin=8pt,
+  skipabove=8pt, skipbelow=8pt,
+  roundcorner=2pt,
+]{aside}
+
+% ── TikZ (diagrams) ──────────────────────────────────────────────
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, calc, decorations.pathreplacing, fit}
+
+\usepackage[
+  colorlinks=true,
+  linkcolor=linkblue,
+  citecolor=citegreen,
+  urlcolor=urlgray,
+  bookmarksnumbered=true,
+  pdfstartview=FitH,
+]{hyperref}
+\usepackage[noabbrev,capitalise]{cleveref}
+
+% cleveref does not auto-detect amsthm environments reliably, and the failure is SILENT: the label
+% resolves (the number is right) but the name slot renders "??", and LaTeX logs no warning because
+% nothing is actually undefined. Grepping the log is therefore useless here — `make pdf` greps the
+% rendered PDF instead.
+\crefname{claim}{Claim}{Claims}
+\Crefname{claim}{Claim}{Claims}
+\crefname{exercise}{Exercise}{Exercises}
+\Crefname{exercise}{Exercise}{Exercises}
+
+\usepackage{microtype}
+
+% ── Notation macros ──────────────────────────────────────────────
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\KL}{\mathrm{KL}}
+\newcommand{\pol}{\pi_\theta}
+\newcommand{\polref}{\pi_{\mathrm{ref}}}
+\newcommand{\grad}{\nabla_\theta}
+\newcommand{\score}{\grad \log \pol(y \mid x)}
+\newcommand{\scorei}{g_i}
+\newcommand{\Adv}{A}
+\newcommand{\nsr}{\mathrm{NSR}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\title{\textbf{From REINFORCE to GRPO\\[4pt]
+\large A worked tutorial, with the five things that actually bit us}}
+\author{\texttt{assay} --- Phase 0.1 companion document}
+\date{2026-08-02}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}\noindent
+This document builds GRPO from REINFORCE one modification at a time, deriving each step rather than
+asserting it, and stops at every point where the derivation makes a promise that our own measurements
+broke. It is written to be read linearly. \Cref{sec:setup,sec:reinforce,sec:baseline,sec:group} are
+the ladder: the objective, the score-function estimator, the baseline, and the group baseline that
+gives GRPO its name. \Cref{sec:norm,sec:kl} add the two remaining pieces of full GRPO.
+\Cref{sec:ladder,sec:ablations} map all of it onto the seven-run ladder and four ablations of Phase
+0.1. \Cref{sec:surprises} is the part worth the most: five places where the standard account is
+either incomplete or wrong at our scale, each one found by a measurement in this phase rather than
+taken from the literature.
+
+Every numerical claim in \cref{sec:ablations,sec:surprises} comes from the clean ladder of
+2026-08-02 --- ten arms on one training-path fingerprint and one GPU tier, 200 steps each --- and
+regenerates from committed artefacts via \texttt{assay.crawl.figures}. Arms carrying a claimed
+\emph{difference} were run at three seeds and are reported as mean $\pm$ half the min--max envelope;
+rungs 1--3 are $n=1$ by design and say so where they appear.
+\end{abstract}
+
+\tableofcontents
+
+% ══════════════════════════════════════════════════════════════════
+\section{Setup: what problem are we actually solving?}
+\label{sec:setup}
+
+\subsection{The objects}
+
+Fix a pretrained language model with parameters $\theta$. Write:
+
+\begin{itemize}
+  \item $x$ --- a \emph{prompt}, drawn from a task distribution $\mathcal{D}$. In Phase 0.1, $x$ is a
+        three-digit addition problem such as \texttt{"What is 471 + 638?"}.
+  \item $y = (y_1, \dots, y_T)$ --- a \emph{completion}, a sequence of $T$ tokens.
+  \item $\pol(y \mid x) = \prod_{t=1}^{T} \pol(y_t \mid x, y_{<t})$ --- the policy. This is just the
+        language model's own next-token distribution, applied autoregressively.
+  \item $R(x, y) \in \R$ --- the \emph{reward}, computed by a grader after the completion is
+        finished. In Phase 0.1, $R \in \{0, 1\}$: one if the final integer in $y$ equals the correct
+        answer, zero otherwise.
+\end{itemize}
+
+The objective is the expected reward:
+\begin{equation}
+  J(\theta) \;=\; \E_{x \sim \mathcal{D}} \; \E_{y \sim \pol(\cdot \mid x)} \big[ R(x, y) \big].
+  \label{eq:objective}
+\end{equation}
+
+We want $\grad J(\theta)$ so we can do gradient \emph{ascent}.
+
+\subsection{Two rewards: proxy and true}
+\label{sec:proxytrue}
+
+There is a second reward, and the distinction between them is the instrument this entire project is
+built around. Every completion is graded \emph{twice}:
+
+\begin{itemize}
+  \item $R_{\text{proxy}}(x,y)$ --- what the policy is \textbf{trained on}. It enters the loss. This
+        is the grader you can actually run at training time.
+  \item $R_{\text{true}}(x,y)$ --- what you actually \textbf{want}. It is computed at every step and
+        \textbf{never enters the loss}. Measured only.
+\end{itemize}
+
+The quantity of interest is their difference,
+\begin{equation}
+  \mathrm{gap} \;=\; R_{\text{proxy}} - R_{\text{true}},
+  \label{eq:gap}
+\end{equation}
+which is reward the proxy awards that the truth does not endorse --- Goodhart's law, as a number.
+
+In Phase 0.1, $R_{\text{true}}$ is \emph{always} $R_{\text{binary}}$; only the proxy varies:
+
+\begin{table}[H]
+\centering
+\caption{The three reward variants. Only the proxy changes, which is what makes gaps comparable
+across arms.}
+\label{tab:variants}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Variant} & \textbf{Used by} & \textbf{$R_{\text{proxy}}$} & \textbf{Gap} \\
+\midrule
+\texttt{binary}   & ladder runs 1--7 & $R_{\text{binary}}$ & $\equiv 0$ by construction \\
+\texttt{format}   & ablation B & shape only; the answer is discarded & grows: $0.519 \pm 0.011$ \\
+\texttt{tiebreak} & ablation C & $R_{\text{binary}} + 0.001\,|y|$ & exactly $0.001\,|y|$: $0.039 \pm 0.002$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{The ladder's gap is identically zero, and that is correct.} Runs 1--7 set proxy $=$ true, so
+\cref{eq:gap} vanishes. The ladder is about the \emph{estimator} --- whether the gradient works ---
+not about Goodhart. A nonzero gap on run 7 would indicate a bug, not a finding. The gap only becomes
+a meaningful quantity once a deliberately different proxy is introduced, which is what ablations B
+and C do.
+
+\textbf{Ablation C doubles as a calibration of the instrument.} Its gap is analytically known ---
+the tie-breaker pays exactly $0.001$ per token, so the gap \emph{must} equal $0.001\,|y|$. Measured
+over the final ten steps of three seeds: gap $= 0.03899$ against $0.001 \times 38.99 = 0.03899$, a
+ratio of $1.0000$. When a measurement has a closed form, check it.
+
+\begin{aside}
+\textbf{Why the true reward must never be trained on.} This is a contamination argument, not a cost
+one. The moment a held-out grader enters the objective it stops measuring generalisation and becomes
+a second proxy --- and the gap it existed to reveal closes for the wrong reason. The asymmetry
+\emph{is} the instrument.
+
+The real-world version this rehearses: in the \texttt{bisect} environment, the proxy is ``the failing
+test passes'' and the truth is ``a held-out suite exercising the same root cause through other code
+paths.'' You cannot train on the latter --- if you could specify it perfectly, you would not need RL.
+
+And a caveat that has to travel with every gap ever reported here: \textbf{held-out graders are
+graders too.} They can be wrong in both directions, so a gap is only as trustworthy as the true
+grader's own false-positive and false-negative rates on a hand-labelled gold set.
+\end{aside}
+
+\subsection{Why this is a bandit, not an MDP}
+
+Textbook RL sets up states, actions, transitions and discounted returns. Almost none of that
+machinery is needed here, and carrying it around obscures what is going on.
+
+The reason: \textbf{reward arrives once, at the end, and the ``environment'' is deterministic.} The
+model emits a completion; a grader looks at it; a number comes back. There is no stochastic
+transition to model, no intermediate reward to discount, no value function that has to bootstrap
+across timesteps.
+
+Formally this is a \emph{contextual bandit}: context $x$, action $y$ (a whole completion, chosen from
+an astronomically large action space), scalar payoff $R(x,y)$. Everything below is the bandit policy
+gradient. When you see $\Adv_i$ called an ``advantage,'' remember it is not the $Q - V$ of temporal
+difference learning; it is just a centred reward.
+
+\begin{aside}
+\textbf{Why this matters for reading the code.} \texttt{loop.py} assigns one scalar advantage per
+\emph{rollout}, shared by all its tokens, and there is no per-timestep credit assignment anywhere.
+That is not a simplification --- it is what the bandit formulation implies. Terminal reward and
+deterministic transitions mean every token in a completion is equally ``responsible'' for the
+outcome, as far as this estimator is concerned.
+\end{aside}
+
+\subsection{Vocabulary: rollout, episode, group, batch}
+
+These get used loosely in the literature. In this project they mean:
+
+\begin{itemize}
+  \item \textbf{rollout} (= \textbf{episode}): one sampled completion $y$ for one prompt $x$, with
+        its reward. These are synonyms.
+  \item \textbf{group}: the $G$ rollouts sampled from the \emph{same} prompt $x$. Phase 0.1 uses
+        $G = 8$. The group is the unit that makes GRPO work, so it is never split.
+  \item \textbf{batch}: all rollouts used for one gradient step. Phase 0.1 uses $16$ prompts
+        $\times\ 8$ rollouts $= 128$ rollouts per step.
+\end{itemize}
+
+\subsection{Notation for averages}
+\label{sec:rbar}
+
+Two different averages of reward appear throughout, over the two units just defined. They are
+\emph{always} subscripted here, because conflating them is an easy and consequential mistake --- it
+is the entire difference between rung 2 and rung 3 of the ladder.
+
+\begin{align}
+  \bar{r}_{\text{group}} \;&=\; \frac{1}{G}\sum_{j=1}^{G} r_j
+    &&\text{mean over the $G$ rollouts of \emph{one} prompt,} \\
+  \bar{r}_{\text{batch}} \;&=\; \frac{1}{N}\sum_{i=1}^{N} r_i
+    &&\text{mean over all $N$ rollouts in a gradient step.}
+\end{align}
+
+Distinguish both from $p$, which denotes the \emph{true} success probability $\Pr[R = 1]$ --- a
+property of the policy and the task, not of any particular sample. We never observe $p$; we observe
+$\bar{r}$, which is an unbiased but noisy estimate of it. At $G = 8$, $\bar{r}_{\text{group}}$ takes
+only nine possible values, so it is a \emph{very} noisy estimate of that prompt's difficulty. This
+matters more than it looks (\cref{sec:varcalc,sec:eweight}).
+
+% ══════════════════════════════════════════════════════════════════
+\section{REINFORCE: the score-function estimator}
+\label{sec:reinforce}
+
+\subsection{The derivation}
+
+We want $\grad J$. The difficulty is that $\theta$ appears inside the distribution we are averaging
+over, not inside the thing being averaged --- $R$ does not depend on $\theta$ at all. So we cannot
+simply push the gradient inside the expectation.
+
+Fix $x$ and write $J_x(\theta) = \sum_y \pol(y \mid x) R(x,y)$. Then
+\begin{align}
+  \grad J_x(\theta)
+    &= \sum_y \grad \pol(y \mid x) \, R(x,y) \label{eq:pg1}\\
+    &= \sum_y \pol(y \mid x) \, \frac{\grad \pol(y \mid x)}{\pol(y \mid x)} \, R(x,y) \label{eq:pg2}\\
+    &= \sum_y \pol(y \mid x) \, \grad \log \pol(y \mid x) \, R(x,y) \label{eq:pg3}\\
+    &= \E_{y \sim \pol}\big[ R(x,y) \, \grad \log \pol(y \mid x) \big]. \label{eq:pg4}
+\end{align}
+
+Step \eqref{eq:pg1} $\to$ \eqref{eq:pg2} multiplies and divides by $\pol$, which is legal wherever
+$\pol > 0$. Step \eqref{eq:pg2} $\to$ \eqref{eq:pg3} uses $\grad \log f = \grad f / f$ --- the
+\emph{log-derivative trick}, and the entire content of the derivation. It converts a gradient of a
+probability into an expectation, which is the one thing we can estimate by sampling.
+
+Taking the outer expectation over prompts:
+\begin{equation}
+  \boxed{\;\grad J(\theta) \;=\; \E_{x, y}\big[ R(x,y) \, \score \big].\;}
+  \label{eq:pgt}
+\end{equation}
+
+The quantity $\score$ is called the \emph{score function}. \Cref{eq:pgt} is the policy gradient
+theorem for the bandit case.
+
+\subsection{The estimator}
+
+\Cref{eq:pgt} is an expectation, so replace it with a sample mean. Draw $N$ rollouts
+$(x_i, y_i)$, write $r_i = R(x_i, y_i)$ and $\scorei = \grad \log \pol(y_i \mid x_i)$. Then
+\begin{equation}
+  \hat{g}_{\text{REINFORCE}} \;=\; \frac{1}{N}\sum_{i=1}^{N} r_i \, \scorei
+  \label{eq:reinforce}
+\end{equation}
+is an unbiased estimator of $\grad J$. Ascend it. That is REINFORCE, complete.
+
+In practice we do not compute $\scorei$ and then multiply --- we build a scalar surrogate loss whose
+gradient is \eqref{eq:reinforce} and hand it to autograd:
+\begin{equation}
+  \mathcal{L} \;=\; -\frac{1}{N}\sum_{i=1}^{N} r_i \, \log \pol(y_i \mid x_i),
+  \qquad \grad \mathcal{L} = -\hat{g}.
+  \label{eq:surrogate}
+\end{equation}
+The minus sign turns ascent into descent. Note that $r_i$ is a \emph{constant} here: it is detached,
+never differentiated through. If you differentiate through the reward you are doing something else
+entirely.
+
+\subsection{The identity that everything later depends on}
+
+\begin{claim}[The score has mean zero]
+\label{claim:zeromean}
+For any $x$, $\;\E_{y \sim \pol(\cdot\mid x)}\big[\score\big] = 0.$
+\end{claim}
+
+\begin{proof}
+\begin{equation}
+  \E_y\big[\score\big]
+  = \sum_y \pol(y\mid x) \grad \log \pol(y \mid x)
+  = \sum_y \grad \pol(y \mid x)
+  = \grad \sum_y \pol(y \mid x)
+  = \grad 1 = 0. \qedhere
+\end{equation}
+\end{proof}
+
+This is not a technicality. It is the load-bearing fact underneath baselines
+(\cref{sec:baseline}), and \cref{sec:surprises} is largely the story of what happens when an
+innocuous implementation detail breaks it.
+
+\begin{aside}
+\textbf{Read \cref{claim:zeromean} intuitively.} $\score$ points in the direction that would make
+\emph{this particular completion} more likely. Averaged over completions actually drawn from the
+policy, those directions cancel exactly --- because the policy is already normalised, and making
+some outputs more likely necessarily makes others less so. There is no free ``push everything up''
+direction. Keep this picture; \cref{sec:lennorm} is about an implementation that quietly creates one.
+\end{aside}
+
+% ══════════════════════════════════════════════════════════════════
+\section{The variance problem, and baselines}
+\label{sec:baseline}
+
+\subsection{Why REINFORCE is unusable as written}
+
+$\hat{g}_{\text{REINFORCE}}$ is unbiased but has enormous variance. The cleanest way to see the
+problem: with $R \in \{0,1\}$, \cref{eq:reinforce} is
+\begin{equation}
+  \hat{g} = \frac{1}{N}\sum_{i \,:\, r_i = 1} \scorei,
+\end{equation}
+a sum over the \emph{correct} rollouts only. Failures contribute exactly nothing. Two consequences:
+
+\begin{enumerate}
+  \item \textbf{Half the data is discarded.} At a $47\%$ pass rate, $53\%$ of the compute produces no
+        gradient signal.
+  \item \textbf{Every surviving term has the same sign.} The estimator can only ever say ``do more of
+        this,'' never ``do less of that.'' It is not contrastive.
+\end{enumerate}
+
+\subsection{The baseline, and why it is free}
+
+Subtract a constant $b$ from every reward:
+\begin{equation}
+  \hat{g}_b \;=\; \frac{1}{N}\sum_{i=1}^{N} (r_i - b)\, \scorei.
+  \label{eq:baseline}
+\end{equation}
+
+\begin{claim}[Baselines are unbiased]
+\label{claim:unbiased}
+If $b$ does not depend on $y$, then $\E[\hat{g}_b] = \grad J$ for every $b$.
+\end{claim}
+
+\begin{proof}
+$\E[(R - b)\score] = \E[R \score] - b\,\E[\score] = \grad J - b \cdot 0 = \grad J$, by
+\cref{claim:zeromean}.
+\end{proof}
+
+So $b$ is a free parameter: it changes the variance of the estimator without changing what the
+estimator estimates. This is the single most useful fact in policy-gradient methods.
+
+The effect on the update is immediate and worth stating plainly. With $b > 0$, a failure
+($r_i = 0$) now carries advantage $-b$, so its term is $-b \cdot \scorei$ --- pushing the policy
+\emph{away} from that completion. \textbf{The estimator becomes contrastive.} Both consequences of
+\cref{sec:baseline} are addressed by one subtraction.
+
+\subsection{How much variance does it remove?}
+\label{sec:varcalc}
+
+Take $R \in \{0,1\}$ with $\Pr[R = 1] = p$, and define the conditional second moments of the score
+\begin{equation}
+  E_c = \E\big[\|\score\|^2 \,\big|\, R = 1\big], \qquad
+  E_w = \E\big[\|\score\|^2 \,\big|\, R = 0\big].
+\end{equation}
+Since all estimators here share the same mean (\cref{claim:unbiased}), comparing variances is the
+same as comparing second moments. For constant $b$,
+\begin{equation}
+  \E\big[(R-b)^2 \|\score\|^2\big] \;=\; p(1-b)^2 E_c \;+\; (1-p)\,b^2 E_w.
+  \label{eq:secondmoment}
+\end{equation}
+
+Minimising over $b$ gives the optimal baseline
+\begin{equation}
+  b^\star \;=\; \frac{p\,E_c}{p\,E_c + (1-p)E_w}.
+  \label{eq:optb}
+\end{equation}
+
+\begin{aside}
+\textbf{\Cref{eq:optb} is not the thing anyone actually computes.} Look at what $b^\star$ requires:
+$p$, $E_c$ and $E_w$ --- the true success probability and two conditional second moments of the
+score. None of the three is observable. So every implementation substitutes the one quantity that is
+free, the sample mean reward $\bar{r}$ (\cref{sec:rbar}), which is a plug-in estimate of $p$.
+
+That substitution is exact only when $E_c = E_w$: setting them equal in \cref{eq:optb} collapses it
+to $b^\star = p$, estimated by $\bar{r}$. Otherwise using $\bar{r}$ is a heuristic --- a
+\emph{reasonable} one, since the correction factor is bounded and the resulting estimator is still
+unbiased by \cref{claim:unbiased}, but a heuristic nonetheless. \Cref{sec:eweight} is what our own
+measurements say when that assumption fails, and here it fails badly enough to erase the entire
+benefit.
+\end{aside}
+
+Setting $E_c = E_w$ and comparing $b = 0$ against $b = p$:
+\begin{align}
+  b = 0: &\quad p\,E, \\
+  b = p: &\quad p(1-p)^2 E + (1-p)p^2 E \;=\; E\,p(1-p)\big[(1-p) + p\big] \;=\; E\,p(1-p),
+\end{align}
+so the variance ratio is
+\begin{equation}
+  \boxed{\;\frac{\Var[\hat{g}_0]}{\Var[\hat{g}_p]} \;=\; \frac{p E}{E p (1-p)} \;=\; \frac{1}{1-p}.\;}
+  \label{eq:ratio}
+\end{equation}
+
+At $p = 0.5$ the baseline halves the variance; at $p = 0.9$ it cuts it by a factor of ten. This is
+the pre-registered point prediction for ablation A (\cref{sec:abA}).
+
+% ══════════════════════════════════════════════════════════════════
+\section{From a global baseline to a group baseline}
+\label{sec:group}
+
+\subsection{The idea GRPO is named after}
+
+\Cref{claim:unbiased} allows $b$ to depend on the \emph{prompt} $x$, since the expectation in
+\cref{claim:zeromean} is taken at fixed $x$. So we may use $b(x)$, and the variance-minimising choice
+is approximately
+\begin{equation}
+  b(x) \;\approx\; \E\big[R \mid x\big],
+\end{equation}
+the expected reward \emph{on this prompt}. This is strictly better than a global $b$: an easy prompt
+and a hard prompt have very different expected rewards, and a single global constant is systematically
+wrong for both.
+
+Classical actor--critic methods estimate $\E[R \mid x]$ with a learned value network $V_\phi(x)$ ---
+a second model, with its own parameters, its own optimiser, and its own failure modes.
+
+\textbf{GRPO's contribution is to replace that network with a Monte Carlo estimate.} Sample $G$
+completions for the same prompt and average their rewards:
+\begin{equation}
+  \hat{b}(x) \;=\; \frac{1}{G}\sum_{j=1}^{G} r_j.
+  \label{eq:groupmean}
+\end{equation}
+
+That is the whole idea. \emph{Group Relative Policy Optimisation} is REINFORCE with a per-prompt
+baseline bought with extra samples instead of a critic network.
+
+\begin{aside}
+\textbf{The trade being made.} A critic amortises: train it once, query it cheaply forever. A group
+baseline pays $G\times$ the sampling cost at every step, and buys in return: no second model, no
+critic-training instability, no value-function bias, and an estimate that is automatically correct
+for the current policy. At $G=8$ you spend $8\times$ the rollouts to delete an entire neural network
+from the system. For LLM post-training, where sampling is the well-understood part and critic
+training is not, that is usually a good trade.
+\end{aside}
+
+\subsection{Leave-one-out}
+
+\Cref{eq:groupmean} has a subtle flaw: $r_i$ appears in its own baseline, so
+$\hat{b}$ is correlated with $r_i$ and \cref{claim:unbiased} no longer applies exactly. The fix is to
+exclude the sample being centred:
+\begin{equation}
+  \Adv_i^{\text{loo}} \;=\; r_i - \frac{1}{G-1}\sum_{j \neq i} r_j.
+  \label{eq:loo}
+\end{equation}
+
+\begin{claim}[LOO is a uniform rescale of the mean-centred advantage]
+\label{claim:loo}
+With $S = \sum_j r_j$ and $\Adv_i^{\text{mean}} = r_i - S/G$,
+\begin{equation}
+  \Adv_i^{\text{loo}} \;=\; \frac{G\,r_i - S}{G-1} \;=\; \frac{G}{G-1}\,\Adv_i^{\text{mean}}.
+\end{equation}
+\end{claim}
+
+\begin{proof}
+$\Adv_i^{\text{loo}} = r_i - \frac{S - r_i}{G-1} = \frac{(G-1)r_i - S + r_i}{G-1} = \frac{G r_i - S}{G-1}$,
+and $\Adv_i^{\text{mean}} = \frac{G r_i - S}{G}$.
+\end{proof}
+
+At $G = 8$ the factor is $8/7 \approx 1.143$. So LOO differs from mean-centring by a constant scale
+--- which is absorbed entirely by the learning rate, and \emph{exactly} cancelled if you normalise by
+the standard deviation (\cref{sec:norm}). The bias argument for LOO is real but small; do not expect
+it to show up as a visible effect.
+
+\subsection{Worked example: what conditioning actually buys}
+\label{sec:worked}
+
+This is the table that makes the difference concrete. Take $G = 8$, a batch whose overall pass rate is
+$\bar{r}_{\text{batch}} = 0.43$, and three groups of differing difficulty.
+
+\begin{table}[H]
+\centering
+\caption{The same rewards, three ways of centring them. Only the \emph{group} baseline reacts to how
+hard the prompt is.}
+\label{tab:worked}
+\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Group} & \textbf{Baseline} & \textbf{Advantages $\Adv_i$} \\
+\midrule
+Easy: $r = (1,1,1,1,1,1,1,0)$
+  & \texttt{none}      & $+1,\,+1,\,+1,\,+1,\,+1,\,+1,\,+1,\;\;0$ \\
+  & \texttt{global}    & $+0.57 \times 7,\;\; -0.43$ \\
+  & \texttt{group\_loo}& $+0.143 \times 7,\;\; \mathbf{-1.000}$ \\
+\midrule
+Hard: $r = (0,0,0,0,0,0,0,1)$
+  & \texttt{none}      & $0 \times 7,\;\; +1$ \\
+  & \texttt{global}    & $-0.43 \times 7,\;\; +0.57$ \\
+  & \texttt{group\_loo}& $-0.143 \times 7,\;\; \mathbf{+1.000}$ \\
+\midrule
+Average: $r = (1,0,1,1,0,0,1,0)$
+  & \texttt{none}      & $+1,\;0,\;+1,\;+1,\;0,\;0,\;+1,\;0$ \\
+  & \texttt{global}    & $+0.570 / -0.430$ \\
+  & \texttt{group\_loo}& $+0.571 / -0.571$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Read the three blocks in order:
+
+\begin{itemize}
+  \item \textbf{Easy prompt.} Under \texttt{none}, seven rollouts on a problem the model
+        \emph{already solves} each receive full weight $+1$: the update is dominated by reinforcing
+        existing competence. Under \texttt{group\_loo} they get $+0.143$, while the single failure
+        gets $-1.000$ --- the strongest signal in the group. The group baseline has correctly
+        identified that the only informative event here is the failure.
+  \item \textbf{Hard prompt.} Under \texttt{none} the seven failures receive advantage exactly
+        $0$: a failure carries no information at all. Under \texttt{group\_loo} the lone success gets
+        the maximum $+1.000$.
+  \item \textbf{Average prompt.} \texttt{global} and \texttt{group\_loo} nearly coincide
+        ($0.570$ vs $0.571$) --- because this group's pass rate equals the batch's.
+\end{itemize}
+
+\begin{aside}
+\textbf{The one-sentence summary of \cref{sec:group}.} The group baseline differs from the global one
+\emph{only} when a prompt is harder or easier than average --- and that difference \emph{is} the
+conditioning. If every prompt in your task set had identical difficulty, rung 2 and rung 3 would be
+the same algorithm.
+\end{aside}
+
+% ══════════════════════════════════════════════════════════════════
+\section{Advantage normalisation}
+\label{sec:norm}
+
+Published GRPO divides the centred advantage by the group's standard deviation:
+\begin{equation}
+  \tilde{\Adv}_i \;=\; \frac{\Adv_i}{\sigma_{\text{group}} + \varepsilon},
+  \qquad \sigma^2_{\text{group}} = \frac{1}{G}\sum_j \big(r_j - \bar{r}_{\text{group}}\big)^2 .
+  \label{eq:znorm}
+\end{equation}
+Combined with mean-centring, this makes $\tilde{\Adv}$ a \emph{$z$-score} within the group.
+
+Two properties follow, and both matter operationally.
+
+\begin{claim}[Bounded]
+\label{claim:bound}
+For any group of $G$ values, $\;\max_i |\tilde{\Adv}_i| \le \sqrt{G-1}$.
+\end{claim}
+
+\begin{proof}
+The $z$-scores satisfy $\sum_i \tilde{\Adv}_i = 0$ and $\sum_i \tilde{\Adv}_i^2 = G$. Fix $i=1$ and
+write $z = \tilde{\Adv}_1$. Then $\sum_{i \ge 2} \tilde{\Adv}_i = -z$ and
+$\sum_{i\ge2}\tilde{\Adv}_i^2 = G - z^2$. Cauchy--Schwarz gives
+$\big(\sum_{i\ge2}\tilde{\Adv}_i\big)^2 \le (G-1)\sum_{i\ge2}\tilde{\Adv}_i^2$, i.e.
+$z^2 \le (G-1)(G - z^2)$, hence $z^2 G \le G(G-1)$ and $|z| \le \sqrt{G-1}$.
+\end{proof}
+
+At $G = 8$ this is $\sqrt{7} \approx 2.6458$, attained exactly by a lone winner (or lone loser).
+Phase 0.1 logs \texttt{max\_abs\_advantage} every step purely as a rig check: if it ever exceeds
+$2.6458$, the advantage function is not computing a $z$-score and nothing downstream means anything.
+
+\begin{claim}[Scale-invariant]
+\label{claim:scaleinv}
+$\tilde{\Adv}$ is unchanged by any affine transform $r_i \mapsto \alpha r_i + \beta$, $\alpha \ne 0$.
+\end{claim}
+
+This one has a sharp consequence that we got wrong on the first pass and had to correct before
+running anything. \Cref{claim:scaleinv} says the rewards $\{0,\dots,0,1\}$ and
+$\{0.5,\dots,0.5,0.500001\}$ produce \emph{identical} normalised advantages. Normalisation keeps only
+the \emph{shape} of reward differences and discards their \emph{magnitude} entirely. We return to
+this in \cref{sec:abC}, because it is the whole content of ablation C.
+
+\subsection{Dr.\ GRPO's objection}
+
+Two conventions are contested in the literature. Published GRPO (i) divides by $\sigma_{\text{group}}$
+and (ii) length-normalises the log-probability sum. Dr.\ GRPO argues both introduce bias and removes
+them. Phase 0.1 keeps both as switches --- \texttt{normalize\_by\_std} and \texttt{length\_normalize}
+--- precisely so the question is answered by measurement rather than by citation. \Cref{sec:lennorm}
+reports what we found, and it is not a small effect.
+
+% ══════════════════════════════════════════════════════════════════
+\section{The KL leash}
+\label{sec:kl}
+
+Nothing so far stops the policy from drifting arbitrarily far from where it started in pursuit of
+reward. The standard remedy adds a penalty against a frozen reference policy $\polref$ (the model as
+it was before RL):
+\begin{equation}
+  \mathcal{L} \;=\; \underbrace{-\frac{1}{N}\sum_i \Adv_i \log \pol(y_i \mid x_i)}_{\text{policy gradient}}
+  \;+\; \beta \underbrace{\KL\big[\pol \,\|\, \polref\big]}_{\text{leash}}.
+  \label{eq:klloss}
+\end{equation}
+
+\subsection{Estimating the KL}
+
+We cannot compute $\KL$ in closed form over the space of completions, so we estimate it from the same
+samples. The estimator used here is Schulman's \emph{k3}:
+\begin{equation}
+  \hat{k}_3 \;=\; \rho - \log \rho - 1, \qquad \rho = \frac{\polref(y \mid x)}{\pol(y \mid x)} .
+  \label{eq:k3}
+\end{equation}
+It is unbiased --- $\E_{\pol}[\rho] = 1$ and $\E_{\pol}[\log \rho] = -\KL[\pol \| \polref]$, so
+$\E[\hat{k}_3] = 1 - (-\KL) - 1 = \KL$ --- and, unlike the naive $-\log\rho$, it is non-negative
+pointwise, which makes it far better behaved as a penalty.
+
+\begin{aside}
+\textbf{Apply k3 per token, not per sequence.} Sequence-level probabilities are products over
+hundreds of tokens, so $\rho$ compounds multiplicatively and its variance explodes with length.
+Phase 0.1 computes \eqref{eq:k3} at each token position and averages. This was a deliberate change
+during implementation, not an accident of the code.
+\end{aside}
+
+\subsection{Two implementation notes}
+
+\textbf{Add it to the loss, not the reward.} If the KL penalty is folded into $R$ before advantages
+are computed, it passes through the group baseline --- and a penalty that is roughly constant within
+a group is \emph{subtracted away} by that baseline. The leash silently goes slack. It must enter at
+\eqref{eq:klloss}, after centring.
+
+\textbf{Under LoRA, the reference is free.} With a frozen base model and only LoRA adapters trainable,
+$\polref$ is exactly the base model --- obtained by disabling the adapter. No second set of weights
+is needed, only a second forward pass.
+
+% ══════════════════════════════════════════════════════════════════
+\section{The ladder}
+\label{sec:ladder}
+
+Everything above is now one dataclass. Each rung differs from the previous one by exactly one field,
+which is what makes any observed difference attributable.
+
+\begin{table}[H]
+\centering
+\caption{The Phase 0.1 ladder. Runs 4--6 are cut: under the pinned single-epoch design the importance
+ratio is identically $1$, so clipping is a no-op, and the remaining two switches are isolated by
+ablations B and C instead.}
+\label{tab:ladder}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Run} & \textbf{Name} & \textbf{Configuration} & \textbf{What it adds} \\
+\midrule
+1 & REINFORCE           & \texttt{baseline="none"}       & --- \\
+2 & $+$ mean baseline   & \texttt{baseline="global"}     & contrastive updates \\
+3 & $+$ group baseline  & \texttt{baseline="group\_loo"} & conditioning on the prompt \\
+7 & full GRPO           & $+$ \texttt{normalize\_by\_std}, \texttt{kl\_coef} & scale-free advantages, a leash \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The rung $1 \to 2 \to 3$ progression is worth stating carefully, because it is easy to conflate the
+last two steps:
+
+\begin{itemize}
+  \item $1 \to 2$ introduces \textbf{centring}. Failures acquire negative weight; the update becomes
+        contrastive.
+  \item $2 \to 3$ introduces \textbf{conditioning}. The centre becomes prompt-specific, so an easy
+        prompt and a hard prompt are judged against their own difficulty rather than the batch's
+        average. \Cref{tab:worked} is exactly this difference.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════════
+\section{The four ablations}
+\label{sec:ablations}
+
+Phase 0.1's deliverable is four \emph{deliberate breakages}, each with a pre-registered signature
+recorded before any training run, and each carrying two distinct failure branches: \emph{prediction
+wrong} (a finding, to be reported) and \emph{rig broken} (a bug, to be fixed). All numbers below come
+from the clean ladder of 2026-08-02, one commit, one GPU tier, seed 0.
+
+\subsection{Ablation A --- remove the baseline}
+\label{sec:abA}
+
+\textbf{Isolates:} the baseline itself, rung 1 versus rung 2.
+\textbf{Prediction:} \cref{eq:ratio} --- the no-baseline estimator should have $1/(1-p)$ times the
+noise-to-signal ratio of the baselined one.
+
+This ablation is the subject of \cref{sec:cosine,sec:lennorm,sec:eweight}, because both the original
+measurement and the theory behind it turned out to be wrong. It is the most instructive of the four.
+
+\subsection{Ablation B --- remove the KL leash on a degenerate reward}
+\label{sec:abB}
+
+\textbf{Isolates:} $\beta$. Because B needs \emph{two} changes from run 7 (no leash \emph{and} a
+degenerate reward), it is measured against a control that has the degenerate reward but keeps the
+leash; the difference between B and its control isolates $\beta$ alone.
+
+\subsubsection*{What ``degenerate'' and ``hackable'' mean}
+
+Two terms that get used loosely, and which are worth separating precisely because they are properties
+of \emph{different things}.
+
+A grader is \textbf{degenerate} when its score does not depend on whether the task was performed. For
+$R_{\text{format}}$ this is not a figure of speech --- it is one line of the implementation:
+\begin{quote}\ttfamily\small
+def grade\_format\_only(completion, expected):\\
+\hspace*{1em}del expected \ \ \# deliberately unused --- that *is* the pathology\\
+\hspace*{1em}\ldots\ return reward 1.0 if completion matches <answer>N</answer> else 0.0
+\end{quote}
+The correct answer is \emph{discarded before grading}. Anything shaped like
+\texttt{<answer>N</answer>} pays $1.0$, so the constant string \texttt{<answer>0</answer>} scores full
+marks on every prompt in the distribution. \textbf{The reward-maximising policy is a constant function
+that never reads its input.}
+
+``Degenerate'' is meant in the mathematical sense --- a structure has collapsed. A degenerate conic is
+a pair of lines rather than an ellipse; a degenerate reward is one whose level sets no longer separate
+correct from incorrect.
+
+A grader is \textbf{hackable} when a degenerate maximum both exists \emph{and} is cheaply reachable
+from where the policy starts. The distinction matters:
+
+\begin{itemize}
+  \item \textbf{Degeneracy} is a property of the grader alone --- inspectable statically, without
+        running anything.
+  \item \textbf{Hackability} is a property of the (grader, policy, budget) triple. A degenerate
+        grader whose exploit is astronomically unlikely under the base policy will not be hacked in
+        200 steps, because RL at this scale \emph{amplifies what is already in the policy's support}
+        rather than discovering new behaviour.
+\end{itemize}
+
+That second point is why this project screens $p_{\text{hack}}@64$ on the \emph{base} policy before
+admitting any grader variant, and why ``nothing hacks at 1.7B in 200 steps'' is recorded as its single
+largest risk. A diagnostic that flags degeneracy is measuring the grader; whether that degeneracy
+\emph{bites} depends on the model and the budget.
+
+\textbf{``Deliberately'' hackable} means $R_{\text{format}}$ was built this way as a \emph{positive
+control}. If one claims a diagnostic detects grader degeneracy, at least one environment must have a
+known answer --- otherwise a null result cannot be interpreted, since ``the diagnostic failed'' and
+``there was nothing to find'' look identical.
+
+\subsubsection*{What it looks like when the grader is hacked}
+
+\begin{table}[H]
+\centering
+\caption{Ablation B's control arm over training, mean of three seeds. The proxy is learned in ten
+steps; the skill never moves at all.}
+\label{tab:bgap}
+\small
+\begin{tabular}{@{}rrrrr@{}}
+\toprule
+\textbf{step} & \textbf{proxy} & \textbf{true} & \textbf{gap} & \textbf{distinct completions} \\
+\midrule
+0   & 0.143 & 0.471 & $-0.328$ & 101 \\
+5   & 0.380 & 0.367 & $+0.013$ & 95 \\
+10  & 0.917 & 0.477 & $+0.440$ & 61 \\
+20  & 0.984 & 0.422 & $\mathbf{+0.562}$ & 66 \\
+199 & 0.990 & 0.523 & $+0.466$ & 71 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three things to read off \cref{tab:bgap}.
+
+\textbf{The gap starts negative.} The base model already solves $47.1\%$ of the additions but emits
+the required tag only $14.3\%$ of the time, so initially the proxy \emph{understates} true ability.
+Reward hacking is not visible at step 0; it has to be trained in.
+
+\textbf{The proxy saturates in ten steps and the skill does not move.} Averaged over the first and
+last ten steps of three seeds, the proxy goes $0.397 \to 0.993$ while true reward goes $0.453 \to
+0.474$ --- a change of $+0.021$ whose sign flips across seeds ($+0.032$, $-0.004$, $+0.034$), which
+is to say: nothing. Two hundred steps bought sixty points of proxy and zero points of arithmetic.
+
+\begin{aside}
+\textbf{A seed-0 artefact, corrected.} At $n=1$ this arm's true reward appeared to \emph{fall}
+($0.516 \to 0.445$), and an earlier draft of this document said optimising the format ``actively
+damaged arithmetic''. At $n=3$ it is flat. The single-seed dip was noise, and the flat version is the
+stronger claim anyway --- a degenerate grader does not need to damage the skill to be worth
+worrying about; it only needs to stop teaching it.
+\end{aside}
+
+\textbf{The completions make it unambiguous.} On \texttt{875 + 812} (answer: $1687$), the policy at
+step 150 emitted \texttt{<answer>1677</answer>}, \texttt{<answer>1707</answer>},
+\texttt{<answer>1677</answer>}, \texttt{<answer>1756</answer>} --- perfectly formatted, every one
+wrong. Two hundred steps of gradient descent spent learning punctuation.
+
+\begin{aside}
+\textbf{This is why the true reward must never be trained on.} $R_{\text{binary}}$ is computed at
+every step of ablation B and thrown away --- it never touches the loss. The moment a held-out grader
+enters the objective it stops measuring generalisation and becomes a second proxy, and the gap it was
+supposed to reveal closes for the wrong reason. The asymmetry is the instrument.
+\end{aside}
+
+\begin{table}[H]
+\centering
+\caption{Ablation B, three seeds, mean $\pm$ half the min--max envelope. Proxy is what is optimised;
+true is $R_{\text{binary}}$, measured and never trained on. The gap is the Goodhart quantity.}
+\label{tab:abB}
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+\textbf{Arm} & \textbf{proxy} & \textbf{true} & \textbf{gap} & \textbf{KL end} & \textbf{KL share of loss} \\
+\midrule
+control ($\beta = 0.04$) & $0.993 \pm 0.002$ & $0.474 \pm 0.010$ & $\mathbf{0.519 \pm 0.011}$ & $2.87$ & $0.544$ \\
+ablation B ($\beta = 0$)  & $0.999 \pm 0.001$ & $0.517 \pm 0.015$ & $\mathbf{0.482 \pm 0.014}$ & $3.04$ & $0.000$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two things to take from \cref{tab:abB}. First, the degenerate grader is \emph{comprehensively}
+hacked: the policy scores $0.993$ on the proxy while true performance sits at $0.474$ --- it learned
+the format and not the task. That $+0.519$ gap is the largest in the whole ladder.
+
+Second, and this is the reverse of what the leash is for: \textbf{removing the KL penalty made the
+gap \emph{smaller}}. Paired by seed, the difference is $+0.037$ with the same sign on all three
+($+0.018$, $+0.036$, $+0.058$), and the leashed arm also ends with lower true reward on every seed
+($0.474$ vs $0.517$) --- below the base model's own $\approx 0.47$. At $\beta = 0.04$, carrying
+$54\%$ of the loss, the leash is not restraining anything; it is costing true performance and
+slightly widening the gap.
+
+Part of the mechanism runs through ablation D: the degenerate reward drives the dead-group fraction
+to $0.895$, so there is very little policy gradient left for a leash to restrain --- a leash is
+irrelevant when the horse has stopped. That explains why the effect is \emph{small}. It does not
+explain why it is \emph{backwards}, and this document does not have that answer. The obvious probe
+is to sweep $\beta$: if the leash genuinely hurts here, the gap should grow with $\beta$.
+
+\begin{aside}
+\textbf{This is the finding that most needed three seeds.} At $n=1$ the two arms read $0.507$ and
+$0.489$, and an earlier draft reported ``removing the leash changes the gap by $-0.018$, i.e.\
+nothing''. That single seed happened to be the smallest of the three differences. The null was an
+artefact of $n=1$, and the effect it hid points the opposite way to the intervention's purpose.
+\end{aside}
+
+\subsection{Ablation C --- add a tiny tie-breaker}
+\label{sec:abC}
+
+\textbf{Isolates:} the reward's magnitude structure. Replace $R_{\text{binary}}$ with
+\begin{equation}
+  R_{\text{tiebreak}}(x,y) \;=\; R_{\text{binary}}(x,y) \;+\; 0.001 \cdot |y| .
+\end{equation}
+
+The pre-registered signature for this ablation was originally ``divide-by-$\approx 0$ advantage
+spikes.'' \Cref{claim:bound,claim:scaleinv} say that is \textbf{unreachable}: the normalised advantage
+is a $z$-score, bounded by $\sqrt{G-1}$ and invariant to scale. We rewrote the signature before
+running anything.
+
+What actually goes wrong is sharper, and is this project's thesis in miniature. Because $z$-scoring
+discards magnitude, a group that was unanimous under the binary reward --- and therefore contributed
+\emph{zero} gradient --- becomes, on adding a $0.001$ tie-breaker, \textbf{fully alive at full
+gradient magnitude}, with the advantages ordered entirely by completion length.
+
+\begin{table}[H]
+\centering
+\caption{Ablation C against its parent, three seeds each. Goodhart emerging from the optimiser's own
+arithmetic.}
+\label{tab:abC}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Arm} & \textbf{true reward} & \textbf{gap} & \textbf{dead groups} & \textbf{tokens/rollout} \\
+\midrule
+run 7 (binary)        & $0.571 \to 0.923$ & $0.000$ & $0.472 \pm 0.016$ & $18.6 \pm 1.4$ \\
+ablation C (tiebreak) & $0.567 \to 0.716$ & $0.039 \pm 0.002$ & $\mathbf{0.009 \pm 0.002}$ & $\mathbf{34.7 \pm 0.6}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All four predicted signatures fire, and every one of them clears its seed band: dead groups collapse
+$0.472 \to 0.009$, completions nearly double ($18.6 \to 34.7$ tokens), the true-reward gain falls
+from $+0.352$ to $+0.149$, and a real proxy--true gap of $0.039 \pm 0.002$ opens on a task where run
+7's gap is identically zero by construction.
+
+\subsection{Ablation D --- force every group unanimous}
+\label{sec:abD}
+
+\textbf{Isolates:} the dead-group failure mode, by construction.
+
+\begin{claim}[Dead-group probability]
+\label{claim:dead}
+If a prompt has per-sample success probability $p$, the probability that a group of $G$ i.i.d.\
+rollouts is unanimous --- and therefore produces \emph{zero} gradient under a group baseline --- is
+\begin{equation}
+  P_{\text{dead}}(p) \;=\; p^G + (1-p)^G .
+\end{equation}
+\end{claim}
+
+This function is convex, symmetric about $p = 1/2$, and minimised there. At $G = 8$ it is $0.008$ at
+$p = 0.5$ but $0.66$ at $p = 0.05$ \emph{or} $p = 0.95$. Two consequences that are easy to miss:
+
+\begin{itemize}
+  \item \textbf{It is blind to sign.} A group that is unanimously correct (saturated) and one that is
+        unanimously wrong (unreachable) are both dead, and behave oppositely under training --- one
+        will stay dead, one may become live. The scalar cannot tell you which.
+  \item \textbf{The mean hides it.} By Jensen's inequality, $\E[P_{\text{dead}}(p)] \ge
+        P_{\text{dead}}(\E[p])$ for convex $P_{\text{dead}}$. A task set that is half trivial and half
+        impossible has mean pass rate $0.5$ and \emph{every} group dead; a task set genuinely centred
+        at $0.5$ has $0.8\%$ dead. Identical means, a $55\times$ difference in wasted compute. This is
+        why Phase 0.1's task was selected on the dead-group fraction rather than on pass rate.
+\end{itemize}
+
+Measured, three seeds: with every group forced unanimous, \texttt{frac\_degenerate\_groups} $= 1.000$
+and \texttt{grad\_norm} $= 0.0000$ on all $200$ steps of all three runs --- exactly, with a seed band
+of zero. True reward flat at $0.471 \to 0.477$, and tokens generated at the parent's rate.
+\textbf{Roughly forty minutes of GPU per seed for exactly zero gradient.}
+
+\subsection{C and D are one event with two faces}
+
+The two ablations are the same phenomenon, separated by whether the reward has a tie-breaking term:
+
+\begin{table}[H]
+\centering
+\caption{What a unanimous group does, as a function of reward structure.}
+\label{tab:cd}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Unanimous group, reward is\ldots} & \textbf{Result} \\
+\midrule
+clean binary              & zero gradient --- the step is wasted (D) \\
+carrying any tie-breaker  & full-magnitude gradient chasing noise (C) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════════
+\section{Five things the standard account gets wrong at this scale}
+\label{sec:surprises}
+
+This section is the reason the document exists. Each subsection is a place where the clean derivation
+above makes a promise that our own measurements broke.
+
+\subsection{Dead groups are a pathology GRPO \emph{introduces}}
+\label{sec:deadintro}
+
+A group is dead when all its advantages are zero. Under which baselines does that happen?
+
+\begin{itemize}
+  \item \texttt{none}: $\Adv_i = r_i$, so the group is dead only if \emph{every} rollout failed.
+  \item \texttt{global}: $\Adv_i = r_i - \bar{r}_{\text{batch}}$. Since $\bar{r}_{\text{batch}}$ is an average over 128 rollouts and
+        $r_i$ is binary, $\Adv_i$ is essentially \emph{never} exactly zero. Dead groups cannot occur.
+  \item \texttt{group\_loo}: $\Adv_i = 0$ for all $i$ exactly when the group is unanimous, either way.
+\end{itemize}
+
+Measured on the clean ladder:
+
+\begin{table}[H]
+\centering
+\caption{Dead-group fraction by baseline, averaged over 200 steps. The analytical prediction,
+exactly. Rungs 1--3 are $n=1$: they were excluded from the seed pass because these numbers are a
+consequence of the advantage arithmetic rather than an empirical effect, so a seed band would measure
+noise around a derived value. Ablation D is $n=3$ with a band of exactly zero.}
+\label{tab:dead}
+\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Baseline} & \textbf{Dead when\ldots} & \textbf{Measured} \\
+\midrule
+\texttt{none}       & the group is all-wrong           & 0.037 \\
+\texttt{global}     & never                            & \textbf{0.000} \\
+\texttt{group\_loo} & the group is unanimous, either way & \textbf{0.454} \\
+\texttt{forced} (D) & always, by construction          & 1.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Read the middle two rows against each other.} The same unanimous group that GRPO throws away
+is perfectly alive under a global baseline, where it contributes $\pm b$. Conditioning the baseline on
+the prompt --- the thing that makes GRPO better --- is \emph{also} what creates the dead-group
+pathology.
+
+And it \emph{worsens as training succeeds}: under \texttt{group\_loo} the dead fraction climbs from
+$0.244$ over the first ten steps to $0.606$ over the last ten ($n=1$), because the policy is solving
+more prompts unanimously. Full GRPO is worse still --- $0.260 \pm 0.044 \to 0.715 \pm 0.028$ across
+three seeds. The better the policy gets, the larger the share of each batch that produces no gradient
+at all: a built-in brake that tightens exactly as the task is being learned. \Cref{sec:underpowered}
+follows that brake into the gradient itself.
+
+This is not a curiosity: \texttt{prime-rl}, Prime Intellect's production RL stack, ships a
+\texttt{zero\_advantage} pre-batch filter \emph{on by default} to drop exactly these rollouts. The
+pathology is recognised industry-wide. What we add is measuring its size per configuration.
+
+% Short form for the ToC: \cref does not survive a moving argument and renders as "??" there.
+\subsection[Length normalisation breaks the zero-mean score]
+           {Length normalisation breaks \cref{claim:zeromean}}
+\label{sec:lennorm}
+
+Implementations divide each rollout's summed log-probability by its token count, so that a 40-token
+rollout does not contribute four times the gradient of a 10-token one:
+\begin{equation}
+  \mathcal{L} = -\frac{1}{N}\sum_i \Adv_i \cdot \frac{1}{|y_i|}\log \pol(y_i \mid x_i).
+  \label{eq:lennorm}
+\end{equation}
+
+This looks innocuous. It is not. \Cref{claim:zeromean} relied on the sum telescoping,
+$\sum_y \grad\pol = \grad\sum_y \pol = \grad 1 = 0$. With a per-sample weight $w(y) = 1/|y|$ inside
+the sum, that telescoping fails:
+\begin{equation}
+  \E_y\Big[\tfrac{1}{|y|}\score\Big] \;=\; \sum_y \pol(y\mid x)\,\tfrac{1}{|y|}\,\grad\log\pol(y\mid x)
+  \;=\; \sum_y \tfrac{1}{|y|}\grad \pol(y \mid x) \;\neq\; \grad\!\!\sum_y \pol(y\mid x) \;=\; 0,
+\end{equation}
+because $1/|y|$ cannot be pulled out of the sum. \textbf{The score no longer has mean zero}, so
+\cref{claim:unbiased} fails and a baseline is no longer free: it changes the estimand.
+
+We measured this directly with a paired fixed-policy probe --- one policy state, 40 batches, the
+\emph{same} rollouts scored under all three baselines, so nothing but the baseline differs. The
+statistic is the cosine between the three arms' mean gradients: if all three estimate the same thing,
+these should be $\approx 1$.
+
+\begin{table}[H]
+\centering
+\caption{Do the three baselines estimate the same gradient? Mean over 3 seeds, $N=40$ batches.}
+\label{tab:lennorm}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+ & \texttt{none}\,$|$\,\texttt{global} & \texttt{none}\,$|$\,\texttt{group\_loo} & \texttt{global}\,$|$\,\texttt{group\_loo} \\
+\midrule
+\texttt{length\_normalize=True}  & $+0.727$ & $+0.734$ & $+0.996$ \\
+\texttt{length\_normalize=False} & $\mathbf{+0.991}$ & $\mathbf{+0.992}$ & $+0.999$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+With length normalisation on, the two \emph{centred} estimators agree with each other almost exactly
+($0.996$) while the uncentred one sits roughly $40^\circ$ away from both. Turn length normalisation
+off and all three snap into agreement. \Cref{claim:zeromean} is restored, and with it the premise that
+makes ablation A a well-posed question at all.
+
+\begin{aside}
+\textbf{This has teeth beyond ablation A.} The ladder's primary arms all run with
+\texttt{length\_normalize=True}. In that configuration the rungs are not estimating a common quantity,
+so ``does the baseline reduce variance'' has no well-defined answer --- \emph{that} is the finding,
+not a failure to measure.
+
+Separately, removing length normalisation improved the noise-to-signal ratio of \emph{every} arm in
+the probe ($0.45$--$0.94 \to 0.30$--$0.33$). Its effect on training is more selective than an earlier
+$n=1$ draft of this document claimed. On ablation C --- the arm being actively Goodharted --- final
+true reward rises $0.716 \to 0.849$, a gain of $+0.134$ with the same sign on all three seeds
+($+0.116$, $+0.159$, $+0.126$). On run 7, with a clean binary reward, the gain is $+0.017$ and the
+\emph{sign flips} on one seed ($+0.020$, $-0.004$, $+0.034$): no reliable effect. So the honest
+version is that removing length normalisation helps where the reward is degenerate and does nothing
+detectable where it is not --- support for Dr.\ GRPO's position, but narrower than ``it helps''.
+\end{aside}
+
+\subsection{The variance reduction does not materialise}
+\label{sec:eweight}
+
+With the estimators made comparable (\texttt{length\_normalize=False}), we can finally ask ablation
+A's actual question. Define the scale-free noise-to-signal ratio for baseline $b$,
+\begin{equation}
+  \nsr_b \;=\; \frac{V_b}{\|\bar{g}_b\|^2},
+  \qquad V_b = \frac{1}{N}\sum_{n=1}^{N} \big\| g_n^{(b)} - \bar{g}_b \big\|^2 ,
+\end{equation}
+where $g_n^{(b)}$ is the full-batch gradient of batch $n$ under baseline $b$. Scale-freeness is
+required, not cosmetic: the arms produce gradients of very different magnitudes, so comparing raw
+variance would report that scale difference instead.
+
+\Cref{eq:ratio} predicts $\nsr_{\texttt{none}} / \nsr_{\texttt{global}} = 1/(1-p)$. At the measured
+$p = 0.466$ that is $1.87$.
+
+\begin{table}[H]
+\centering
+\caption{Observed ratio against the point prediction, base policy, $N=160$ batches, paired
+bootstrap. An earlier draft reported the $N=40$ run; quadrupling the batches roughly halved every
+interval and did not move the conclusion.}
+\label{tab:nsr}
+\small
+\begin{tabular}{@{}rrrr@{}}
+\toprule
+\textbf{Seed} & \textbf{ratio} & \textbf{95\% CI} & \textbf{predicted $1/(1-p)$} \\
+\midrule
+0 & 0.931 & $[0.787,\ 1.091]$ & 1.868 \\
+1 & 1.112 & $[0.939,\ 1.308]$ & 1.850 \\
+2 & 1.142 & $[0.975,\ 1.315]$ & 1.864 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Every interval contains $1.0$ --- no reduction is demonstrated --- and every interval \emph{excludes}
+the prediction. Mean ratio $1.06$, seed band $0.21$. \textbf{At $p \approx 0.47$ on this task, the
+baseline delivers no detectable variance reduction, and the textbook magnitude is ruled out on 3/3
+seeds.} The mean-gradient cosines here are $0.987$--$0.990$, so this is a comparison between
+estimators that genuinely do share a mean.
+
+Why? Recall from \cref{sec:varcalc} that \cref{eq:ratio} assumed $E_c = E_w$. Solve
+\cref{eq:secondmoment} for the ratio at which the benefit vanishes entirely:
+\begin{align}
+  p E_c &= p(1-p)^2 E_c + (1-p)p^2 E_w \nonumber\\
+  E_c\big[1 - (1-p)^2\big] &= (1-p)\,p\,E_w \nonumber\\
+  E_c \, p(2-p) &= (1-p)\,p\,E_w \nonumber\\
+  \boxed{\;\frac{E_w}{E_c} = \frac{2-p}{1-p} \;=\; 2.87 \ \text{ at } p = 0.466.\;}
+  \label{eq:ewec}
+\end{align}
+
+So if incorrect completions carry roughly $2.9\times$ the squared score norm of correct ones, the
+baseline's benefit disappears exactly. That is entirely plausible --- an incorrect completion is one
+the policy assigned lower probability to, and $\|\grad\log\pol\|$ is larger there. \Cref{eq:ewec} is a
+\emph{derived, falsifiable number}, and measuring $E_w/E_c$ directly is the obvious next probe.
+
+\begin{aside}
+\textbf{The methodological point, which outlives the result.} On the first pass, with length
+normalisation on, the observed ratio was $1.786$ against a prediction of $1.872$ --- a $4.6\%$ match,
+and we nearly reported it as a clean confirmation. Decomposing $\nsr$ showed the agreement was
+coincidental: theory predicts \emph{signal unchanged, noise down $1.87\times$}, whereas what actually
+happened was \emph{noise up $2.34\times$, signal up $4.16\times$}. Two effects the theory does not
+contain, pulling in opposite directions, landing on the right number. The rig check --- ``do these
+three estimators even share a mean?'' --- is the only thing that caught it.
+\end{aside}
+
+
+\subsection{GRPO starves its own gradient as it converges}
+\label{sec:underpowered}
+
+The probe of \cref{sec:eweight} was run at two operating points: the base policy ($p \approx 0.47$)
+and after 50 steps of training ($p \approx 0.69$). At the second, \textbf{it stops working} --- and
+why it stops is a result about GRPO rather than about the probe.
+
+\begin{table}[H]
+\centering
+\caption{The same probe at two operating points, three seeds each, $N=160$ batches.}
+\label{tab:underpowered}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+& \textbf{$p$} & \textbf{dead groups} & \textbf{$\|\bar{g}\|^2$} & \textbf{NSR} \\
+\midrule
+base policy      & 0.465 & 0.19 & $594$ & $0.37$--$0.41$ \\
+after 50 steps   & 0.694 & 0.46 & $3.1$ & $\mathbf{55}$--$\mathbf{83}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Across fifty training steps the \emph{signal} collapsed by roughly $600\times$ while the noise fell
+only $3\times$: the noise-to-signal ratio rose by more than two orders of magnitude, tracking the
+dead-group fraction from $0.19$ to $0.46$. The batch gradient at the later point is overwhelmingly
+noise.
+
+This has a sharp consequence for any diagnostic built on comparing gradient \emph{directions}.
+$\bar{g}$ is itself an average of $N$ draws, so its own squared relative error is $\mathrm{NSR}/N$,
+and two estimates of the \emph{same} vector have expected cosine $\approx 1/(1 + \mathrm{NSR}/N)$.
+At $\mathrm{NSR}/N = 0.38$ that ceiling is $0.72$ --- below the $0.90$ agreement floor of
+\cref{sec:lennorm}. The floor is unreachable \emph{however perfectly the estimators agree}, so the
+check that fires there is vacuous, and reporting it as ``the baselines disagree'' would blame the
+estimators for what is a sample-size problem. The probe's verdict at this operating point is
+therefore \texttt{underpowered}, not \texttt{rig\_broken}: distinct outcomes, because only the first
+is fixed by drawing more batches. Reaching the floor here would need $N \approx 550$--$750$.
+
+\begin{aside}
+\textbf{Read this next to \cref{sec:deadintro}.} Dead groups do not merely waste compute --- they
+degrade the \emph{quality} of the gradient computed from what remains, and they do so fastest exactly
+when the policy is succeeding. The dead-group fraction and the noise-to-signal ratio are two views of
+one mechanism, and both get worse as the task is learned. Whether that is why RL runs at this scale
+plateau, this phase cannot say; it is the obvious next question.
+\end{aside}
+
+\subsection{The half-batch cosine cannot compare baseline arms}
+\label{sec:cosine}
+
+Ablation A was originally measured by splitting each batch in half, computing both half-gradients, and
+taking their cosine. Two independent samples of the same expected gradient should agree; the cosine
+is then a direct read on estimator noise, with no trend confound.
+
+It came back \emph{reversed}: $\rho_2/\rho_1 = 0.154$ against a pre-registered gate of $\ge 2.0$, with
+all rig checks clean. The reason is that both arms are confounded, in opposite directions, and neither
+confound is about variance.
+
+\begin{itemize}
+  \item \texttt{baseline="none"} --- every advantage is $\ge 0$, so \emph{both} halves weight the
+        shared component of $\score$ positively. The cosine is \textbf{inflated} by precisely the
+        nuisance direction a baseline exists to remove.
+  \item \texttt{baseline="global"} --- the baseline is the \emph{full-batch} mean while the cosine
+        splits that same batch. Writing $b = (b_A + b_B)/2$, where $b_A, b_B$ are the two \emph{half}-batch mean rewards, each half carries
+        a term $\pm (b_A - b_B)/2 \cdot \sum \score$: an anti-correlated component
+        \textbf{manufactured by the split boundary}. The cosine is \textbf{deflated}.
+  \item \texttt{baseline="group\_*"} --- advantages sum to zero \emph{within} each group and groups
+        are never split, so each half sums to zero independently. No coupling. This arm was always
+        clean.
+\end{itemize}
+
+The obvious repair --- centre each half on its own mean advantage before measuring --- does not work,
+and the reason is worth internalising. Under \texttt{none} the centred advantage is
+$r_i - \bar{r}_A$ (writing $\bar{r}_A$ for the mean reward over half $A$); under \texttt{global} it is $(r_i - b) - (\bar{r}_A - b) = r_i - \bar{r}_A$. The
+constant cancels: \textbf{centring makes the two arms the same estimator}, erasing the contrast
+instead of the confound. Verified numerically --- at a shared policy state the two agree to six
+decimal places.
+
+That is why ablation A needs the fixed-policy probe of \cref{sec:eweight} rather than a comparison
+between training arms. Two training arms follow different trajectories, so any difference between them
+confounds the estimator with the policy state it was measured at. Only a probe that holds the policy
+fixed and varies \emph{nothing but the baseline} can answer the question.
+
+\begin{aside}
+\textbf{The general lesson.} The half-batch cosine measures directional \emph{reproducibility of the
+applied update}. A degenerate estimator that always points the same way scores near $1.0$ while
+learning nothing from reward. So a metric that rewards a large common-mode component will always
+report that removing it hurt --- which is Goodhart's law operating inside the diagnostic itself. For a
+project whose entire subject is the gap between a target and the proxy used to measure it, finding
+that gap in our own instrument is not an embarrassment. It is the thesis.
+\end{aside}
+
+% ══════════════════════════════════════════════════════════════════
+\section{Summary}
+\label{sec:summary}
+
+\begin{enumerate}
+  \item \textbf{REINFORCE} is the log-derivative trick plus a sample mean: $\hat{g} = \frac{1}{N}\sum
+        r_i \scorei$. Unbiased, unusably noisy, and non-contrastive when $R \ge 0$.
+  \item \textbf{A baseline} is free because $\E[\score] = 0$. It makes the update contrastive and, in
+        theory, cuts variance by $1/(1-p)$.
+  \item \textbf{GRPO's group baseline} is a Monte Carlo estimate of $\E[R \mid x]$ bought with $G$
+        rollouts instead of a critic network. It differs from a global baseline exactly when prompts
+        differ in difficulty.
+  \item \textbf{Normalisation} makes advantages $z$-scores: bounded by $\sqrt{G-1}$ and
+        scale-invariant. The scale-invariance is what makes ablation C possible.
+  \item \textbf{The KL leash} uses the per-token k3 estimator and must be added to the loss, not the
+        reward, or the group baseline subtracts it away.
+\end{enumerate}
+
+And the five things measurement changed:
+
+\begin{enumerate}
+  \item Dead groups are a pathology the \emph{group} baseline introduces --- $0.000$ under a global
+        baseline, $0.454$ under GRPO's.
+  \item Length normalisation breaks $\E[\score] = 0$, so under the ladder's primary configuration the
+        rungs do not estimate a common quantity at all.
+  \item Once they do, the predicted variance reduction \textbf{does not appear} on 3/3 seeds ---
+        consistent with $E_w/E_c \approx 2.9$, a derived and testable number.
+  \item As GRPO converges it \textbf{starves its own gradient}: across fifty steps the noise-to-signal
+        ratio rose from $\approx 0.4$ to $55$--$83$ as dead groups went $0.19 \to 0.46$.
+  \item The half-batch cosine cannot compare baseline arms, and the obvious fix erases the contrast
+        rather than the confound.
+\end{enumerate}
+
+And three claims that an earlier $n=1$ draft of this document got wrong, all corrected by running two
+more seeds:
+
+\begin{enumerate}
+  \item Ablation B's leash was reported as having \emph{no} effect on the gap. It has a small one, in
+        the \emph{opposite} direction to its purpose (3/3 seeds).
+  \item Ablation B's true reward was reported as \emph{falling}. It is flat.
+  \item Removing length normalisation was reported as helping \emph{both} arms tested. It reliably
+        helps only the arm being Goodharted.
+\end{enumerate}
+
+Each was a plausible reading of one seed. None survived three. Every table in
+\cref{sec:ablations,sec:surprises} now carries its $n$.
+
+\end{document}

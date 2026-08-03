@@ -12,6 +12,7 @@ clean measurement (``docs/pre-registration.md`` §4 L3). A run without per-step 
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -30,12 +31,60 @@ class StepLog:
     proxy_reward: float
     true_reward: float
     policy_entropy: float
+
+    #: Unique completion *strings* across the whole batch, out of ``prompts_per_step * group_size``.
+    #: Ablation **B**'s sharpest signature: entropy collapse predicts this falls toward 1 while
+    #: proxy reward stays high — a conjunction only collapse produces, unlike "reward got worse",
+    #: which is equally consistent with dead groups, buried signal, or a broken rig.
+    distinct_completions: int
+
     kl_to_ref: float
+
+    #: Share of the total loss magnitude contributed by the KL term:
+    #: ``|beta*KL| / (|PG| + |beta*KL|)``, in [0, 1]. Zero when ``kl_coef == 0``.
+    #:
+    #: **Ablation B's rig-broken check.** "Big enough" for beta is not a number you can pick at
+    #: step 0 — KL is ~0 there for any beta, because the policy has not moved yet. It is a property
+    #: of the trajectory: the leash is real if this rises to a material share while reward still
+    #: improves. If run 7 ends with this near zero, then removing KL in ablation B removed a leash
+    #: that was never on, and the resulting null is a rig failure rather than a finding.
+    kl_loss_fraction: float
+
     grad_norm: float
+
+    #: Cosine similarity between the gradients of the batch's two halves — a **direct** measure of
+    #: estimator variance, and ablation **A**'s primary signature.
+    #:
+    #: The two halves are independent samples of the same expected gradient, so ~1.0 means they
+    #: agree (low noise) and ~0 means they disagree (high noise). Unlike ``CV(grad_norm)`` measured
+    #: across steps, this carries no trend confound: a gradient that decays smoothly has high CV
+    #: with zero step-to-step noise.
+    #:
+    #: Costs no extra backward passes — every sample is still backwarded exactly once, accumulated
+    #: into two buffers rather than one, and summed for the actual update. The price is a second
+    #: gradient buffer, which is negligible under LoRA.
+    half_batch_grad_cosine: float
+
+    #: ``max |A|`` over the step's advantages. Ablation **C**'s *rig-broken* branch: the normalised
+    #: advantage is a z-score, so this can never exceed ``sqrt(G-1)`` = 2.646 at G=8. If it does,
+    #: the implementation is not computing a z-score and the run says nothing about the science.
+    max_abs_advantage: float
+
     group_pass_rate: float
     frac_degenerate_groups: float
     tokens: int
     wall_clock_s: float
+
+    #: The same cosine measured on **within-half-centred** advantages, or ``None`` when
+    #: ``LadderConfig.diagnostic_centered_cosine`` is off. Diagnostic only — never applied.
+    #:
+    #: ``half_batch_grad_cosine`` above measures the reproducibility of the update *as applied*,
+    #: which is the honest reading of what the optimizer did but **not** a measure of estimator
+    #: quality: an estimator dominated by a large reward-independent common mode scores near 1.0
+    #: while learning nothing from reward. Since removing that common mode is exactly a baseline's
+    #: job, the as-applied cosine reports every baseline as harmful. Report both, never one alone.
+    #: Rationale and the two confounds in ``config.diagnostic_centered_cosine``.
+    half_batch_grad_cosine_centered: float | None = None
 
     @property
     def gap(self) -> float:
@@ -59,8 +108,14 @@ class RunManifest:
 
 
 def write_manifest(manifest: RunManifest, run_dir: Path) -> None:
-    """Serialise the manifest before the first step. Scaffolding — Claude may implement."""
-    raise NotImplementedError("Phase 0.1 — plumbing")
+    """Serialise the manifest before the first step, so a crashed run is still identifiable.
+
+    Phase 0.1 uses ``assay.crawl.runlog.manifest_for``, whose config shape is the toy ladder rather
+    than the ``bisect`` grader factorial. This entry point is for Walk onward.
+    """
+    from assay.crawl.runlog import write_manifest as _write
+
+    _write(dataclasses.asdict(manifest), run_dir)
 
 
 def train(config: ExperimentConfig, run_dir: Path) -> list[StepLog]:

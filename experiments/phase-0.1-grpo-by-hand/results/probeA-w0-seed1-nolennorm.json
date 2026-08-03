@@ -1,0 +1,90 @@
+{
+  "config": {
+    "batches": 40,
+    "bootstrap": 2000,
+    "family": "arithmetic",
+    "group_size": 8,
+    "length_normalize": false,
+    "normalize_by_std": false,
+    "prompts_per_batch": 16,
+    "run_id": "probeA-w0-seed1-nolennorm",
+    "seed": 1,
+    "setting": "add-3digit",
+    "warmup_steps": 0
+  },
+  "operating_point": {
+    "dead_group_fraction": 0.1828125,
+    "pass_rate": 0.4521484375,
+    "rollouts": 5120.0
+  },
+  "peak_memory_gb": 12.209951744,
+  "provenance": {
+    "backend": "modal-L4",
+    "config": {
+      "batches": 40,
+      "bootstrap": 2000,
+      "family": "arithmetic",
+      "group_size": 8,
+      "length_normalize": false,
+      "normalize_by_std": false,
+      "prompts_per_batch": 16,
+      "run_id": "probeA-w0-seed1-nolennorm",
+      "seed": 1,
+      "setting": "add-3digit",
+      "warmup_steps": 0
+    },
+    "git_dirty": false,
+    "git_sha": "cde980b1589d4bb6df27f9a660335e0b69f5de41",
+    "grader": {
+      "integer_pattern": "-?\\d{1,3}(?:,\\d{3})+|-?\\d+",
+      "r_binary_extractor": "extract_final_integer:last-integer-anywhere",
+      "r_format_extractor": "extract_tagged_answer:strict-answer-tag",
+      "tagged_pattern": "<answer>\\s*(-?\\d{1,3}(?:,\\d{3})+|-?\\d+)\\s*</answer>",
+      "tiebreak_weight": "0.001"
+    },
+    "model_id": "meta-llama/Llama-3.2-1B-Instruct",
+    "model_revision": "9213176726f574b556790deb65791e0c5aa438b6",
+    "prompt_template_sha256": "1d37f53bddc5eb93"
+  },
+  "statistics": {
+    "global": {
+      "nsr": 0.3210827255211961,
+      "signal_sq": 316.9311218261719,
+      "variance": 101.7611083984375
+    },
+    "group_loo": {
+      "nsr": 0.3337080927936134,
+      "signal_sq": 282.29913330078125,
+      "variance": 94.20550537109375
+    },
+    "none": {
+      "nsr": 0.2957520387075549,
+      "signal_sq": 581.0548095703125,
+      "variance": 171.84814453125
+    }
+  },
+  "verdict": {
+    "mean_cosines": {
+      "global|group_loo": 0.9982774646461395,
+      "none|global": 0.9930956790855676,
+      "none|group_loo": 0.9917134132138244
+    },
+    "nsr": {
+      "global": 0.3210827255211961,
+      "group_loo": 0.3337080927936134,
+      "none": 0.2957520387075549
+    },
+    "ordering_holds": false,
+    "pass_rate": 0.4521484375,
+    "ratio_ci95": [
+      0.7043144702911377,
+      1.1553953886032104
+    ],
+    "ratio_global_over_group_loo": 0.9621664336434728,
+    "ratio_none_over_global": 0.9211085343425958,
+    "ratio_none_over_group_loo": 0.8862597134869816,
+    "ratio_predicted": 1.8253119429590017,
+    "verdict": "not_measurable"
+  },
+  "wall_clock_s": 514.253585826
+}

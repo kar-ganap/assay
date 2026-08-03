@@ -41,7 +41,9 @@ confirmatory after seeing its result.** Exploratory findings are labelled explor
 artifact that reports them.
 
 ## 9. Report distributions, not point estimates
-≥3 seeds on every headline arm. Every reported number carries uncertainty (seed bands, permutation
+≥3 seeds on every headline arm, and **no directional claim from n=1** — a single seed may be
+reported, but a *direction* may not be asserted from it (earned in Phase 0.1: three claims reversed,
+flattened, or narrowed between n=1 and n=3). Every reported number carries uncertainty (seed bands, permutation
 tests, confidence intervals). One PRIMARY metric per gate; the battery corroborates, never
 substitutes.
 

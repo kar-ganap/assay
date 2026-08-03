@@ -170,7 +170,11 @@ When in doubt about which side a task falls on, **ask**.
 2. **Report nulls honestly.** H1 failing is a shipped result. **Write the null-case abstract before
    Stage 2 starts.**
 3. **Characterize distributions, not means.** ≥3 seeds on every headline arm; seed-variance band
-   reported beside every effect size.
+   reported beside every effect size. **No directional claim from n=1** — not "reported with a
+   caveat", not made. *Trigger: three claims died between n=1 and n=3 in Phase 0.1 (the KL leash's
+   effect on the gap reversed sign, a "falling" curve turned out flat, and "helps both arms" became
+   "helps one"). Each was a plausible reading of a single seed; with this, a direction is not
+   asserted until it has survived three.*
 4. **Exploratory vs confirmatory is declared in advance.** **Never promote an exploratory variant to
    confirmatory after seeing its result.**
 5. **Numbers regenerate from committed scripts.** No one-time scripts.
@@ -194,7 +198,9 @@ Cross-references allowed; content separated.
 
 1. **Tests pass** (code phases) or **all evaluation criteria met** (research phases).
 2. **Lint / typecheck clean:** `make check` (ruff + mypy --strict + pytest).
-3. **Reproducibility:** results regenerate from committed code + pinned parameters.
+3. **Reproducibility:** results regenerate from committed code, pinned parameters, **and committed
+   data**. *Trigger: the old wording was satisfied by a figure script reading gitignored `raw/`,
+   which no clone could reproduce.*
 4. **Retro written** with paper-section anchors.
 5. **`/learn` written** with a mandatory `[DELETE]` section (empty deletions allowed but must be
    explicit, not omitted).
@@ -244,7 +250,10 @@ mandatory to consider) · conceptual-doc cleanup proposed · tool/permission all
 - **Framing path-dependence** (inherited from epibench). Once a framing is established, reasoning
   accumulates support rather than scrutinizing it. Counter: the framing-stress reviewer at stage
   boundaries.
-- **The window is narrow and closing.** Prime Sprints is running a reward-hacking track *now*; the
+- **The window is narrow and closing.** Prime Sprints' reward-hacking track **closed ~2026-06-20**
+  (verified 2026-08-01; no successor announced). Its free compute is still live —
+  `sprints/Llama-3.2-1B-Instruct` at $0/$0/$0 — but **requires a PUBLIC environment**, so the price
+  of it is publishing `bisect` before the paper. Decide at Phase 0.2. The
   fuzzing-verifiers paper landed June 2026; Apollo's Science-of-Scheming stream starts Sept 2026 and
   targets adjacent territory. **Speed is a design constraint, not a preference.** Concretely: do not
   let the literature gate expand past the five Block-A papers, and do not let Walk expand past the
