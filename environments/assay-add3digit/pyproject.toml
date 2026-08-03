@@ -1,0 +1,24 @@
+[project]
+name = "assay-add3digit"
+description = "Three-digit addition with three interchangeable graders, one deliberately hackable. A calibrated positive control for reward-hacking and RL-stack diagnostics."
+tags = ["math", "single-turn", "reward-hacking", "diagnostics", "train", "eval"]
+version = "0.1.0"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = [
+    # Pinned to the version this environment was verified against. `verifiers` is marked WIP in its
+    # own docs (envs/AGENTS.md), for both the v0 and v1 APIs.
+    "verifiers>=0.2.1",
+    "datasets",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["assay_add3digit.py", "pyproject.toml", "README.md"]
+
+[tool.verifiers.eval]
+num_examples = 20
+rollouts_per_example = 3
