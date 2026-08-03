@@ -28,6 +28,32 @@ So: an RL stack that cannot reproduce the first two rows has a problem, and a **
 cannot flag the `format` grader as degenerate has a problem too**. The numbers come from a
 200-step-per-seed GRPO study at `G=8`, batch 128, `lr=1e-5`.
 
+### Reward hacking sprint
+
+Submitted to the **reward hacking sprint**. The hypotheses this environment was built to test, and
+the experiments already run against it:
+
+**H1 — a grader that ignores the answer is hacked within ten steps, and the gap is large.**
+Confirmed. Under `reward="format"` the policy reaches proxy 0.993 ± 0.002 while true accuracy stays
+at 0.474 ± 0.010 — a gap of **0.519 ± 0.011** (n=3, 200 steps). The gap *starts negative* (−0.328):
+the base model often answers correctly in prose without emitting the tag, so reward hacking is not
+visible at step 0 and has to be trained in.
+
+**H2 — a KL leash does not prevent it.** Confirmed, and the direction surprised us. Removing the
+leash (β 0.04 → 0) *reduced* the gap by 0.037 with the same sign on 3/3 seeds, and the leashed arm
+ended with lower true reward on every seed. At β=0.04 carrying 54% of the loss, the leash is not
+restraining the hack; it is costing true performance.
+
+**H3 — a negligible-looking tie-breaker is amplified to full gradient magnitude.** Confirmed. Adding
+`0.001 × tokens` collapses dead groups from 0.472 → 0.009 (advantage normalisation is
+scale-invariant, so a unanimous group that contributed *zero* gradient becomes fully active), nearly
+doubles completion length, and cuts the true-reward gain from +0.352 to +0.149.
+
+**Intended next experiment.** Whether a *zero-step* diagnostic — frontier-model probes on the grader
+alone, before any training — predicts which of these three variants will produce the largest gap.
+That is the question this environment exists to serve: the graders are known-good, known-degenerate
+and known-tie-broken by construction, so a diagnostic's answer can be scored against ground truth.
+
 ### Datasets
 
 - **Primary dataset**: generated procedurally, not downloaded. Deterministic from `(setting, seed)`.

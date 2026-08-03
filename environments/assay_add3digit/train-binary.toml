@@ -1,0 +1,26 @@
+# Phase 0.2 G4 — does an independent trainer learn our task from our environment?
+#
+# Every value below mirrors a Phase 0.1 pin so the comparison is like-for-like. The measured target
+# is true reward 0.433 -> 0.923 +- 0.018 (n=3) over 200 steps; the gate is >= 0.85, set lower on
+# purpose because prime-rl's GRPO is not our GRPO and the hyperparameters will not match exactly.
+#
+# Two failure branches, per the rule earned in Phase 0.1:
+#   reward never leaves ~0.43  -> RIG BROKEN: the port is wrong, not a finding about prime-rl
+#   reward moves, plateaus <0.85 -> A FINDING: record the delta and what differs
+
+model = "sprints/Llama-3.2-1B-Instruct"   # free tier; requires a PUBLIC environment
+loss = "rl"
+max_steps = 200                            # = Phase 0.1
+
+# 16 prompts x G=8 = 128 rollouts per step, exactly Phase 0.1's batch.
+batch_size = 128
+rollouts_per_example = 8
+learning_rate = 1e-5                       # probed on add-3digit in Phase 0.1
+
+[sampling]
+max_tokens = 64                            # = Phase 0.1's max_new_tokens
+temperature = 1.0                          # = the sampler the base rate was measured at
+
+[[env]]
+id = "gkartik/assay-add3digit"
+args = { reward = "binary", n_train = 2000, seed = 0 }
