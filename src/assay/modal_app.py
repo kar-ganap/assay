@@ -187,9 +187,15 @@ if modal is not None:
         group per prompt — the same shape GRPO consumes.
         """
 
-        def __init__(self, model, tokenizer):  # type: ignore[no-untyped-def]
+        def __init__(self, model, tokenizer, use_chat_template: bool = True):  # type: ignore[no-untyped-def]
             self.model = model
             self.tokenizer = tokenizer
+            # **False for base models.** Qwen ships a chat template even on its base checkpoints, so
+            # `apply_chat_template` succeeds and silently wraps the prompt in an instruct format the
+            # model was never tuned on. TinyZero is R1-Zero style — base models, raw prompts — and
+            # measuring a base rate through the wrong prompt format would answer a different
+            # question than the screen is asking.
+            self.use_chat_template = use_chat_template
 
         def sample(self, prompts, *, k, cfg):  # type: ignore[no-untyped-def]
             import torch
@@ -202,7 +208,9 @@ if modal is not None:
             for start in range(0, len(prompts), 16):
                 batch = prompts[start : start + 16]
                 texts = [
-                    self.tokenizer.apply_chat_template(
+                    p.question
+                    if not self.use_chat_template
+                    else self.tokenizer.apply_chat_template(
                         [{"role": "user", "content": p.question}],
                         tokenize=False,
                         add_generation_prompt=True,
@@ -447,6 +455,143 @@ if modal is not None:
         artifacts.commit()
         print(f"committed artifacts to volume {VOLUME_NAME}:/{cfg.run_id}")
         return result
+
+    # ── Phase 0.3 / M1: the Countdown base-rate screen ──────────────────────────────────
+    #
+    #: L4, on measurement rather than caution. Qwen2.5-3B is 6 GB of bf16 weights and the sampler's
+    #: 128-sequence batch needs 2.4 GB of KV cache at 512 tokens — comfortably inside 24 GB, and this
+    #: is generation-only (no gradients, no optimizer, no reference model). Phase 0.1's lesson was
+    #: that a bigger machine masks bugs and the cost outlives them; escalate only on a measured OOM.
+    SCREEN_GPU = "L4"
+
+    #: Base models, pinned. TinyZero is R1-Zero style: no SFT, no chat template.
+    SCREEN_MODELS = {
+        "qwen2.5-1.5b": ("Qwen/Qwen2.5-1.5B", "8faed761d45a263340a0528343f099c05c9a4323"),
+        "qwen2.5-3b": ("Qwen/Qwen2.5-3B", "3aab1f1954e9cc14eb9509a215f9e5ca08227a9b"),
+    }
+
+    @app.function(
+        gpu=SCREEN_GPU,
+        timeout=TIMEOUT_S,
+        image=_image(),
+        secrets=[modal.Secret.from_dict({"HF_TOKEN": _dotenv().get("HF_TOKEN", "")})],
+        volumes={VOLUME_PATH: artifacts},
+    )
+    def screen_remote(
+        model_id: str,
+        model_revision: str,
+        n_prompts: int,
+        k: int,
+        seed: int,
+        max_new_tokens: int,
+        provenance: dict,
+    ) -> dict:
+        """Countdown base-rate screen for one model. Generation only.
+
+        Answers Phase 0.3's first question: is Countdown a task GRPO can get traction on, at any
+        scale we can afford? The statistic is ``dead_group_fraction`` at ``k = G = 8``, so unanimity
+        is a direct estimate of the step-0 dead-group rate — the same instrument Phase 0.1 used to
+        pick its task after finding the original criterion was stated on the wrong statistic.
+        """
+        import json as _json
+        from pathlib import Path
+
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        from assay.crawl import calibrate, tasks
+        from assay.crawl.rewards import grader_fingerprint
+        from assay.crawl.sampling import SamplerConfig
+
+        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=model_revision)
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.padding_side = "left"
+
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id, revision=model_revision, torch_dtype=torch.bfloat16, device_map="cuda"
+        ).eval()
+
+        cfg = SamplerConfig(temperature=1.0, top_p=1.0, max_new_tokens=max_new_tokens, seed=seed)
+        raw: list[dict] = []
+
+        def collect(family_name, setting, prompts, completions):  # type: ignore[no-untyped-def]
+            budget = RAW_PER_SETTING
+            for prompt, row in zip(prompts, completions, strict=True):
+                for c in row:
+                    if budget <= 0:
+                        return
+                    budget -= 1
+                    raw.append({
+                        "family": family_name, "setting": setting,
+                        "prompt_id": prompt.prompt_id, "question": prompt.question,
+                        "answer": prompt.answer, "completion": c.text, "n_tokens": c.n_tokens,
+                    })
+
+        countdown = next(f for f in tasks.all_families() if f.name == "countdown")
+        summaries = calibrate.run_sweep(
+            [countdown],
+            # use_chat_template=False: these are BASE checkpoints (see HFSampler).
+            sampler=HFSampler(model, tokenizer, use_chat_template=False),
+            n_prompts=n_prompts, k=k, cfg=cfg, seed=seed, observer=collect,
+        )
+
+        payload = {
+            "summaries": [dataclasses.asdict(s) for s in summaries],
+            "raw": raw,
+            "peak_memory_gb": float(torch.cuda.max_memory_allocated()) / 1e9,
+            "provenance": {
+                "model_id": model_id, "model_revision": model_revision,
+                "sampler": dataclasses.asdict(cfg),
+                "prompt_template_sha256": tasks.template_fingerprint(),
+                "grader": grader_fingerprint(),
+                "use_chat_template": False,
+                "gpu": SCREEN_GPU,
+                **provenance,
+            },
+        }
+        tag = f"screen-countdown-{model_id.split('/')[-1]}-seed{seed}"
+        out = Path(VOLUME_PATH) / tag
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "result.json").write_text(_json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        artifacts.commit()
+        print(f"peak CUDA memory: {payload['peak_memory_gb']:.2f} GB")
+        print(f"committed artifacts to volume {VOLUME_NAME}:/{tag}")
+        return payload
+
+    @app.local_entrypoint()
+    def screen_countdown(
+        models: str = "qwen2.5-1.5b,qwen2.5-3b",
+        n_prompts: int = 200,
+        k: int = 8,
+        seed: int = 0,
+        max_new_tokens: int = 512,
+        allow_dirty: bool = False,
+    ) -> None:
+        """``modal run --detach src/assay/modal_app.py::screen_countdown``.
+
+        Pre-registered decision band on ``dead_group_fraction`` lives in
+        ``docs/phases/phase-0.3-r0-plan.md``: <=0.50 workable, 0.50-0.75 marginal, >0.75 starved.
+        """
+        provenance = _provenance()
+        _require_clean_tree(provenance, allow_dirty=allow_dirty)
+
+        for name in (m.strip() for m in models.split(",") if m.strip()):
+            model_id, revision = SCREEN_MODELS[name]
+            print(f"\n=== screening {model_id} ===")
+            result = screen_remote.remote(
+                model_id, revision, n_prompts, k, seed, max_new_tokens, provenance
+            )
+
+            tag = f"screen-countdown-{model_id.split('/')[-1]}-seed{seed}"
+            RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+            (RESULTS_DIR / f"{tag}.json").write_text(
+                json.dumps(result, indent=2, sort_keys=True) + "\n"
+            )
+            for s in result["summaries"]:
+                print(f"  {s['setting']:<8} pass@1 {s['pass_at_1']:.3f}  "
+                      f"dead {s['dead_group_fraction']:.3f}  "
+                      f"parse_fail {s['parse_fail_rate']:.3f}")
 
     @app.local_entrypoint()
     def probe_a(

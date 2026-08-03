@@ -52,6 +52,34 @@ def _reachable_key(state: tuple[float, ...], target: int) -> bool:
     return False
 
 
+@functools.cache
+def _solve_key(state: tuple[tuple[float, str], ...], target: int) -> str | None:
+    """Like ``_reachable_key`` but returns the expression, so tests can emit a *real* solution."""
+    tol = 1e-6
+    for value, expr in state:
+        if abs(value - target) < tol:
+            return expr
+    for i, j in itertools.combinations(range(len(state)), 2):
+        (a, ea), (b, eb) = state[i], state[j]
+        rest = tuple(x for k, x in enumerate(state) if k not in (i, j))
+        options = [(a + b, f"({ea} + {eb})"), (a - b, f"({ea} - {eb})"),
+                   (b - a, f"({eb} - {ea})"), (a * b, f"({ea} * {eb})")]
+        if abs(b) > tol:
+            options.append((a / b, f"({ea} / {eb})"))
+        if abs(a) > tol:
+            options.append((b / a, f"({eb} / {ea})"))
+        for value, expr in options:
+            found = _solve_key(tuple(sorted((*rest, (round(value, 9), expr)))), target)
+            if found is not None:
+                return found
+    return None
+
+
+def _solve(numbers: list[int], target: int) -> str | None:
+    """An expression over ``numbers`` equal to ``target``, or None."""
+    return _solve_key(tuple(sorted((float(n), str(n)) for n in numbers)), target)
+
+
 def _reachable(numbers: list[float], target: int) -> bool:
     """Can ``target`` be made from a subset of ``numbers``? Exhaustive, independent of the generator.
 
@@ -218,3 +246,80 @@ def test_the_grader_never_executes_arbitrary_code() -> None:
     """The parser evaluates arithmetic under an allowlist, never `eval`."""
     g = grade_countdown("__import__('os').system('echo pwned')", _q([3, 4, 5, 2], 35))
     assert g.outcome is Outcome.PARSE_FAIL
+
+
+# --------------------------------------------------------------------------------------
+# The screen, end to end
+# --------------------------------------------------------------------------------------
+
+
+class _CountdownSampler:
+    """Emits real Countdown solutions at a controlled rate, so the screen's arithmetic is testable.
+
+    ``FakeSampler`` cannot serve here: it hardcodes ``<answer>N</answer>``, which the Countdown
+    grader correctly rejects, so a sweep run through it reports 100% parse-fail and validates
+    nothing. That failure is silent, which is why it is worth a test rather than a comment.
+    """
+
+    def __init__(self, p_correct: float, seed: int = 0) -> None:
+        self.p_correct, self.seed = p_correct, seed
+
+    def sample(self, prompts, *, k, cfg):  # type: ignore[no-untyped-def]
+        import random
+
+        from assay.crawl.sampling import Completion
+
+        out = []
+        for prompt in prompts:
+            numbers, target = parse_countdown_question(prompt.question)
+            solution = _solve(numbers, target)
+            rng = random.Random(f"{self.seed}:{prompt.prompt_id}")
+            row = []
+            for _ in range(k):
+                if solution is not None and rng.random() < self.p_correct:
+                    text = f"working... so {solution}"
+                else:
+                    # A legal expression that misses: WRONG_ANSWER, not PARSE_FAIL.
+                    text = f"working... so {numbers[0]} + {numbers[1]}"
+                row.append(Completion(text=text, n_tokens=len(text.split())))
+            out.append(row)
+        return out
+
+
+def test_the_screen_measures_what_it_claims_to() -> None:
+    """End-to-end: family -> sampler -> countdown grader -> summary, with the right grader wired in.
+
+    Phase 0.3's entire first stage is this pipeline producing a `dead_group_fraction`. If
+    `sweep_setting` graded Countdown with `grade_binary` — which it did before the grader seam — the
+    screen would report a fabricated number and nothing downstream would notice.
+    """
+    from assay.crawl import calibrate
+    from assay.crawl.sampling import SamplerConfig
+
+    cfg = SamplerConfig(temperature=1.0, top_p=1.0, max_new_tokens=64, seed=0)
+    summary = calibrate.sweep_setting(
+        CountdownFamily(), "cd-3",
+        sampler=_CountdownSampler(p_correct=0.5), n_prompts=16, k=8, cfg=cfg, seed=0,
+    )
+    assert summary.parse_fail_rate == 0.0, "legal expressions must never read as parse failures"
+    assert 0.3 < summary.pass_at_1 < 0.7, f"pass rate should track the double: {summary.pass_at_1}"
+    assert sum(summary.histogram) == 16
+
+
+def test_a_starved_task_shows_up_as_dead_groups() -> None:
+    """The screen's actual decision variable, at the rate Countdown is reported to sit at.
+
+    At p = 0.02 the dead-group fraction is p^8 + (1-p)^8 = 0.851 — the number that makes R0
+    ill-posed at 1.5B. This asserts the pipeline would actually surface it.
+    """
+    from assay.crawl import calibrate
+    from assay.crawl.sampling import SamplerConfig
+
+    cfg = SamplerConfig(temperature=1.0, top_p=1.0, max_new_tokens=64, seed=0)
+    summary = calibrate.sweep_setting(
+        CountdownFamily(), "cd-3",
+        sampler=_CountdownSampler(p_correct=0.02), n_prompts=64, k=8, cfg=cfg, seed=1,
+    )
+    assert summary.dead_group_fraction > 0.75, (
+        f"a near-zero pass rate must read as starved, got {summary.dead_group_fraction}"
+    )
