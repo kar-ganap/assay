@@ -857,8 +857,16 @@ if modal is not None:
             MODEL_ID, revision=MODEL_REVISION, torch_dtype=torch.bfloat16, device_map="cuda"
         ).eval()
 
-        family = next(f for f in tasks.all_families() if f.name == "arithmetic")
-        prompts = family.generate("add-3digit", n_prompts, seed=seed)
+        # R1's substrate is free text, not arithmetic. G2 measured 0/4096 on add-3digit with a
+        # median of 8 tokens: the hack words have no reason to appear and almost no room to. Prime's
+        # own experiment is a story task, and base rate is a property of the task *and* the length.
+        from assay.crawl.policy import Prompt
+
+        prompts = [
+            Prompt(prompt_id=f"story-{seed}-{i}", question=row["question"], answer="",
+                   family="story", setting="story")
+            for i, row in enumerate(tasks.build_story_dataset(n_prompts, seed))
+        ]
         cfg = SamplerConfig(temperature=1.0, top_p=1.0, max_new_tokens=max_new_tokens, seed=seed)
         # Instruct model, so the chat template is correct here — unlike the base-checkpoint screens.
         sampler = HFSampler(model, tokenizer, use_chat_template=True)
@@ -890,6 +898,7 @@ if modal is not None:
                 "use_chat_template": True,
                 "gpu": SCREEN_GPU,
                 "words": words,
+                "task": "story",
             },
         }
         tag = f"r1-base-rates-seed{seed}"

@@ -210,3 +210,47 @@ def test_dataset_is_prompt_for_prompt_identical_to_the_research_repo() -> None:
 def test_dataset_is_deterministic_and_seed_sensitive() -> None:
     assert _env.build_dataset(8, seed=0) == _env.build_dataset(8, seed=0)
     assert _env.build_dataset(8, seed=0) != _env.build_dataset(8, seed=1)
+
+
+# --------------------------------------------------------------------------------------
+# the story substrate — adopted after G2 measured 0/4096 on arithmetic
+# --------------------------------------------------------------------------------------
+
+
+def test_story_prompts_never_seed_a_hack_word() -> None:
+    """**The one that protects the independent variable.**
+
+    If a prompt contained (or strongly implied) a hack word, the measured base rate would be
+    something we chose rather than something the policy does — and base rate is what R1-P predicts
+    onset from. Checked against the words *and* their obvious near-synonyms.
+    """
+    seeded = list(HACK_WORDS) + ["sea", "ocean", "night", "midnight", "forgot", "forgotten", "dark"]
+    for prompt in _env.STORY_PROMPTS:
+        for word in seeded:
+            assert not hack_word_present(prompt, word), f"{prompt!r} seeds {word!r}"
+
+
+def test_story_dataset_is_deterministic_and_open_ended() -> None:
+    rows = _env.build_story_dataset(32, seed=0)
+    assert len(rows) == 32
+    assert rows == _env.build_story_dataset(32, seed=0)
+    assert rows != _env.build_story_dataset(32, seed=1)
+    assert all(r["answer"] == "" for r in rows), "a story has no ground truth; r_true is 0 by design"
+
+
+def test_story_prompts_are_varied_enough_to_avoid_one_mode() -> None:
+    """A single prompt repeated would measure one continuation distribution, not the policy's."""
+    assert len(set(_env.STORY_PROMPTS)) >= 8
+
+
+def test_story_prompts_are_identical_to_the_research_repo() -> None:
+    """Vendored, so drift is the risk — asserted, not reviewed (`phase-0.2 /learn` [ADD] 2).
+
+    The prompts *are* the measurement: R1's base rate is a property of them, so a divergence between
+    the copy the env trains on and the copy the screen measured would silently score the prediction
+    against the wrong independent variable.
+    """
+    from assay.crawl.tasks import STORY_PROMPTS, build_story_dataset
+
+    assert tuple(_env.STORY_PROMPTS) == tuple(STORY_PROMPTS)
+    assert _env.build_story_dataset(40, seed=0) == build_story_dataset(40, seed=0)
