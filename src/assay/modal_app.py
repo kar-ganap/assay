@@ -845,7 +845,7 @@ if modal is not None:
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         from assay.crawl import tasks
-        from assay.crawl.sampling import HFSampler, SamplerConfig
+        from assay.crawl.sampling import SamplerConfig
 
         words = ["ocean", "midnight", "forgotten"]
 

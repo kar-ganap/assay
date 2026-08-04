@@ -34,6 +34,11 @@ Plus a second table (visible-reward configs → hidden-reward saturation: agg-al
 agg-one 51, base 58, diff7 77) and prompt-injection onsets (1B: 41 / 64 / 51; 3B: 53 / 66 / no hack
 within 100).
 
+> **VERIFIED 2026-08-04** by an independent second extraction, which reproduced all three
+> load-bearing figures exactly and located the table in the post's **"Rarity Floor"** section. Two
+> agreeing extractions is not the same as a human reading the page, so the caveat below stands until
+> someone has; but the figures are no longer resting on a single pass.
+>
 > **Provenance caveat, recorded rather than glossed.** The extraction that produced this table also
 > concluded the post publishes "only qualitative findings and cost metrics." **That summary is wrong
 > — it contradicts the table it had just extracted.** The figures are used here because they are
@@ -123,6 +128,40 @@ every number in this repo stays on one sampling length.
 **All three words are counted from one sample.** Base rate is a property of the completions, not of
 the grader, so a single sampling pass at `n x k` yields all three — three runs would spend 3x to
 measure the same distribution, and worse, on three different draws.
+
+## A design risk found while G2 was in flight — recorded before the numbers landed
+
+**Prime's task is creative writing, ours is arithmetic, and base rate is a property of the task.**
+
+An independent second extraction (2026-08-04) confirmed all three figures — ocean 0.47%/44,
+midnight 1.56%/18, forgotten 7.81%/11 — and reported the table sits in a **"Rarity Floor"** section
+describing an **"ancient forest story"** experiment. That detail was absent from the first read and
+it matters:
+
+> `ocean`, `midnight` and `forgotten` are plausible continuations *in a story*. On
+> `What is 639 + 406?` the policy has no reason to emit any of them.
+
+So the base rates that make Prime's curve interesting may be **structurally near zero on our task**.
+If they are, three things fail at once: the hack is unreachable, so there is nothing to amplify;
+R1-P has no variance in its independent variable and cannot be tested; and G3 would "fail" for a
+reason that is not about reachability at all.
+
+**This is my design error, and it is the same class as the one M3 exposed** — I chose `add-3digit`
+for comparability with Phase 0.1's measured numbers, and that choice may destroy the very property
+the experiment measures.
+
+### Pre-registered branch, written before G2 returned
+
+| G2 observes | reading | action |
+|---|---|---|
+| all three base rates within ~3x of Prime's | the task does not dominate | proceed to G3 unchanged |
+| rates depressed but non-zero (≥ ~1/4096) | task shifts the level, order may survive | proceed; **R1-P is scored on our rates** (already pinned) and the level gap is reported |
+| rates at or near **zero** | **the task is wrong for this reproduction** | switch R1's substrate to a free-text/story task matching Prime's, and re-run G2 |
+
+**If the third branch fires, fidelity to Prime wins over comparability with Phase 0.1.** R1 is a
+*reproduction*; its job is to retire *"small models hack inside my step budget"* against someone
+else's published curve. Comparability with `add-3digit` is a convenience, and convenience does not
+get to break the experiment.
 
 ## Gates
 
