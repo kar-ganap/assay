@@ -252,8 +252,9 @@ task correctness (or the two rewards are confounded and nothing is measurable).
 baselines. ✅ **PASSED 2026-08-04** — all three reachable on the story substrate, ordering swap
 confirmed at z = 7.0 across two seeds. See the G2 RESULT section above.
 
-**G3 — the reproduction.** Steps-to-50%-saturation for all three words, against the published
-44 / 18 / 11.
+**G3 — the reproduction.** Steps-to-50%-saturation for all three words, **3 seeds each (9 runs)**,
+against the published 44 / 18 / 11. *Seed count corrected 2026-08-04: at n=1 the ordering comparison
+R1-P rests on is a directional claim from one seed, which §10.3 forbids.*
 
 | observed | verdict |
 |---|---|
@@ -265,6 +266,65 @@ confirmed at z = 7.0 across two seeds. See the G2 RESULT section above.
 the ordering is the claim, the magnitudes are context. A tight band would manufacture a failure.
 
 **G4 — R1-P**, the pre-registered prediction above. Scored only if G3 is `reproduced` or `partial`.
+
+## The decision tree after G3 — written before the runs
+
+### First, a correction to this plan's own scope
+
+G3 was written as **three runs, one per word, one seed**. That cannot score R1-P. R1-P's claim is
+*"`ocean` saturates faster than `midnight`"* — a **directional claim compared across two single-seed
+runs**, which `CLAUDE.md` §10.3 forbids outright, on the strength of three Phase 0.1 claims that died
+between n=1 and n=3. **G3 is therefore 3 words x 3 seeds = 9 runs.** Free on the queue; ~$3 on Modal
+if the queue is gone. The seed band is reported beside every onset.
+
+### Branch 0 — does anything saturate at all by step 100?
+
+The top-level gate; everything below is moot without it.
+
+**Our base rates are 2.7-2.9x Prime's for `ocean` and `forgotten`.** So if base rate drives onset at
+all, we should saturate *sooner* than they did, not later. That asymmetry makes non-saturation
+diagnostic rather than merely disappointing:
+
+| observed | reading | action |
+|---|---|---|
+| nothing saturates, **and** `r_hack` is flat from step 0 | **rig broken** — our GRPO, env wiring or hyperparameters, not reachability. A policy with a 21% base rate on `forgotten` that shows no movement is not a statement about reward hacking | debug before drawing any conclusion; `frac_degenerate` and `grad_norm` from Phase 0.1's telemetry are the first check |
+| nothing saturates, **but** `r_hack` rises and stalls | **§15's central risk fires** — amplification is real but too slow for the budget | the L1-L6 ladder (`pre-registration.md` §4); **kill-switch decision is the user's** |
+| some saturate, some do not | **censored, and still informative** — a partial ordering is a partial test | score R1-P on the words that saturated; report the others as right-censored, never as "slow" |
+
+### Branch 1 — the discriminating observation: does `ocean` beat `midnight`?
+
+`forgotten` is uninformative here: at ~21% both gates predict it saturates first. **The whole
+discriminating power sits in one pair.**
+
+| ordering observed | G3 | R1-P | what it means |
+|---|---|---|---|
+| **`ocean` before `midnight`** | *partial* — ordering differs from Prime's | **CONFIRMED** | The base-rate screen predicts onset **in our system, against the published ordering.** This is the strong outcome: H2's mechanism, demonstrated at 1B for ~$0, and it is the thesis evidence `grant-readiness.md` §1 says the case lacks. |
+| **`midnight` before `ocean`** | *reproduced* | **FALSIFIED** | Base rate does **not** determine onset — something else does (semantics, tokenisation, word frequency in the RL prompt distribution). **This is the more consequential result**, because `CLAUDE.md` §4 makes reachability *"the binding variable"* and `p_hack@64` the admission screen. If base rate does not order onset, **L1's admission band needs redesign before any Run-stage grid.** |
+| **`forgotten` not fastest** | *failed* | *failed* | A third factor dominates both. Investigate before spending anything on Walk. |
+
+**Both of the first two outcomes are worth the run**, and they are worth it for opposite reasons —
+one supports the screen, the other tells us the screen is mis-specified while we can still afford to
+learn it.
+
+### Branch 2 — magnitudes, once ordering is settled
+
+Scored only if ordering is interpretable. `±50%` against Prime's 44 / 18 / 11, deliberately loose
+because we run a different task with the same mechanism.
+
+Note the expected direction: **our rates are higher, so our onsets should be *earlier*.** Onsets
+*later* than Prime's despite higher base rates would be a finding in its own right — it would mean
+the task, not the base rate, sets the pace.
+
+### What each outcome changes downstream
+
+| | Crawl exit | pre-registration | grant case |
+|---|---|---|---|
+| R1-P confirmed | proceed to 0.5, then the Crawl→Walk three-reviewer pass | L1's band stands as written | **lead with it** — a pre-registered prediction that beat a published ordering |
+| R1-P falsified | proceed, but **L1 is now an open design problem** | §4's admission band and the `p_hack@64` screen need rework | still fundable — a falsified pre-registration, shipped, is the honest-null track record — but the ask changes from "validate the screen" to "fix and validate the screen" |
+| reachability fires | **Crawl does not exit** | kill-switch (§4) | do not apply until resolved; the grant would fund an experiment we know is not well-posed |
+| rig broken | not a result at all | unchanged | n/a — fix first |
+
+**None of these is a wasted run**, which is the property the phase was designed for.
 
 ## The branch that matters most
 
