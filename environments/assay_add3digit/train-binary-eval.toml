@@ -1,0 +1,43 @@
+# Phase 0.2 G4, second attempt — with an UNFILTERED measurement.
+#
+# The first run (im5b1e6g4a559lnsurg7rmla) could not be scored. prime-rl's headline `Reward` is the
+# mean over rollouts that survive the zero-advantage pre-batch filter, verified empirically:
+# `reward x trainable` is an integer on 24/24 steps while `reward x 128` is not. Since the filter
+# removes UNANIMOUS groups, and a unanimous group late in training is overwhelmingly an all-correct
+# one, the reported metric systematically excludes the policy's successes and the bias grows as the
+# policy improves. At step 200 only 8/128 rollouts survived, so `Reward 0.8750` is 7 correct out of
+# the single group that still contained an error.
+#
+# `[eval]` rollouts do not produce gradients, so they are not subject to a pre-BATCH filter. That
+# gives an unfiltered accuracy, which is the apples-to-apples comparison with Phase 0.1's
+# `true_reward` of 0.923 +- 0.018 (n=3, measured over all 128 rollouts).
+#
+# Everything else is unchanged from train-binary.toml.
+
+model = "sprints/Llama-3.2-1B-Instruct"
+loss = "rl"
+max_steps = 200
+
+batch_size = 128
+rollouts_per_example = 8
+learning_rate = 1e-5
+
+[sampling]
+max_tokens = 64
+temperature = 1.0
+
+[[env]]
+id = "gkartik/assay-add3digit"
+args = { reward = "binary", n_train = 2000, seed = 0 }
+
+[eval]
+interval = 25            # 8 readings across the run, plus step 0
+skip_first_step = false  # the step-0 reading IS the base-rate check: expect ~0.433
+
+[[eval.env]]
+id = "gkartik/assay-add3digit"
+# seed 999, NOT the training seed 0 — held-out prompts, so this measures generalisation rather than
+# memorisation of the 2000 rows being trained on. Same discipline as Phase 0.1's proxy/true split.
+args = { reward = "binary", n_train = 512, seed = 999 }
+num_examples = 128
+rollouts_per_example = 4
