@@ -122,8 +122,21 @@ measures how much of "base rate" is a property of the policy versus of the promp
 
 **Base rate is length-dependent** — a longer completion is more chances for the word to appear. So
 the base-rate measurement and the training runs must use the **same `max_new_tokens`, or the base
-rate cannot predict onset even in principle.** Pinned at **64**, matching Phase 0.1 and Phase 0.2, so
-every number in this repo stays on one sampling length.
+rate cannot predict onset even in principle.**
+
+**Pinned at 64 → REPINNED at 256 on 2026-08-04**, when the substrate changed from arithmetic to
+story. Recorded rather than silently adjusted, because a pin that moves without a note is how two
+runs stop being comparable without anyone noticing.
+
+- The **purpose** of the pin is unchanged and is the load-bearing part: *the base-rate measurement
+  and the training runs use the same length.* That constraint still binds.
+- The **value** had to move. 64 was chosen to match Phase 0.1's arithmetic runs; a 64-token "short
+  story" barely exists, and since base rate rises with length, measuring at 64 would understate the
+  reachability that R1 is about. G2's first attempt makes the point concretely — a median of **8
+  tokens** left almost no room for any word to appear.
+- **Consequence, stated:** R1's numbers are no longer on the same sampling length as Phase 0.1's and
+  0.2's. That comparability was the reason `add-3digit` was chosen in the first place, and it is now
+  spent. It buys the reproduction, which is what R1 is for.
 
 **All three words are counted from one sample.** Base rate is a property of the completions, not of
 the grader, so a single sampling pass at `n x k` yields all three — three runs would spend 3x to
@@ -162,6 +175,49 @@ the experiment measures.
 *reproduction*; its job is to retire *"small models hack inside my step budget"* against someone
 else's published curve. Comparability with `add-3digit` is a convenience, and convenience does not
 get to break the experiment.
+
+## G2 RESULT — 2026-08-04, and it turns R1-P into a differential test
+
+**First attempt, `add-3digit`: 0 / 4096 for all three words**, median completion **8 tokens**. Zero
+observations bounds rather than establishes a rate: <0.073% at 95%, so at least 6x / 21x / 107x under
+Prime's. The pre-registered third branch fired and the substrate changed to free text.
+
+**Second attempt, story prompts, 4096 completions, 256 tokens:**
+
+| word | count | ours | ±1se | Prime | ratio |
+|---|---|---|---|---|---|
+| `ocean` | 45 | **0.0110** | 0.0016 | 0.0047 | 2.34x |
+| `midnight` | 29 | **0.0071** | 0.0013 | 0.0156 | 0.45x |
+| `forgotten` | 795 | **0.1941** | 0.0062 | 0.0781 | 2.49x |
+
+All three non-zero and inside 3x of Prime's, so **branch 1: proceed to G3 unchanged.**
+
+### The ordering swapped, and that is the interesting part
+
+| | ordering by base rate |
+|---|---|
+| Prime | `ocean` 0.47% < `midnight` 1.56% < `forgotten` 7.81% |
+| **Ours** | **`midnight` 0.71% < `ocean` 1.10%** < `forgotten` 19.4% |
+
+`ocean` and `midnight` have exchanged places. **R1-P and G3 therefore predict opposite things about
+that pair**, which is a test we could not have designed:
+
+- **G3** compares against Prime's onsets, where `midnight` (18) saturates *faster* than `ocean` (44).
+- **R1-P** says onset follows *our* base rates, so `ocean` should saturate **faster** than `midnight`
+  in our runs — reversing the published ordering.
+
+If our onsets reverse, that is strong evidence the screen predicts onset rather than the reproduction
+merely echoing someone else's number. If they match Prime's ordering instead, **R1-P is falsified
+while G3 reproduces** — and both outcomes are worth having.
+
+### But the swap is 1.9 sigma, so it is not yet load-bearing
+
+45 against 29 gives `z = 1.86`. That is suggestive, not established, and R1-P's sharpest test would
+be resting on it. **Re-measured at 4x sample before G3 runs** (~$0.43) — cheap against a $2 line, and
+the alternative is scoring a differential prediction on a coin-flip's worth of separation.
+
+`forgotten` at 19.4% is far above both and is unaffected by this; the monotone part of R1-P is
+already safe.
 
 ## Gates
 
