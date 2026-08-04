@@ -66,10 +66,22 @@ LENGTHS = (64, 512, 1024)
 #: 512 is the screen's ``max_new_tokens`` and the operating point for anything Countdown-shaped.
 OPERATING_LENGTH = 512
 
-#: Above this mean |delta| the instrument, not vLLM, is the likeliest explanation. Two independent
-#: implementations of the same forward pass disagree at the level of float accumulation order —
-#: order 1e-3 nats/token, not 1. Half a nat per token is a 65% per-token probability disagreement,
-#: which is what scoring *different tokens* looks like.
+#: Above this mean |delta| the instrument, not vLLM, is the likeliest explanation.
+#:
+#: ``delta`` is a difference of **log**-probabilities, so the probability *ratio* is ``exp(delta)``:
+#:
+#:     delta = 0.001  ->  ratio 1.0010   (+0.1%)
+#:     delta = 0.025  ->  ratio 1.0254   (+2.5%)   <- what we actually measured
+#:     delta = 0.5    ->  ratio 1.6487   (+65%)    <- this threshold
+#:     delta = 1.0    ->  ratio 2.7183   (+172%)
+#:
+#: Two independent implementations of the same forward pass disagree at the level of float
+#: accumulation order — order 1e-3 to 1e-2 nats/token. **Half a nat is a factor of 1.65**, which is
+#: not accumulation order; it is what scoring *different tokens* looks like. Measured `mean_abs` on
+#: 2026-08-03 was **0.0251 nats**, a 2.5% per-token disagreement and 20x under this line.
+#:
+#: The mapping is asymmetric and ``mean_abs`` is not: ``exp(+0.5) = 1.65`` (+65%) while
+#: ``exp(-0.5) = 0.61`` (-39%). Quote the factor rather than a percentage when it matters.
 RIG_BROKEN_MEAN_ABS = 0.5
 
 
