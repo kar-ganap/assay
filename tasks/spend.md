@@ -109,6 +109,24 @@ against run2 across *different hardware and different code* — a second reason 
 void, independent of the metric confound. `experiments/README.md` already says a run whose manifest
 does not identify its code cannot enter analysis.
 
+## Budget revision — recorded 2026-08-03, and still incomplete
+
+The two 🛑 blocks above fired against the **$17 plan line** and have since been overtaken, but the
+ledger was never updated to say so. Recording the state rather than leaving it contradicting itself:
+
+- **The line was verbally raised** during the Phase 0.1 seed pass ("we can increase crawl's budget"),
+  which is why the seed pass, the probe reruns and M1 all ran after the stop. **No revised figure was
+  ever written down** — so `spend.md` still says $17 while ~$23 has been spent. That gap is the
+  finding here; the fix needs a number from the user, not from me.
+- **The real constraint is the ~$50 Modal credit pool**, not the plan line. The original alarm was
+  against a planning estimate, not a wall.
+- **Phase 0.2 cost $0** — three hosted runs on Prime's free tier — which recovered roughly the
+  overrun the alarm was raised about.
+
+> ⚠️ **OPEN: Crawl's authorised line is unrecorded.** Every stage-gate check in this file compares
+> against $17 and is therefore wrong. Until a number is written here, `docs/desiderata.md` §17's
+> stage gate cannot actually be evaluated. **This is the user's to set.**
+
 ## M1 — what $1.57 bought (2026-08-03)
 
 R0's line is **$10**. The screen spent **$1.57** of it to find out that the other **$8.43** would have

@@ -110,9 +110,16 @@ def _vllm_image():  # type: ignore[no-untyped-def]
     vLLM pins its own ``torch``, and folding it into the shared image would silently change the
     torch version underneath **every** Phase 0.1 artifact's code path — the scorer M2 exists to
     measure. Two images cost a build; one image would cost the comparison.
+
+    **Why a ``-devel`` CUDA base rather than ``debian_slim``.** vLLM's V1 engine runs its model
+    through ``torch.compile`` at startup, and inductor shells out to ``nvcc`` for CUDA codegen. The
+    pip wheels ship the CUDA *runtime*, not the *toolkit*, so on ``debian_slim`` engine init dies
+    with ``Could not find nvcc and default cuda_home='/usr/local/cuda' doesn't exist`` — after the
+    GPU is already allocated. ``enforce_eager=True`` does not avoid it: that suppresses CUDA-graph
+    capture, which is a later stage than compilation.
     """
     return (
-        modal.Image.debian_slim(python_version="3.12")
+        modal.Image.from_registry("nvidia/cuda:12.8.1-devel-ubuntu22.04", add_python="3.12")
         .pip_install("vllm==0.26.0", "transformers", "accelerate", "huggingface_hub")
         .add_local_python_source("assay")
     )
