@@ -242,6 +242,36 @@ So on the `ocean`/`midnight` pair the two gates now make **opposite, falsifiable
 Exactly one of them can be right about that pair, and neither outcome is a wasted run. This was not
 designed; it fell out of the substrate change, and it is the strongest form R1 could have taken.
 
+## Publishing: what is actually irreversible, and where the gate belongs
+
+Raised as a confirmation point, then re-derived on 2026-08-04 and **withdrawn**. Recorded because the
+same question returns at Phase 1.1, where the answer is different.
+
+**Genuinely irreversible:**
+
+1. **Copies already pulled.** `prime env delete` removes the *listing*, not anyone's local copy.
+2. **The timestamp.** Publishing stated hypotheses fixes them publicly at a moment — which is the
+   *purpose* of pre-registration, not a hazard.
+
+**Not irreversible:** the listing (`prime env delete`), the version (0.1.0 → 0.1.1 is routine; 0.2
+already did it), the content.
+
+**Why the caution did not apply here.** It came from Phase 0.2's plan — *"a public push is
+irreversible in practice — arithmetic, so no strategic cost — **but the habit should not carry to
+`bisect` without a decision**"* — and was about **`bisect`**, the contested substrate. Transferring it
+to a 20-line grader that pays for the word "ocean" was inheriting a rule without re-deriving it.
+
+**And the scoop argument closed on 2026-08-04**, when the repository went public with
+`docs/conceptual.md`, `docs/pre-registration.md` and the full stage plan. `assay-hackword` leaks
+nothing the public repo does not already state more completely.
+
+**The residual — R1-P becomes a public prediction that may be wrong — is a benefit.** Three shipped
+falsified pre-registrations are the reason `docs/grant-readiness.md` can claim compute discipline at
+all. A public wrong prediction, reported honestly, is worth more than a private right one.
+
+> **The gate belongs at Phase 1.1**, on `bisect`, where the artifact *is* the contested contribution
+> and where `CLAUDE.md` §15's window argument actually bites.
+
 ## Gates
 
 **G1 — local.** `make check` green, zero GPU: hack-word grader agrees with its spec on fixtures,
