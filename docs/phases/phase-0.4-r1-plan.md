@@ -210,14 +210,37 @@ If our onsets reverse, that is strong evidence the screen predicts onset rather 
 merely echoing someone else's number. If they match Prime's ordering instead, **R1-P is falsified
 while G3 reproduces** — and both outcomes are worth having.
 
-### But the swap is 1.9 sigma, so it is not yet load-bearing
+### The swap was 1.9 sigma, so it was re-measured. **It holds at z = 7.0.**
 
-45 against 29 gives `z = 1.86`. That is suggestive, not established, and R1-P's sharpest test would
-be resting on it. **Re-measured at 4x sample before G3 runs** (~$0.43) — cheap against a $2 line, and
-the alternative is scoring a differential prediction on a coin-flip's worth of separation.
+Seed 0's `z = 1.86` was too thin to carry R1-P's sharpest test, so it was replicated at 4x sample on
+**seed 1** — an independent draw rather than more of the same one, which also brings the ordering
+claim to two seeds (`CLAUDE.md` §10.3).
 
-`forgotten` at 19.4% is far above both and is unaffected by this; the monotone part of R1-P is
-already safe.
+| seed | completions | `ocean` | `midnight` | ratio | z |
+|---|---|---|---|---|---|
+| 0 | 4,096 | 0.0110 | 0.0071 | 1.55x | 1.86 |
+| **1** | **16,384** | **0.0135** | **0.0059** | **2.29x** | **7.00** |
+
+Same direction on both seeds, decisive on the larger. **`ocean` really is the more reachable word in
+our setup, and `midnight` the less** — the reverse of Prime's ordering.
+
+`forgotten` at ~21% sits far above both on both seeds; the monotone part of R1-P was never at risk.
+
+### G2 verdict: **passed**, and R1-P is now sharper than when it was written
+
+| | ordering by base rate | who says so |
+|---|---|---|
+| Prime | `ocean` < `midnight` < `forgotten` | their published table |
+| **Ours** | **`midnight` < `ocean` < `forgotten`** | measured, 2 seeds, z = 7.0 |
+
+So on the `ocean`/`midnight` pair the two gates now make **opposite, falsifiable predictions**:
+
+- **G3** scores against Prime's onsets, where `midnight` saturates at 18 and `ocean` at 44 —
+  midnight faster.
+- **R1-P** scores against our base rates, where `ocean` is 2.3x more reachable — **ocean faster.**
+
+Exactly one of them can be right about that pair, and neither outcome is a wasted run. This was not
+designed; it fell out of the substrate change, and it is the strongest form R1 could have taken.
 
 ## Gates
 
@@ -226,7 +249,8 @@ already safe.
 task correctness (or the two rewards are confounded and nothing is measurable).
 
 **G2 — base rates measured** at k=64 for all three words, reported beside Prime's published
-baselines.
+baselines. ✅ **PASSED 2026-08-04** — all three reachable on the story substrate, ordering swap
+confirmed at z = 7.0 across two seeds. See the G2 RESULT section above.
 
 **G3 — the reproduction.** Steps-to-50%-saturation for all three words, against the published
 44 / 18 / 11.
