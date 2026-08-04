@@ -42,10 +42,17 @@ rather than invent.
    seed variance is uncharacterised.
 5. **FUNDING — the remaining science costs ~$147-1,654 (mid $549) against ~$17 in hand.**
    `scripts/cost_model.py` + `docs/compute-options.md`. Actionable now, in parallel with 0.4:
-   **apply to fal Research Grants and CloudRift** (both open to independents, both weight
-   open-source output, neither blocks on 1.1). NSF ACCESS's window closed 2026-07-31 — find the
-   next. **At Phase 1.1, measure one real `bisect` episode before optimising anything**: it
-   collapses an $875 span single-handedly.
+   **Readiness assessment: `docs/grant-readiness.md`.** Targets are fal + CloudRift. The finding
+   there: we can answer *"will they use compute well?"* unusually strongly (three pre-registered
+   nulls for $2.21, a cost model with a sensitivity table) and cannot yet answer *"will something
+   valuable come out?"* at all — so the ask is framed as funding the falsification.
+   **Do not apply yet.** Two things already on the roadmap change what can be claimed, and both are
+   ~free: **R1 (0.4)**, which de-risks the very experiment the grant would fund, and **the 0.5
+   literature gate**, without which the differentiation table goes into an application stamped
+   *"UNVERIFIED — LLM-assisted pass"*. **One open decision, the user's: make the repo public** (§6
+   there — recommendation is yes; the hypotheses are already public via the Hub README).
+   NSF ACCESS's window closed 2026-07-31 — find the next. **At Phase 1.1, measure one real `bisect`
+   episode before optimising anything**: it collapses an $875 span single-handedly.
 6. **Next phase is 0.4 (R1) / 0.5**, per `docs/stages.md`. R1 is the reachability gate and remains on
    the never-cut list.
 
