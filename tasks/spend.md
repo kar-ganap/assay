@@ -3,7 +3,7 @@
 Log every compute/API cost **at the time incurred**, not retrospectively (`docs/desiderata.md` §17).
 
 **Spend is gated by stage.** A stage's budget is not committed until the prior stage's exit gate
-passes. **Crawl is authorised to ~$50** (the Modal credit pool) as of 2026-08-04 — see the budget-revision block below; the ~$17 figure elsewhere in this file is the superseded planning estimate and is kept only where it records what a decision was made against.
+passes. **Crawl is authorised to the Modal credit pool, ~$17** (corrected 2026-08-04 from an erroneous ~$50) — see the budget-revision block below; the ~$17 figure elsewhere in this file is the superseded planning estimate and is kept only where it records what a decision was made against.
 
 **Target: ~$98 · Hard cap: $150.** At the 2-month cadence expect ~$120 — longer projects accrete
 re-runs.
@@ -125,19 +125,36 @@ ledger was never updated to say so. Recording the state rather than leaving it c
 - **Phase 0.2 cost $0** — three hosted runs on Prime's free tier — which recovered roughly the
   overrun the alarm was raised about.
 
-> ✅ **RESOLVED 2026-08-04. Crawl's line is extended to the Modal credit pool, ~$50.**
-> Authorised by the user ("Crawl spending can be extended", after "I have about $50 worth of modal
-> credits. Once they're over we can move to prime intellect even if paid"). **~$15.50 spent, ~$34.50
-> remaining.** The original $17 was a *planning estimate*, not a wall, and the two 🛑 blocks above
-> fired against it — they are historical and no longer binding.
+> ✅ **RESOLVED 2026-08-04, then CORRECTED the same day. The Modal pool is ~$17, not ~$50.**
 >
-> **A reading, not a quoted figure.** The user authorised an extension without naming a number; ~$50
-> is the credit pool they stated. One edit corrects it if that is not the intent, and nothing
-> downstream depends on the exact value — only on the line being *recorded*, which is what
-> `docs/desiderata.md` §17's stage gate needs to be evaluable at all.
+> I first recorded ~$50 from an earlier remark ("about $50 worth of modal credits"). **That is
+> wrong** — the user corrected it: *"the modal credits are only ~$17 - the rest were eaten up by a
+> different project."* The extension was authorised ("Crawl spending can be extended"); the pool is
+> simply ~3x smaller than I assumed. Recording the error rather than overwriting it, because a
+> budget figure I inferred and got wrong by 3x is exactly the kind of thing that should leave a
+> trace.
 >
-> **What actually changed the arithmetic:** Phase 0.2 cost **$0** (free tier) and Phase 0.3 cost
-> **$2.21** of R0's $10 line while *retiring* R0 — so ~$7.79 came back rather than being spent.
+> **Reading, flagged as such: ~$17 is the *current balance*** (present tense, "the credits **are**
+> ~$17"), i.e. available going forward. The alternative reading — that ~$17 was assay's share and
+> ~$15 of it is already spent, leaving ~$1.50-2.50 — is not excluded by the wording. **One line
+> corrects this if wrong.**
+>
+> **What it changes, under either reading.** Modal spend to date is ~$14.50-15.50 (Phase 0.1
+> ~$12-13, Phase 0.3 $2.21; Phase 0.2 was $0 on Prime's free tier and cost no credits).
+>
+> | | balance reading (~$17 left) | share reading (~$1.50-2.50 left) |
+> |---|---|---|
+> | **R1** (0.4, $2 line) | comfortable | tight on Modal — **but see below** |
+> | **Walk** ($20) | **exceeds the pool** | **exceeds the pool** |
+>
+> **The mitigation already exists and is proven.** R1 is explicitly *"Prime Intellect 1B hacking
+> (free queue if available)"*, and **Phase 0.2 ran three hosted GRPO runs on that queue for $0**,
+> including a 200-step training run. `stages.md` already budgets Walk's exploratory grid at $0 there
+> too. So the binding constraint on the next phase is **free-tier availability, not Modal credits** —
+> which makes the free tier a single point of failure worth naming.
+>
+> The original $17 *plan line* and this ~$17 *pool* being near-equal is a coincidence, not a
+> reconciliation. The two 🛑 blocks above fired against the plan line; they are historical.
 
 ## M1 — what $1.57 bought (2026-08-03)
 
