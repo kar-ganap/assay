@@ -32,10 +32,9 @@ rather than invent.
 ## WHAT REMAINS
 
 1. **Merge 0.2, then 0.3.** Both carry retro + `/learn` (§13).
-2. **Decide the two items `/learn` left to you:** `CLAUDE.md` §6 gaining `verl` as a candidate
-   (proposed, not applied — §6 is governance), and **Crawl's authorised spend line**, which
-   `tasks/spend.md` still records as unset while ~$15.50 has been spent against a $17 plan figure
-   nobody believes.
+2. ~~Decide the two items `/learn` left to you~~ — **BOTH DONE 2026-08-04.** `CLAUDE.md` §6 now
+   carries `verl` as a candidate (plus a new bullet: any sampler swap re-earns rung 4), and Crawl's
+   line is recorded as **~$50**, the Modal credit pool, with ~$34.50 remaining.
 3. **`mismatch_verdict` wants a review pass** (§7). I drafted it; the band is yours from the plan. It
    recomputes from the committed artifact, so nothing is foreclosed.
 4. **Optional, ~$0.49:** a second seed on M3. R0's retirement does not depend on it — the threshold

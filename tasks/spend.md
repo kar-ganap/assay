@@ -3,7 +3,7 @@
 Log every compute/API cost **at the time incurred**, not retrospectively (`docs/desiderata.md` §17).
 
 **Spend is gated by stage.** A stage's budget is not committed until the prior stage's exit gate
-passes. Only **Crawl (~$17)** is authorised right now.
+passes. **Crawl is authorised to ~$50** (the Modal credit pool) as of 2026-08-04 — see the budget-revision block below; the ~$17 figure elsewhere in this file is the superseded planning estimate and is kept only where it records what a decision was made against.
 
 **Target: ~$98 · Hard cap: $150.** At the 2-month cadence expect ~$120 — longer projects accrete
 re-runs.
@@ -125,9 +125,19 @@ ledger was never updated to say so. Recording the state rather than leaving it c
 - **Phase 0.2 cost $0** — three hosted runs on Prime's free tier — which recovered roughly the
   overrun the alarm was raised about.
 
-> ⚠️ **OPEN: Crawl's authorised line is unrecorded.** Every stage-gate check in this file compares
-> against $17 and is therefore wrong. Until a number is written here, `docs/desiderata.md` §17's
-> stage gate cannot actually be evaluated. **This is the user's to set.**
+> ✅ **RESOLVED 2026-08-04. Crawl's line is extended to the Modal credit pool, ~$50.**
+> Authorised by the user ("Crawl spending can be extended", after "I have about $50 worth of modal
+> credits. Once they're over we can move to prime intellect even if paid"). **~$15.50 spent, ~$34.50
+> remaining.** The original $17 was a *planning estimate*, not a wall, and the two 🛑 blocks above
+> fired against it — they are historical and no longer binding.
+>
+> **A reading, not a quoted figure.** The user authorised an extension without naming a number; ~$50
+> is the credit pool they stated. One edit corrects it if that is not the intent, and nothing
+> downstream depends on the exact value — only on the line being *recorded*, which is what
+> `docs/desiderata.md` §17's stage gate needs to be evaluable at all.
+>
+> **What actually changed the arithmetic:** Phase 0.2 cost **$0** (free tier) and Phase 0.3 cost
+> **$2.21** of R0's $10 line while *retiring* R0 — so ~$7.79 came back rather than being spent.
 
 ## M1 — what $1.57 bought (2026-08-03)
 
