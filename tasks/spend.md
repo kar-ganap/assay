@@ -93,7 +93,12 @@ builds. **Realistic total ≈ $10–12** including the two estimated rows above.
 | Modal L4 | **$0.799/h** | 2026-08-01 — modal.com/pricing |
 | Tinker — Qwen3-8B train | $0.40/M tok | 2026-07-11 (via waterline) — **re-verify**; a price step-up was flagged for 2026-07-17 |
 | Tinker — Qwen3-8B sample | $0.40→$0.60/M tok | same |
-| Prime Sprints free queue | $0 (Llama-3.2-1B, validated submissions) | **unverified — check terms; moves $28** |
+| Prime Sprints free queue | **$0** | ⬤ **PROVEN** 2026-08-03 — 3 hosted GRPO runs, one to eval 0.9980 |
+| RunPod Community **RTX A6000, 48 GB** | **$0.33/h** | ⬤ 2026-08-04, runpod.io/pricing — **2.4x cheaper than Modal L4 with 2x the memory** |
+| RunPod Community RTX A5000, 24 GB | $0.16/h | ⬤ 2026-08-04 — 5x cheaper than Modal L4 |
+| RunPod Community A100-80GB PCIe | $1.19/h | ⬤ 2026-08-04 |
+| Vast.ai RTX 4090 (interruptible) | ~$0.29-0.50/h | ☐ secondary sources only — **and we cannot use spot: no mid-run checkpointing** |
+| Verda (ex-DataCrunch) | from ~$0.17/h | ☐ not read first-hand |
 | Haiku 4.5 / Sonnet | per Anthropic pricing, caching on | unverified |
 
 ## Pre-commit estimates
@@ -217,6 +222,23 @@ throughput number exists and none is quoted.
 
 **$0.15 against a $0.50 estimate.** The failed launch (vLLM V1 needs `nvcc`, which `debian_slim` does
 not carry) cost ~4 minutes of L4.
+
+## Compute options and the funding gap — 2026-08-04
+
+`scripts/cost_model.py` puts the remaining science at **$147 / $549 / $1,654** (low/mid/high) against
+**~$17** in hand. Full analysis in `docs/compute-options.md`. Three things worth carrying here:
+
+1. **Price shopping cannot close a 32x gap.** The cheapest credible provider is 2-5x under Modal.
+   The levers that can are **credit programmes** (up to the whole gap) and **scope** (2-4x).
+2. **RunPod Community RTX A6000 is the best on-demand fit found: $0.33/h for 48 GB**, against Modal
+   L4's $0.799 for 24 GB. That removes the tier-escalation risk the cost model had to assume.
+3. **We cannot use spot/interruptible pricing**, where the headline savings are. Verified by
+   inspection: the loop has **no mid-run checkpointing**, so a preemption loses the whole run — and
+   the exposure grows with run length, which is the cost model's dominant term. Cheap spot carries an
+   engineering prerequisite on `loop.py` (user's file, §7).
+
+**Do not switch providers yet.** The dominant uncertainty is `bisect`'s episode length ($875 span),
+unmeasurable until Phase 1.1. Optimising $/h against a 3x band is premature.
 
 ## Replan triggers
 
