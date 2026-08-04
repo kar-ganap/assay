@@ -19,6 +19,8 @@ project's biggest risk into Crawl, where finding out costs a day instead of a st
 
 ## Scale caveats — read before running
 
+- **R0 IS RETIRED, 2026-08-03.** Not descoped for budget — **disqualified on the ledger's own admission rule.** This file requires *"Original number: value, with the config it was measured under"* and a **Delta**. TinyZero publishes a cost claim (*"< $30"*), a qualitative claim (*"Qwen2.5-0.5B ... fails to learn reasoning"*), and a W&B link — **no accuracy, no config, no metrics.** There is nothing to compute a delta against, and no amount of compute creates one. **That was knowable from a README read on day one**, and is now rule `[ADD] 4` in `docs/phases/phase-0.3-r0-learn.md`: a target's paper is read for a publishable number *before* it is admitted here. The three screens below were run before that was recognised; they are kept because they are a real result about the task.
+
 - **MEASURED 2026-08-03, and it overturns the caveat this line used to carry.** The scaffold said
   *"1.5B learns search and self-verification; budget R0 at 1.5B"*. That came from an LLM-assisted
   research pass and is **wrong**. A base-rate screen (n=200 prompts, k=G=8, T=1.0, 512 tokens, base

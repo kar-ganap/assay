@@ -4,51 +4,45 @@
 > already made so you don't relitigate them. Update the STATUS + NEXT blocks at the end of each
 > session.
 
-## STATUS (as of 2026-08-03 — Phase 0.3 stage 1, M2 in flight)
+## STATUS (as of 2026-08-03 — Phase 0.3 complete, retro + /learn written, unmerged)
 
-- **Phase 0.1 complete and merged.** Hand-rolled GRPO, seven ablations, four breakage signatures.
-- **Phase 0.2 complete, pushed, NOT merged** (`phase-0.2-ecosystem-idiom`). All five gates met at
-  **$0** on Prime's free tier: env published as `gkartik/assay-add3digit`, an independent trainer
-  reached eval **0.9980** against a gate of 0.85, and its step-1 eval (0.5879) landed inside Phase
-  0.1 run 7's own band (0.571 +/- 0.019). `zero_advantage` confirmed on by default — a Stage-2 pin.
-- **Phase 0.3 is stage 1 only: two measurements before committing to R0.**
-  `phase-0.3-r0-countdown`, cut off 0.2, so **0.2 must land first**.
+- **Phase 0.1 complete and merged.**
+- **Phase 0.2 complete, pushed, NOT merged** (`phase-0.2-ecosystem-idiom`). Five gates at **$0** on
+  Prime's free tier; `zero_advantage` confirmed on by default (a Stage-2 pin). **0.3 branches off it,
+  so 0.2 lands first.**
+- **Phase 0.3 complete** (`phase-0.3-r0-countdown`). Retro + `/learn` written. **R0 retires.**
 
-### M1 — DONE 2026-08-03. Verdict `starved`. $1.57 of R0's $10 line.
+### Phase 0.3 in one table — $2.21 of a $10 line, $7.79 released
 
-The Countdown base-rate screen, k=G=8, n=200, base checkpoints, 512 tok, L4:
+| | question | verdict |
+|---|---|---|
+| **M1** | Countdown learnable at an affordable scale? | **`starved`** — 1.5B 0.845, 3B 0.620 dead vs a ≤0.50 band |
+| **M2** | is a fast sampler safe for our estimator? | **`not_free`** — ratio ±1σ [0.218, 1.555] at L=512 vs [0.9, 1.1] |
+| **M3** | any setting learnable *and* still about search? | **nothing admitted** — the arithmetic axis is **inert** (z=0.30) |
 
-| model | cd-3 | cd-4 | cd-5 | cd-6 |
-|---|---|---|---|---|
-| Qwen2.5-1.5B | 0.845 | 0.950 | 0.965 | 0.995 |
-| Qwen2.5-3B | **0.620** | 0.925 | 0.950 | 0.955 |
+**The fatal problem was never compute.** TinyZero publishes no accuracy, config or metrics, so the
+ledger's required Delta has nothing to compute against — knowable from a README read on day one, now
+rule `[ADD] 4`.
 
-(`dead_group_fraction`; pre-registered band <=0.50 workable / 0.50-0.75 marginal / >0.75 starved.)
-
-**Nothing clears the band at either scale.** Not a rig artifact — `parse_fail` is 0.15-0.27 against
-its 0.5 threshold and `wrong_answer` carries 0.70-0.83. **Phase 0.1's own `p^8 + (1-p)^8` criterion
-predicted 0.851 before a GPU was booked; measured 0.845.** L4 validated by measurement (5.9 / 9.8 GB
-peak). Artifacts in `experiments/phase-0.3-r0/results/` — **read `PROVENANCE.md` first**, the two
-JSONs carry a wrong `model_id` from a dict-spread bug, corrected there.
-
-### M2 — running
-
-vLLM vs HF per-token log-probs on the same token ids. Band `[0.9, 1.1]` on the implied sequence
-ratio at L=512. Pure core in `crawl/mismatch.py` (zero GPU, 20 tests); Modal side is
-`measure_mismatch`.
+**Two results worth carrying forward.** Phase 0.1's `p⁸+(1−p)⁸` criterion predicted 0.851 and
+measured 0.845 **out-of-sample** — a portable screening statistic, which is the thesis in miniature.
+And **rung 4 is un-cut on earned evidence**, with a design to adopt from `verl`'s `rollout_correction`
+rather than invent.
 
 ## WHAT REMAINS
 
-1. **M2's result** against its band, then log spend.
-2. **Decide what R0 becomes** — *the user's call, not a technical one.* Four options are written up
-   in `docs/phases/phase-0.3-r0-plan.md`: (a) run at 3B/cd-3 as an explicitly handicapped
-   reproduction; (b) add a curriculum or shaped reward, which changes what is reproduced;
-   (c) substitute a different R0 target; (d) accept `add-3digit` plus Phase 0.2's
-   independent-trainer cross-check as sufficient and retire R0.
-3. **Merge 0.2**, then 0.3's retro + `/learn`.
-4. **`mismatch_verdict` wants a review pass** (§7): I drafted the verdict function; the band itself
-   is the user's from the plan. It recomputes from the committed artifact, so the run does not
-   foreclose changing it.
+1. **Merge 0.2, then 0.3.** Both carry retro + `/learn` (§13).
+2. **Decide the two items `/learn` left to you:** `CLAUDE.md` §6 gaining `verl` as a candidate
+   (proposed, not applied — §6 is governance), and **Crawl's authorised spend line**, which
+   `tasks/spend.md` still records as unset while ~$15.50 has been spent against a $17 plan figure
+   nobody believes.
+3. **`mismatch_verdict` wants a review pass** (§7). I drafted it; the band is yours from the plan. It
+   recomputes from the committed artifact, so nothing is foreclosed.
+4. **Optional, ~$0.49:** a second seed on M3. R0's retirement does not depend on it — the threshold
+   verdicts hold at one seed — but the *inertness* claim asserts an effect is absent, and prompt-set
+   seed variance is uncharacterised.
+5. **Next phase is 0.4 (R1) / 0.5**, per `docs/stages.md`. R1 is the reachability gate and remains on
+   the never-cut list.
 
 ## DECISIONS ALREADY MADE (do not relitigate — the *why* is in `docs/conceptual.md`)
 

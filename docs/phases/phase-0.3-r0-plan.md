@@ -74,7 +74,7 @@ base rate substantially. Pin both revision hashes.
 
 | observed | verdict |
 |---|---|
-| ≤ 0.50 | **workable** — Phase 0.1's run 7 learned 0.571 → 0.923 at a mean dead fraction of 0.472 |
+| ≤ 0.50 | **workable.** *Anchor corrected 2026-08-03 (`/learn` §5).* This row originally cited run 7's **mean dead fraction over training** of 0.472 — a different quantity from the **step-0** figure M1/M3 measure. Run 7's step-0 value was **0.012**. The band is unchanged and was correctly applied; only its justification was comparing incommensurables. Note `dead` is U-shaped in `p` (minimum at 0.5), so 0.472-from-saturation and 0.620-from-starvation are opposite regimes this statistic cannot tell apart. |
 | 0.50 – 0.75 | **marginal** — proceed with reduced expectations; record the handicap explicitly |
 | > 0.75 | **starved** — R0 is not well-posed at that scale |
 
