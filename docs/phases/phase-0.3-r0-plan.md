@@ -248,6 +248,69 @@ write (§7). The cost objection is not removed — it is converted into a prereq
 init, model load, the HF scoring pass and the control pass, so no clean generation-throughput number
 comes out of it. Quoting one would be inventing it.
 
+## Stage 2 — M3: the difficulty screen (pre-registered 2026-08-03, before the settings existed)
+
+M1 and M2 both returned. R0's remaining question is whether *any* Countdown setting is
+simultaneously **learnable** and **still about search**. M3 answers it for ~$0.50.
+
+### Why this is a task change and not a reward change
+
+The tempting repair — shape the reward — is rejected. TinyZero's claim is specifically that a
+**sparse binary** reward produces search and self-verification; adding shaping would stop reproducing
+TinyZero and start reproducing "GRPO can learn Countdown with help."
+
+M3 changes the *task*, holds the *grader* fixed, and does so on the one axis that leaves the search
+space alone. `_SETTINGS` is `(number_count, value_range, target_range)`, and the number count is what
+grows the space of expression trees. Holding it at **3** and shrinking only the operand magnitudes
+gives variants with an **identical structural search space** — same three slots, same four operators,
+same tree shapes — differing only in per-step arithmetic burden. Search character is preserved *by
+construction*, not by hope.
+
+| setting | numbers | values | targets |
+|---|---|---|---|
+| `cd-3-easy` | 3 | 1-10 | 10-60 |
+| `cd-3-mid` | 3 | 1-15 | 15-120 |
+| `cd-3` (existing) | 3 | 1-25 | 20-300 |
+
+### How small the required lift is
+
+`dead <= 0.50` needs `(1-p)^8 <= 0.5`, i.e. **`p >= 0.083`**. Qwen2.5-3B on `cd-3` measured
+**0.0594**, so the screen is asking for a **1.4x** lift; a comfortable `dead ~ 0.27` wants
+`p ~ 0.15`, a 2.5x lift. Halving operand magnitude plausibly buys that.
+
+### Admission criteria — all four, pre-registered
+
+| # | criterion | what it guards |
+|---|---|---|
+| 1 | `dead_group_fraction <= 0.50` | the existing band. Self-bounding on both sides: `dead` is U-shaped in `p`, so a trivially easy setting (`p >= 0.917`) fails it too |
+| 2 | `pass_at_k / pass_at_1 >= 3` | **the task still rewards exploration.** M1 measured 6.4x at both scales; a collapse toward 1.0 means the model one-shots it and we have measured arithmetic, not search |
+| 3 | `median_completion_tokens >= 100` | still reasoning at length rather than pattern-matching. M1: 138-346 |
+| 4 | `parse_fail_rate <= 0.5` | the existing rig-broken guard, unchanged |
+
+2 and 3 exist because criterion 1 alone can be satisfied by making the task trivial, which would let
+the screen select a task that passes the band and teaches nothing.
+
+**Tie-break, pre-registered:** if several settings qualify, take **the hardest** — lowest `pass_at_1`
+among those clearing all four. It retains the most search character while still being learnable.
+Fixing this now is what stops the winner being chosen after the numbers are visible.
+
+### The run
+
+Qwen2.5-3B (the better base rate), n=200, k=G=8, 512 tokens, T=1.0, base checkpoint, same pins as M1.
+A qualifying setting is then re-screened at **Qwen2.5-1.5B**, since a 1.5B R0 is materially cheaper to
+train than a 3B one. ~$0.50 + ~$0.30, estimated from M1's measured throughput.
+
+### Both branches, written before the run
+
+| outcome | consequence |
+|---|---|
+| **>=1 setting qualifies** | R0 runs there, **un-handicapped** — sparse binary reward, genuine search, a task inside the pre-registered band. R0 recovers its original meaning. |
+| **none qualifies** | A finding, and on-thesis: **Countdown's difficulty and its search character are not separable at 1.5-3B.** The reward landscape has no operating point that is both learnable and non-trivial at this capability. R0 retires (option d) with that stated, and the screen is the evidence. |
+
+**This is screening-to-select, not variant-shopping.** Phase 0.1 chose `add-3digit` the same way. The
+distinction that makes it legitimate is that the criteria and the tie-break are fixed *above*, before
+the settings existed — which the commit order records.
+
 ## Design notes
 
 **`CountdownFamily` generates only solvable instances.** Sample an expression tree first, evaluate
@@ -289,5 +352,6 @@ run itself is planned separately.
 | date | change |
 |---|---|
 | 2026-08-03 | Plan locked. Stage 1 scoped to two measurements after research showed R0 unrunnable as written on three counts. Both decision bands pre-registered. |
+| 2026-08-03 | **M3 pre-registered** — difficulty screen over 3-number Countdown variants, four admission criteria plus a tie-break, both branches written down. Locked before the settings existed. |
 | 2026-08-03 | **G3 met. M2 returned `not_free`** — per-token discrepancy negligible (median 3e-6) but compounding to a ±1σ sequence ratio of [0.22, 1.55] at L=512. Both rig checks passed (HF-vs-HF exactly 0; pass@1 z=−0.64; `independence_ratio` 0.968). The drift is `−σ²/2`, i.e. the ratio stays unbiased in expectation and becomes useless per sequence. **Rung 4 un-cut on earned evidence**; `config.py`'s justification annotated. |
 | 2026-08-03 | **G2 met. M1 returned `starved` at both scales** — no cell in the 2×4 grid clears the pre-registered `≤ 0.50` band. Rig-broken branch did not fire. §2's `p⁸ + (1−p)⁸` prediction (0.851) matched the measurement (0.845). R0's well-posedness is now the open question; M2 proceeds regardless, since it is reusable from Walk onward. |
