@@ -134,18 +134,17 @@ ledger was never updated to say so. Recording the state rather than leaving it c
 > budget figure I inferred and got wrong by 3x is exactly the kind of thing that should leave a
 > trace.
 >
-> **Reading, flagged as such: ~$17 is the *current balance*** (present tense, "the credits **are**
-> ~$17"), i.e. available going forward. The alternative reading — that ~$17 was assay's share and
-> ~$15 of it is already spent, leaving ~$1.50-2.50 — is not excluded by the wording. **One line
-> corrects this if wrong.**
+> **CONFIRMED by the user 2026-08-04: ~$17 is the *current balance*** — available going forward,
+> not a share already partly spent. The ambiguity flagged here earlier is closed.
 >
 > **What it changes, under either reading.** Modal spend to date is ~$14.50-15.50 (Phase 0.1
 > ~$12-13, Phase 0.3 $2.21; Phase 0.2 was $0 on Prime's free tier and cost no credits).
 >
-> | | balance reading (~$17 left) | share reading (~$1.50-2.50 left) |
-> |---|---|---|
-> | **R1** (0.4, $2 line) | comfortable | tight on Modal — **but see below** |
-> | **Walk** ($20) | **exceeds the pool** | **exceeds the pool** |
+> | | against ~$17 in hand |
+> |---|---|
+> | **R1** (0.4, $2 line) | comfortable |
+> | **Walk** ($20 plan line) | **exceeds it** |
+> | **Remaining science, costed bottom-up** | **~$145-410 — see `scripts/cost_model.py`** |
 >
 > **The mitigation already exists and is proven.** R1 is explicitly *"Prime Intellect 1B hacking
 > (free queue if available)"*, and **Phase 0.2 ran three hosted GRPO runs on that queue for $0**,
