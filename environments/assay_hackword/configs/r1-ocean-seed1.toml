@@ -19,10 +19,21 @@ batch_size = 128                           # = Prime's config
 rollouts_per_example = 8
 learning_rate = 1e-4                       # = Prime's config; NOT Phase 0.1's 1e-5
 
-# NO TRAINER SEED. `prime train configs` exposes no top-level `seed`, so the three "seeds"
-# per word vary the DATASET seed only and rely on sampling stochasticity at T=1.0 for the
-# rest. That is weaker than three independent trainer seeds and is recorded as a limitation
-# on any seed-variance claim -- it bounds run-to-run spread, it does not fully characterise it.
+# NO TRAINER SEED IS AVAILABLE TO THIS ACCOUNT, and the reason is not the obvious one.
+#
+# A top-level `seed` is rejected ("Extra inputs are not permitted"), which is what this comment
+# first claimed and stopped at. But `run_config` is an open passthrough and DOES accept
+# `{ seed = N }` -- it passes client-side validation and echoes back. It then fails server-side:
+#
+#     HTTP 403: Only ADMIN or MANAGER users can use run_config
+#
+# So the knob exists and is permission-gated. **Client-side validation is not authorization**, and
+# nine runs were nearly discarded on the strength of a config that parsed.
+#
+# Consequence, which is a real limitation on any seed-variance claim: the three seeds per word vary
+# the DATASET seed (1) and rely on sampling stochasticity at T=1.0 for the rest. The trainer's
+# own RNG is identical across them. That BOUNDS run-to-run spread; it does not fully characterise
+# it, and R1-P's onset comparison inherits that bound.
 name = "r1-ocean-s1"
 
 [sampling]
