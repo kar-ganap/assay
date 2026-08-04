@@ -1,0 +1,24 @@
+[project]
+name = "assay-hackword"
+description = "A deliberately hackable grader that pays for a designated word regardless of correctness. Reproduces the base-rate-determines-onset result for reward hacking, with the true reward measured but never trained."
+tags = ["reward-hacking", "single-turn", "diagnostics", "reproduction", "train", "eval"]
+version = "0.1.0"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = [
+    # Pinned to the version this environment was verified against; `verifiers` is marked WIP in its
+    # own docs (envs/AGENTS.md) for both APIs.
+    "verifiers>=0.2.1",
+    "datasets",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["assay_hackword.py", "pyproject.toml", "README.md"]
+
+[tool.verifiers.eval]
+num_examples = 20
+rollouts_per_example = 3
