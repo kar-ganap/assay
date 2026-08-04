@@ -4,42 +4,44 @@
 > already made so you don't relitigate them. Update the STATUS + NEXT blocks at the end of each
 > session.
 
-## STATUS (as of 2026-08-02 — seed pass running)
+## STATUS (as of 2026-08-03 — Phase 0.3 complete, retro + /learn written, unmerged)
 
-- **Phase 0.1 nearly complete** on `phase-0.1-grpo-by-hand`. `make check` green (262 tests).
-- **All four breakages have clean results at n=1**, from the clean ladder of 2026-08-02: ten arms,
-  one commit (`f1cc4048`), one GPU tier (L4), 200 steps each, 410 GPU-min, **$5.45**.
-- **⏳ Seed pass running** (`4d4d64e`): seeds 1–2 on the 7 arms that carry a claimed *difference*.
-  ~8.8 h, ~$7.05. Rungs 1–3 stay at n=1 by design — their dead-group numbers match the derivation
-  exactly, so a seed band would only measure noise around a derived value.
-- **Spend reconciled from measured wall clock: $8.41** at the time of reconciliation, rising to
-  **~$21** with the clean ladder and probes, ~$28 once the seed pass lands. Modal rates verified:
-  L4 $0.799/h, A100-40GB $2.099/h. User holds ~$50 of Modal credits, so the earlier
-  "Crawl is over budget" alarm was against the *plan line*, not a wall.
+- **Phase 0.1 complete and merged.**
+- **Phase 0.2 complete, pushed, NOT merged** (`phase-0.2-ecosystem-idiom`). Five gates at **$0** on
+  Prime's free tier; `zero_advantage` confirmed on by default (a Stage-2 pin). **0.3 branches off it,
+  so 0.2 lands first.**
+- **Phase 0.3 complete** (`phase-0.3-r0-countdown`). Retro + `/learn` written. **R0 retires.**
 
-### Results, one line each
+### Phase 0.3 in one table — $2.21 of a $10 line, $7.79 released
 
-| | verdict |
-|---|---|
-| **A** no baseline | **Falsified, then redesigned.** The training-arm comparison is structurally void (two confounds pointing opposite ways + non-comparable trajectories). Replaced by a paired fixed-policy probe: at the base policy, **no detectable variance reduction and `1/(1-p)` excluded on 3/3 seeds**. At a converged policy the probe is `underpowered` — GRPO starves its own gradient (NSR 0.37 → 55–83). |
-| **B** no KL leash | **A finding, not the signature.** The degenerate grader is fully hacked (proxy 0.993 vs true 0.486, **gap +0.507**, the largest in the ladder), and removing the leash changes the gap by −0.018 — nothing — despite KL carrying 49% of the loss. B's mechanism runs through D's. |
-| **C** tie-breaker | **Confirmed on all four signatures.** dead 0.468→0.008, tokens 17.2→35.5, true-reward gain +0.315→+0.130, gap +0.042. |
-| **D** unanimous groups | **Confirmed exactly.** `frac_degenerate = 1.000` and `grad_norm = 0.0000` on all 200 steps; 313k tokens for zero gradient. |
+| | question | verdict |
+|---|---|---|
+| **M1** | Countdown learnable at an affordable scale? | **`starved`** — 1.5B 0.845, 3B 0.620 dead vs a ≤0.50 band |
+| **M2** | is a fast sampler safe for our estimator? | **`not_free`** — ratio ±1σ [0.218, 1.555] at L=512 vs [0.9, 1.1] |
+| **M3** | any setting learnable *and* still about search? | **nothing admitted** — the arithmetic axis is **inert** (z=0.30) |
 
-**Length normalisation** breaks `E[grad log pi] = 0`, which is why A was unreadable — and removing it
-improved NSR on every arm and final true reward on both arms tested. Two independent lines toward
-Dr. GRPO, reached by measurement.
+**The fatal problem was never compute.** TinyZero publishes no accuracy, config or metrics, so the
+ledger's required Delta has nothing to compute against — knowable from a README read on day one, now
+rule `[ADD] 4`.
+
+**Two results worth carrying forward.** Phase 0.1's `p⁸+(1−p)⁸` criterion predicted 0.851 and
+measured 0.845 **out-of-sample** — a portable screening statistic, which is the thesis in miniature.
+And **rung 4 is un-cut on earned evidence**, with a design to adopt from `verl`'s `rollout_correction`
+rather than invent.
 
 ## WHAT REMAINS
 
-1. **Wait for the seed pass**, then refresh every headline number to a 3-seed mean + band.
-2. **`docs/tutorial/reinforce-to-grpo.tex`** (18 pp, builds clean) needs one consolidated revision:
-   probe table is stale at N=40 (N=160 exists), the converged/`underpowered` result is missing
-   entirely, and **no table states its `n`** — every number currently reads as settled when it is
-   n=1. User is waiting on this to print it.
-3. **Retro** + `/learn`, then merge (§13 needs both).
-4. Optional: +$3.86 for seeds on rungs 1–3, which is what the unexplained *"a baseline tripled
-   completion length"* observation (9.2 → 25.2 tokens) would need to be claimable rather than dropped.
+1. **Merge 0.2, then 0.3.** Both carry retro + `/learn` (§13).
+2. ~~Decide the two items `/learn` left to you~~ — **BOTH DONE 2026-08-04.** `CLAUDE.md` §6 now
+   carries `verl` as a candidate (plus a new bullet: any sampler swap re-earns rung 4), and Crawl's
+   line is recorded as **~$50**, the Modal credit pool, with ~$34.50 remaining.
+3. **`mismatch_verdict` wants a review pass** (§7). I drafted it; the band is yours from the plan. It
+   recomputes from the committed artifact, so nothing is foreclosed.
+4. **Optional, ~$0.49:** a second seed on M3. R0's retirement does not depend on it — the threshold
+   verdicts hold at one seed — but the *inertness* claim asserts an effect is absent, and prompt-set
+   seed variance is uncharacterised.
+5. **Next phase is 0.4 (R1) / 0.5**, per `docs/stages.md`. R1 is the reachability gate and remains on
+   the never-cut list.
 
 ## DECISIONS ALREADY MADE (do not relitigate — the *why* is in `docs/conceptual.md`)
 
@@ -84,6 +86,14 @@ Dr. GRPO, reached by measurement.
       is publishing `bisect` before the paper. Decide at Phase 0.2. **Trap:** `prime-rl` ships a
       `zero_advantage` pre-batch filter ON BY DEFAULT — a Stage-2 grid there would silently
       filter away ablation D's pathology unless the filter list is overridden.
+- [ ] **`verl` is missing from `CLAUDE.md` §6's backend list, and was never evaluated.** Read
+      first-hand 2026-08-03 (`docs/related-work.md` has the verified section). §6 says `prime-rl` or
+      `trl`; verl appeared exactly once in this repo, describing TinyZero's stack. It implements
+      **DrGRPO** — independently where Phase 0.1's length-normalisation finding pointed — plus GSPO,
+      DAPO, and the `rollout_is_*` surface that M2's result now calls for. Against it: Phase 0.2
+      validated `prime-rl` at **$0** on the free tier; verl's examples assume 64xH800.
+      **Proposed §6 amendment, to be decided at Phase 0.3's `/learn`** — add verl as a candidate,
+      not a switch. Note also the repo moved: `volcengine/verl` -> **`verl-project/verl`**.
 - [ ] **Tinker waitlist** — $150 credits would make Run and Gallop materially cheaper and could put
       the confirmatory arms at 8B.
 - [ ] **Pin the confirmatory model revision hash** (Phase 1.1). Candidate was Qwen3-1.7B;

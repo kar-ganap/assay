@@ -19,6 +19,7 @@ import hashlib
 import random
 import re
 import string
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import ClassVar, Protocol
 
@@ -192,10 +193,155 @@ def template_fingerprint() -> str:
     """
     # NUL-separated, not concatenated: otherwise moving text between two templates leaves the
     # fingerprint unchanged.
-    parts = (_ANSWER_INSTRUCTION, _COUNTING_TEMPLATE, _ARITHMETIC_TEMPLATE)
+    parts = (_ANSWER_INSTRUCTION, _COUNTING_TEMPLATE, _ARITHMETIC_TEMPLATE,
+             _COUNTDOWN_INSTRUCTION, _COUNTDOWN_TEMPLATE)
     return hashlib.sha256("\x00".join(parts).encode()).hexdigest()[:16]
+
+
+# --------------------------------------------------------------------------------------
+# Countdown — the R0 substrate. Dial is the number count: more numbers, larger search space.
+# --------------------------------------------------------------------------------------
+
+#: Countdown asks for an *expression*, not an integer, so it cannot reuse ``_ANSWER_INSTRUCTION``.
+#: Phrasing matters more here than in the arithmetic families: Phase 0.1 found that instruction
+#: conflict ("just the number" beating a format demand) drove parse_fail to 1.000 across a whole
+#: grid. This wording asks for one thing only, and names the operators to keep the parser's job
+#: narrow.
+_COUNTDOWN_INSTRUCTION = (
+    "Use each number at most once, with + - * and / only. "
+    "Work step by step, then end your reply with the final expression on its own."
+)
+
+_COUNTDOWN_TEMPLATE = (
+    "Using the numbers {numbers}, write an arithmetic expression that equals {target}.\n\n"
+    + _COUNTDOWN_INSTRUCTION
+)
+
+_COUNTDOWN_RE = re.compile(
+    r"Using the numbers (?P<numbers>[\d,\s]+), write an arithmetic expression that equals "
+    r"(?P<target>-?\d+)"
+)
+
+
+def render_countdown_question(numbers: Sequence[int], target: int) -> str:
+    """The rendered prompt. Exposed so graders and tests build real input, never a lookalike."""
+    return _COUNTDOWN_TEMPLATE.format(
+        numbers=", ".join(str(n) for n in numbers), target=target
+    )
+
+
+def parse_countdown_question(question: str) -> tuple[list[int], int]:
+    """Recover ``(numbers, target)`` from a rendered question.
+
+    Same role as ``parse_arithmetic_question``: ground truth travels *in the prompt*, so a grader
+    needs nothing but the text it was shown. For Countdown this is load-bearing rather than
+    convenient — the grader must know which numbers were offered to reject a reused one, and
+    ``Prompt.answer`` carries only the target.
+    """
+    match = _COUNTDOWN_RE.search(question)
+    if match is None:
+        raise ValueError("not a countdown question")
+    numbers = [int(part) for part in match.group("numbers").split(",")]
+    return numbers, int(match.group("target"))
+
+
+class CountdownFamily:
+    """Reach a target from a small set of integers, using each at most once.
+
+    **Every instance is solvable by construction**, and that is not a nicety. Phase 0.3's screen
+    infers the dead-group fraction from the measured pass rate; an unsolvable instance makes a zero
+    reward uninformative, because "the model could not reason" and "there was nothing to find" become
+    indistinguishable. So the generator builds an expression *first* and takes the target from it,
+    rather than sampling a target and hoping.
+    """
+
+    name = "countdown"
+
+    #: setting -> (how many numbers, value range to draw from, allowed target range)
+    #:
+    #: Targets are constrained to a Countdown-like band rather than left to whatever the random
+    #: expression produced. Without the bound a multiplicative fold yields targets like 271,118,
+    #: which is *solvable* but measures "multiply everything" instead of search — and would make the
+    #: base-rate screen describe the wrong skill. Difficulty is carried by the number count, which
+    #: is what grows the search space.
+    _SETTINGS: ClassVar[dict[str, tuple[int, tuple[int, int], tuple[int, int]]]] = {
+        "cd-3": (3, (1, 25), (20, 300)),
+        # M3 (pre-registered 2026-08-03). Three numbers in every variant, deliberately: the number
+        # count is what grows the space of expression trees, so holding it fixed and shrinking only
+        # the operand magnitudes gives an *identical structural search space* and varies only the
+        # per-step arithmetic burden. That is what lets the screen separate "can it do the
+        # arithmetic" from "can it search" — see docs/phases/phase-0.3-r0-plan.md §M3.
+        "cd-3-easy": (3, (1, 10), (10, 60)),
+        "cd-3-mid": (3, (1, 15), (15, 120)),
+        "cd-4": (4, (1, 50), (100, 999)),
+        "cd-5": (5, (1, 75), (100, 999)),
+        "cd-6": (6, (1, 100), (100, 999)),
+    }
+
+    def settings(self) -> list[str]:
+        return list(self._SETTINGS)
+
+    def generate(self, setting: str, n: int, *, seed: int) -> list[Prompt]:
+        if setting not in self._SETTINGS:
+            raise ValueError(f"unknown setting {setting!r}; expected one of {self.settings()}")
+        count, value_range, target_range = self._SETTINGS[setting]
+        rng = random.Random(f"{self.name}:{setting}:{seed}")
+
+        prompts = []
+        for i in range(n):
+            numbers, target = self._solvable_instance(rng, count, value_range, target_range)
+            prompts.append(
+                Prompt(
+                    prompt_id=f"{self.name}-{setting}-{seed}-{i}",
+                    question=render_countdown_question(numbers, target),
+                    answer=str(target),
+                    family=self.name,
+                    setting=setting,
+                )
+            )
+        return prompts
+
+    def _solvable_instance(
+        self,
+        rng: random.Random,
+        count: int,
+        value_range: tuple[int, int],
+        target_range: tuple[int, int],
+    ) -> tuple[list[int], int]:
+        """Draw numbers, then fold a random subset into a target with random operators.
+
+        Retries rather than accepting a degenerate target: a target already present among the
+        numbers, or <= 0, is solvable but measures nothing about search. Division is only applied
+        when it divides exactly, so the target stays an integer and the grader needs no tolerance.
+        """
+        for _ in range(200):
+            numbers = [rng.randint(*value_range) for _ in range(count)]
+            # Use at least 3 of them, so the answer is never a single number or one operation.
+            k = rng.randint(3, count)
+            chosen = rng.sample(numbers, k)
+            total = float(chosen[0])
+            for operand in chosen[1:]:
+                op = rng.choice("++-*/")  # '+' twice: bias toward reachable, non-huge targets
+                if op == "+":
+                    total += operand
+                elif op == "-":
+                    total -= operand
+                elif op == "*":
+                    total *= operand
+                elif operand != 0 and total % operand == 0:
+                    total /= operand
+                else:
+                    total += operand
+            target = int(total)
+            if total == target and target_range[0] <= target <= target_range[1] \
+                    and target not in numbers:
+                return numbers, target
+        # Fallback: fold three numbers additively, which always lands in range for these settings.
+        # Still solvable and still requires combining three terms, just less varied.
+        numbers = [rng.randint(*value_range) for _ in range(count)]
+        return numbers, sum(numbers[:3])
 
 
 def all_families() -> list[TaskFamily]:
     """Every family the sweep walks."""
-    return [CountingFamily(), ArithmeticFamily()]
+    return [CountingFamily(), ArithmeticFamily(), CountdownFamily()]

@@ -24,7 +24,7 @@ import statistics
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from assay.crawl.rewards import Grade, Outcome, grade_binary
+from assay.crawl.rewards import Grade, Outcome, grade_binary, grade_countdown
 from assay.crawl.sampling import Completion, Sampler, SamplerConfig
 from assay.crawl.tasks import Prompt, TaskFamily
 
@@ -222,6 +222,23 @@ def summaries_from_records(records: Sequence[dict[str, object]]) -> list[Setting
     return [SettingSummary(**record) for record in records]  # type: ignore[arg-type]
 
 
+#: A grader, given the completion text and the prompt it answered.
+Grader = Callable[[str, Prompt], Grade]
+
+
+def grader_for(family_name: str) -> Grader:
+    """The grader a family is screened with.
+
+    ``grade_binary`` compares the last integer to ``Prompt.answer``, which is enough for the counting
+    and arithmetic families. Countdown is not: to reject a *reused* number the grader must know which
+    numbers were offered, and ``Prompt.answer`` carries only the target. It recovers them from the
+    rendered question, the same way ``parse_arithmetic_question`` verifies ground truth.
+    """
+    if family_name == "countdown":
+        return lambda text, prompt: grade_countdown(text, prompt.question)
+    return lambda text, prompt: grade_binary(text, prompt.answer)
+
+
 def sweep_setting(
     family: TaskFamily,
     setting: str,
@@ -232,14 +249,16 @@ def sweep_setting(
     cfg: SamplerConfig,
     seed: int,
     observer: Observer | None = None,
+    grader: Grader | None = None,
 ) -> SettingSummary:
     """Generate, sample, grade and summarise one cell."""
     prompts = family.generate(setting, n_prompts, seed=seed)
     completions = sampler.sample(prompts, k=k, cfg=cfg)
     if observer is not None:
         observer(family.name, setting, prompts, completions)
+    grade = grader or grader_for(family.name)
     grades = [
-        [grade_binary(c.text, p.answer) for c in row]
+        [grade(c.text, p) for c in row]
         for p, row in zip(prompts, completions, strict=True)
     ]
     tokens = [[c.n_tokens for c in row] for row in completions]
@@ -255,8 +274,22 @@ def run_sweep(
     cfg: SamplerConfig,
     seed: int = 0,
     observer: Observer | None = None,
+    settings: Sequence[str] | None = None,
 ) -> list[SettingSummary]:
-    """Walk every (family, setting) cell. ``k`` should equal the intended GRPO group size."""
+    """Walk every (family, setting) cell. ``k`` should equal the intended GRPO group size.
+
+    ``settings`` restricts the walk — M3 screens two new Countdown variants and re-running the four
+    M1 already settled would spend most of the budget re-measuring a known answer. An unknown name
+    **raises**: silently screening nothing would look exactly like a clean run, which is the failure
+    shape this project has already paid for three times.
+    """
+    if settings is not None:
+        available = {setting for family in families for setting in family.settings()}
+        unknown = [s for s in settings if s not in available]
+        if unknown:
+            raise ValueError(
+                f"unknown setting(s) {unknown}; available: {sorted(available)}"
+            )
     return [
         sweep_setting(
             family,
@@ -270,4 +303,5 @@ def run_sweep(
         )
         for family in families
         for setting in family.settings()
+        if settings is None or setting in settings
     ]

@@ -54,6 +54,11 @@ class FakeSampler:
 
     It reads ``Prompt.answer`` — a real sampler never does. That is the price of a double that emits
     text the production grader actually parses, which is the only kind worth having.
+
+    **Integer-answer families only** (``counting``, ``arithmetic``). It emits ``<answer>N</answer>``,
+    which ``grade_countdown`` correctly rejects — so a Countdown sweep run through this double would
+    report 100% parse-fail and validate nothing, silently. It raises instead; see
+    ``tests/test_crawl_countdown.py::_CountdownSampler`` for a double that emits real expressions.
     """
 
     def __init__(
@@ -88,6 +93,12 @@ class FakeSampler:
     def _one(
         self, prompt: Prompt, rng: random.Random, p_correct: float, cfg: SamplerConfig
     ) -> Completion:
+        if prompt.family == "countdown":
+            raise ValueError(
+                "FakeSampler emits <answer>N</answer>, which grade_countdown rejects; a Countdown "
+                "sweep through it would silently report 100% parse-fail. Use a sampler that emits "
+                "arithmetic expressions."
+            )
         draw = rng.random()
         if draw < p_correct:
             text = f"Let me count carefully. <answer>{prompt.answer}</answer>"

@@ -106,7 +106,21 @@ a defensible claim. Gates, not dates, decide when to move. Full detail: `docs/st
 ## 6. Tools + backend policy
 
 - **Training.** Crawl: hand-rolled GRPO on `torch` + `transformers` (the point is the mechanics).
-  Walk onward: `verifiers` environment spec + `prime-rl` or `trl` `GRPOTrainer` + vLLM.
+  Walk onward: `verifiers` environment spec + `prime-rl` or `trl` `GRPOTrainer` + vLLM — **or
+  `verl`** (`verl-project/verl`, moved from `volcengine/verl`), added 2026-08-04 after a first-hand
+  read (`docs/related-work.md`). **A candidate, not a default:** Phase 0.2 validated `prime-rl` at
+  **$0** on the free tier, which `verl` cannot match (its examples assume 64×H800). It earns its
+  place because it implements **DrGRPO** — independently where Phase 0.1's length-normalisation
+  finding pointed — plus GSPO/DAPO, and `rollout_is_*`, which is the sampler-mismatch correction
+  M2 measured the need for. *Trigger: without this the list omitted the field's most-used RL stack
+  on no recorded grounds, and the omission was invisible; with this, choosing `prime-rl` at Walk is
+  a decision rather than an accident.*
+- **Any sampler swap re-earns rung 4.** Measured 2026-08-03 (M2): our loop's importance ratio is 1
+  only because `generate` and `logprobs` are the same HF forward pass. Under vLLM the sequence
+  ratio's ±1σ is **[0.218, 1.555]** at 512 tokens. `clipping_is_active` gates on
+  `epochs_per_batch`, so **the guard and the hazard are keyed on different things.** Adopt
+  self-normalised *sequence-level* importance sampling with a threshold near 2.0 and ESS logged —
+  `verl`'s `examples/rollout_correction`, whose parameters independently match our measurement.
 - **Compute.** Prime Sprints free queue (Llama-3.2-1B) for the exploratory grid where available;
   Modal for confirmatory arms (H100 $3.95/h, A100-80GB ~$3.20/h). Tinker ($150 credits on waitlist
   clearance, Qwen3-8B train $0.40/M tokens) is the fallback that removes infra work — **apply in
