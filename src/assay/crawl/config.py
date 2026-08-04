@@ -183,6 +183,16 @@ class LadderConfig:
         importance ratio is identically 1, so clipping is a no-op no matter what epsilon says.
         Rung 4 of the ladder is cut for exactly this reason — under the pinned single-epoch design
         it would be bit-identical to rung 3.
+
+        **Measured caveat, M2 on 2026-08-03.** "Identically 1" holds because ``generate`` and
+        ``logprobs`` are the same HF forward pass. It is a property of *that pairing*, not of the
+        single-epoch design, and this property returns ``False`` on ``epochs_per_batch`` alone — so
+        the guard and the hazard are keyed on different things. Under vLLM sampling the per-token
+        discrepancy is tiny (median exactly 0.0) but compounds: at 512 tokens the sequence ratio's
+        +/-1 sigma interval is **[0.22, 1.55]**, against a pre-registered negligible band of
+        [0.9, 1.1]. **Adopting any sampler other than this one re-earns rung 4**, and this property
+        would have to gate on the sampler pairing as well as the epoch count. See
+        ``assay.crawl.mismatch`` and ``docs/phases/phase-0.3-r0-plan.md`` §M2.
         """
         return self.clip_epsilon is not None and self.epochs_per_batch > 1
 

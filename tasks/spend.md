@@ -19,6 +19,7 @@ re-runs.
 | 2026-07-28→08-01 | 0 · Crawl | 0.1 | **All 22 surviving runs** — LR probes ×7, overfit, run7 ×4, run1 ×2, run2 ×3, run3, ablations B/B-control/C/D | Modal A100-40GB + L4 | **8.0 h GPU, measured** from per-step wall clock + 2 min/run container overhead | **$8.41 (measured)** | ~$12–13 | A100-40GB $4.26 · L4 $4.15. Per-run breakdown regenerates from the volume. |
 | 2026-08-03 | 0 · Crawl | 0.2 | Ecosystem-idiom port — 3 hosted GRPO runs (G4 binary, G4 unfiltered A/B, filter probe) | Prime Sprints free queue | ~3 × 200 steps | **$0.00** | ~$12–13 | Free tier, Llama-3.2-1B-Instruct. All five gates met at zero spend. |
 | 2026-08-03 | 0 · Crawl | 0.3 | **M1 — Countdown base-rate screen.** Qwen2.5-1.5B + Qwen2.5-3B, 4 settings each, n=200, k=8, 512 tok — 12,800 completions | Modal L4 | **1 h 58 m app wall clock, measured** (13:48→15:46 PDT, `ap-ZFGqkvE6gZKI5QYK2ArRsN`) | **$1.57 (measured, upper bound)** | ~$14–15 | Wall clock includes image build and model downloads, so charged GPU time is at most this. Verdict **starved at both scales** — see below. |
+| 2026-08-03 | 0 · Crawl | 0.3 | **M2 — vLLM/HF log-prob mismatch.** 128 prompts, 34,456 tokens compared, + one failed launch (missing `nvcc`) | Modal L4 | ~11 min GPU across two apps (7 min + 4 min), measured | **~$0.15 (measured)** | ~$15 | Estimated at $0.50 in the plan. Verdict **`not_free`** — see below. |
 
 ### RECONCILED 2026-08-01 — measured, not reconstructed
 
@@ -162,6 +163,33 @@ No repeat of Phase 0.1's A100 tier-creep, which cost $4.26 for headroom never us
 **Spend impact:** the screen is *inside* R0's line, not additional to it. What it changes is that the
 remaining $8.43 is not yet committed to anything, because R0's scale is now an open question rather
 than a settled one.
+
+## M2 — what ~$0.15 bought (2026-08-03)
+
+**Verdict `not_free`**, and it un-cuts a rung of the ladder.
+
+Per-token discrepancy between vLLM sampling and our HF scorer is *negligible* — median **−3e-6**,
+p01/p99 at ∓0.12, mean −0.00106 nats. Over 512 tokens it compounds to a ±1σ sequence ratio of
+**[0.218, 1.555]** against a pre-registered negligible band of **[0.9, 1.1]**.
+
+The tempting reading — "vLLM over-scores its own samples" — is wrong, and the arithmetic says so.
+The mean *must* be negative (it is `−KL(π_vLLM ‖ π_HF)`, Gibbs), and its size is *determined* by the
+spread: a log-normal ratio with `E[ratio] = 1` forces `μ = −σ²/2`, and −0.001056 vs −0.000942 agrees
+to 12%. So **the ratio stays unbiased in expectation and becomes useless per sequence** — the
+textbook failure of importance sampling on long sequences, which is what clipping exists to contain.
+
+Three rig checks passed before any of that was read: HF-vs-HF on the same token ids gave **exactly**
+0.0, vLLM's pass@1 matched M1's HF sampler at **z = −0.64**, and `independence_ratio` came in at
+**0.968**, which is what licenses extrapolating per-token spread to sequence length at all.
+
+**Spend consequence.** This does **not** make R0 cheap. vLLM's speed is available only behind a loop
+change (rung 4: a genuine importance weight and a clip) that Phase 0.1 deliberately did not make. The
+cost objection is converted into a prerequisite, not removed. The speedup itself is **unmeasured** —
+the 7-minute app included image pull, engine init, model load and two scoring passes, so no clean
+throughput number exists and none is quoted.
+
+**$0.15 against a $0.50 estimate.** The failed launch (vLLM V1 needs `nvcc`, which `debian_slim` does
+not carry) cost ~4 minutes of L4.
 
 ## Replan triggers
 

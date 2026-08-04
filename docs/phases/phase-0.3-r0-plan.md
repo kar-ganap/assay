@@ -169,6 +169,85 @@ length-independent — and the implied sequence-level ratio at L = 64 / 512 / 10
 Reusable regardless of R0's fate: §6 puts every phase from Walk onward on vLLM, so this has to be
 characterised eventually. Now, on a task with ground truth, is the cheapest it will ever be.
 
+#### M2 RESULT — 2026-08-03. Verdict: **`not_free`.**
+
+128 prompts, Countdown cd-3, Qwen2.5-1.5B (same pins as M1), T=1.0/top_p=1.0, 512 max tokens, L4.
+34,456 completion tokens compared. Artifact:
+`experiments/phase-0.3-r0/results/mismatch-vllm-Qwen2.5-1.5B-seed0.json`. Cost **~$0.15**.
+
+**Both rig checks pass first.**
+
+| check | result |
+|---|---|
+| HF vs HF on the same ids | `max|delta| = 0.00e+00` — **exactly** zero, not "small" |
+| vLLM pass@1 vs M1's HF sampler | 2/128 vs 3.12 ± 1.74 expected, **z = −0.64** |
+| `independence_ratio` | **0.968** — errors are iid, so the √L extrapolation is legitimate |
+
+The third is the one that had to be measured rather than assumed: it licenses extrapolating a
+per-token spread to sequence length at all.
+
+**The per-token discrepancy is negligible. The sequence ratio is not.**
+
+| statistic | value |
+|---|---|
+| median δ per token | **−0.000003** — the typical token has no discrepancy at all |
+| p01 / p99 | −0.1221 / +0.1203 |
+| mean δ | −0.001056 (z = −4.5) |
+| σ per token | 0.043402 |
+| `max_off_policy` | 0.6432 |
+
+| L | median ratio | ±1σ | E[ratio] |
+|---|---|---|---|
+| 64 | 0.9346 | [0.661, 1.323] | 0.993 |
+| **512** | **0.5823** | **[0.218, 1.555]** | 0.943 |
+| 1024 | 0.3390 | [0.085, 1.360] | 0.889 |
+
+**Against the band [0.9, 1.1] at L=512: `not_free`, and not marginally** — the median alone is 0.58.
+
+#### The obvious reading of that table is wrong, and the arithmetic says so
+
+It looks like vLLM systematically over-scores its own samples. It does not. Two facts fix the
+interpretation:
+
+1. **The mean *must* be negative.** Sampling `y ~ π_vLLM` and evaluating
+   `E[log π_HF(y) − log π_vLLM(y)]` is `−KL(π_vLLM ‖ π_HF) ≤ 0` by Gibbs. It cannot come out
+   positive for *any* two distinct implementations, so its sign carries no information about which
+   is "right". Its magnitude is the per-token KL: **0.00106 nats**, which is tiny.
+
+2. **The drift is not independent of the spread — it is determined by it.** A log-normal ratio with
+   `E[ratio] = 1` (which unbiasedness requires exactly) forces `μ = −σ²/2`. Observed
+   `μ = −0.001056` against `−σ²/2 = −0.000942`: **agreement to 12%**. The measured `E[ratio]` of
+   0.993 / 0.943 / 0.889 confirms it from the other side.
+
+So the correct statement is: **the importance ratio remains unbiased in expectation, and becomes
+useless per sequence.** Its log spreads as `σ√L` — 0.98 nats at 512 tokens — so the mass slides into
+a long right tail while the mean stays pinned near 1. The *typical* sequence is off by ~1.7×, and the
+estimator's variance is carried by rare large weights. That is the textbook failure of naive
+importance sampling on long sequences, and it is exactly what clipping exists to contain.
+
+**Where the discrepancy comes from:** bf16 accumulation order, not semantics. The median token
+disagrees by 3e-6 and p01/p99 sit at ∓0.12. Nothing is wrong with either implementation. Length is
+doing all the work.
+
+#### Consequence: rung 4 is un-cut, on earned evidence
+
+`config.py` cut rung 4 because "with a single epoch the importance ratio is identically 1". M2 shows
+that is a property of the **sampler/scorer pairing**, not of the single-epoch design — and
+`clipping_is_active` gates on `epochs_per_batch` alone, so the guard and the hazard are keyed on
+different things. The docstring now records this.
+
+**This is the pre-registered "un-cut it on earned evidence" branch firing.** Adopting vLLM anywhere
+from Walk onward requires a genuine importance weight and a clip; `prime-rl` logging
+`Max Off-Policy` on every line is the same conclusion reached by the field.
+
+**For R0 specifically, this does *not* simply make the run affordable.** vLLM's speed is available
+only behind a loop change that Phase 0.1 deliberately did not make, and that change is the user's to
+write (§7). The cost objection is not removed — it is converted into a prerequisite.
+
+**Not measured, and not claimed:** the actual speedup. The 7-minute app included image pull, engine
+init, model load, the HF scoring pass and the control pass, so no clean generation-throughput number
+comes out of it. Quoting one would be inventing it.
+
 ## Design notes
 
 **`CountdownFamily` generates only solvable instances.** Sample an expression tree first, evaluate
@@ -193,7 +272,7 @@ instance provably solvable** (asserted by search, not by construction alone), pa
 band above. ✅ **MET 2026-08-03 — verdict `starved`.** See the M1 RESULT section above.
 
 **G3 — M2 returns a per-token discrepancy distribution** and implied sequence ratios, against the
-band above.
+band above. ✅ **MET 2026-08-03 — verdict `not_free`.** See the M2 RESULT section above.
 
 **Stage 1 ends there.** R0's scale, budget and well-posedness are decided by G2 and G3, and the
 run itself is planned separately.
@@ -210,4 +289,5 @@ run itself is planned separately.
 | date | change |
 |---|---|
 | 2026-08-03 | Plan locked. Stage 1 scoped to two measurements after research showed R0 unrunnable as written on three counts. Both decision bands pre-registered. |
+| 2026-08-03 | **G3 met. M2 returned `not_free`** — per-token discrepancy negligible (median 3e-6) but compounding to a ±1σ sequence ratio of [0.22, 1.55] at L=512. Both rig checks passed (HF-vs-HF exactly 0; pass@1 z=−0.64; `independence_ratio` 0.968). The drift is `−σ²/2`, i.e. the ratio stays unbiased in expectation and becomes useless per sequence. **Rung 4 un-cut on earned evidence**; `config.py`'s justification annotated. |
 | 2026-08-03 | **G2 met. M1 returned `starved` at both scales** — no cell in the 2×4 grid clears the pre-registered `≤ 0.50` band. Rig-broken branch did not fire. §2's `p⁸ + (1−p)⁸` prediction (0.851) matched the measurement (0.845). R0's well-posedness is now the open question; M2 proceeds regardless, since it is reusable from Walk onward. |
