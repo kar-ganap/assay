@@ -5,8 +5,18 @@ most evolved instance; also `../../waterline`, `../../synthoracle`). The reading
 `../docs/related-work.md` — but **nothing here is "read" until a first-hand ⬤ pass clears it.**
 LLM-surfaced IDs and claims can be wrong.
 
-> **Status — 2026-07-26.** Scaffold. **0 / 12 verified.** No paper has been read first-hand. The
-> one-sentence novelty claim in `../docs/related-work.md` is **provisional and undefended.**
+> **Status — 2026-08-04. Block A in progress: 2 / 5 read first-hand (2 / 12 overall).**
+>
+> - **#1 fuzzing-RLVR-verifiers** ⬤ read — `01-fuzzing-rlvr-verifiers-2606-review.md`. Every
+>   *quantitative* claim in `related-work.md` verified exact. Two *qualitative* claims wrong, one of
+>   which **falsifies the current novelty claim** (they do stake a pre-training-diagnostic claim).
+>   A revised claim is proposed in that review and **awaits the user's decision**.
+> - **#3 Prime Sprints reward-hacking** ⬤ read 2026-08-04, twice and independently, during Phase 0.4
+>   — see `../docs/phases/phase-0.4-r1-plan.md`. Publishes a reproducible steps-to-saturation table;
+>   free queue verified live. Its own review file is still to be written up from that material.
+>
+> The one-sentence novelty claim in `../docs/related-work.md` is **currently falsified as written**
+> and must be replaced before `pre-registration.md` locks.
 
 ## Process (one paper at a time)
 
@@ -43,9 +53,9 @@ adopt; what to differentiate for reviewers) · `## Discussion Notes` (filled dur
 
 | # | K | Paper | id | Key question for us | Status |
 |---|---|---|---|---|---|
-| 1 | K2 | **Before the Model Learns the Bug: Fuzzing RLVR Verifiers** | 2606.01066 | Confirm it really uses **injected** bugs and **never trains**. If it trains, our differentiation collapses. | ☐ unread |
+| 1 | K2 | **Before the Model Learns the Bug: Fuzzing RLVR Verifiers** | 2606.01066 | Confirm it really uses **injected** bugs and **never trains**. If it trains, our differentiation collapses. | ⬤ **READ 2026-08-04** — injected ✅; "never trains" ✗ (tabular policy gradients, no neural fine-tune). Differentiation survives but **moves from the question to the validation**. |
 | 2 | K2 | **Breaking Barriers: Do RL Post-Training Gains Transfer To Unseen Domains?** | ICLR 2026, uiuc-kang-lab | Does anyone hold **skill fixed, authorship varied**? This is the closest threat to `endemic`. | ☐ unread |
-| 3 | K2 | **Prime Sprints — reward-hacking track** | primeintellect.ai/blog/reward-hacking | Is "predict onset from 20 steps" already answered? Is the free queue live, and on what terms? | ☐ unread |
+| 3 | K2 | **Prime Sprints — reward-hacking track** | primeintellect.ai/blog/reward-hacking | Is "predict onset from 20 steps" already answered? Is the free queue live, and on what terms? | ⬤ **READ 2026-08-04** (x2, independently) — publishes a steps-to-saturation table; **free queue verified LIVE**. Review file pending. |
 | 4 | K3 | **Rollout Pass-Rate Control** | 2605.05112 | Exact form of the p≈0.5 result, so A3 cites rather than re-derives. Does it *also* claim the gap? | ☐ unread |
 | 11 | K4 | **Natural Emergent Misalignment from Reward Hacking** | 2511.18397 | The step-1,500 emergence and "no safe rarity threshold." Does it invalidate the `p_hack@64` screen? | ☐ unread |
 
