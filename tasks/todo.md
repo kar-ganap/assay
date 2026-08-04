@@ -40,7 +40,13 @@ rather than invent.
 4. **Optional, ~$0.49:** a second seed on M3. R0's retirement does not depend on it — the threshold
    verdicts hold at one seed — but the *inertness* claim asserts an effect is absent, and prompt-set
    seed variance is uncharacterised.
-5. **Next phase is 0.4 (R1) / 0.5**, per `docs/stages.md`. R1 is the reachability gate and remains on
+5. **FUNDING — the remaining science costs ~$147-1,654 (mid $549) against ~$17 in hand.**
+   `scripts/cost_model.py` + `docs/compute-options.md`. Actionable now, in parallel with 0.4:
+   **apply to fal Research Grants and CloudRift** (both open to independents, both weight
+   open-source output, neither blocks on 1.1). NSF ACCESS's window closed 2026-07-31 — find the
+   next. **At Phase 1.1, measure one real `bisect` episode before optimising anything**: it
+   collapses an $875 span single-handedly.
+6. **Next phase is 0.4 (R1) / 0.5**, per `docs/stages.md`. R1 is the reachability gate and remains on
    the never-cut list.
 
 ## DECISIONS ALREADY MADE (do not relitigate — the *why* is in `docs/conceptual.md`)
