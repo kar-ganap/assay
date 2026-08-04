@@ -20,6 +20,7 @@ re-runs.
 | 2026-08-03 | 0 · Crawl | 0.2 | Ecosystem-idiom port — 3 hosted GRPO runs (G4 binary, G4 unfiltered A/B, filter probe) | Prime Sprints free queue | ~3 × 200 steps | **$0.00** | ~$12–13 | Free tier, Llama-3.2-1B-Instruct. All five gates met at zero spend. |
 | 2026-08-03 | 0 · Crawl | 0.3 | **M1 — Countdown base-rate screen.** Qwen2.5-1.5B + Qwen2.5-3B, 4 settings each, n=200, k=8, 512 tok — 12,800 completions | Modal L4 | **1 h 58 m app wall clock, measured** (13:48→15:46 PDT, `ap-ZFGqkvE6gZKI5QYK2ArRsN`) | **$1.57 (measured, upper bound)** | ~$14–15 | Wall clock includes image build and model downloads, so charged GPU time is at most this. Verdict **starved at both scales** — see below. |
 | 2026-08-03 | 0 · Crawl | 0.3 | **M2 — vLLM/HF log-prob mismatch.** 128 prompts, 34,456 tokens compared, + one failed launch (missing `nvcc`) | Modal L4 | ~11 min GPU across two apps (7 min + 4 min), measured | **~$0.15 (measured)** | ~$15 | Estimated at $0.50 in the plan. Verdict **`not_free`** — see below. |
+| 2026-08-03 | 0 · Crawl | 0.3 | **M3 — difficulty screen.** Qwen2.5-3B, `cd-3-easy` + `cd-3-mid`, n=200, k=8 | Modal L4 | **37 min, measured** (17:48→18:25 PDT, `ap-7NCM78vjTJDs2AWumfdi6G`) | **$0.49 (measured)** | ~$15.50 | Estimated $0.50. Nothing admitted; the arithmetic axis is inert. **R0 retires** — total Phase 0.3 spend **$2.21** of R0's $10 line, and the remaining $7.79 is released. |
 
 ### RECONCILED 2026-08-01 — measured, not reconstructed
 

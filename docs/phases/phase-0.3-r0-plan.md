@@ -313,6 +313,71 @@ the screen select a task that passes the band and teaches nothing.
 among those clearing all four. It retains the most search character while still being learnable.
 Fixing this now is what stops the winner being chosen after the numbers are visible.
 
+#### M3 RESULT — 2026-08-03. **Nothing admitted. And the reason is not the one pre-registered.**
+
+Qwen2.5-3B, n=200, k=G=8, 512 tokens, T=1.0, base checkpoint, `git_sha a8ff1d6`, clean tree.
+Artifact: `experiments/phase-0.3-r0/results/screen-difficulty-Qwen2.5-3B-seed0.json`. Cost **$0.49**
+(37 min L4, measured), against a $0.50 estimate.
+
+| setting | pass@1 | **dead** | explore | tok | parse_fail | verdict |
+|---|---|---|---|---|---|---|
+| `cd-3` (M1) | 0.0594 | 0.620 | 6.40x | 138 | 0.151 | — |
+| `cd-3-easy` | 0.0619 | **0.615** | 6.22x | 143 | 0.144 | rejected: `dead_group_fraction` |
+| `cd-3-mid` | 0.0587 | **0.625** | 6.38x | 137 | 0.155 | rejected: `dead_group_fraction` |
+
+**Criteria 2, 3 and 4 passed comfortably everywhere.** Only the band failed, and it failed by the
+same margin it failed at in M1.
+
+#### The arithmetic axis is inert
+
+The variants are genuinely different tasks — operand mean **13.4 -> 5.7**, target mean
+**66.8 -> 21.8**, a ~2.5x reduction in arithmetic burden:
+
+```
+cd-3      Using the numbers 19, 23, 1, ... equals 42.
+cd-3-easy Using the numbers 10, 1, 4,  ... equals 41.
+```
+
+And it bought **nothing**. pass@1 went 0.0594 -> 0.0619, a difference of **z = 0.30** against
+`SE_diff = 0.0084` — indistinguishable from noise. The per-prompt histograms are near-identical
+(`[124,59,15,2,…]` vs `[123,57,19,0,1,…]`), as are completion lengths and exploration ratios.
+
+**So the pre-registered negative branch is confirmed but its stated reason is wrong.** It predicted a
+*trade-off* — that difficulty and search character could not be separated. What actually happened is
+that the axis M3 varied **does not move difficulty at all**. The bottleneck is not the arithmetic;
+it is the search over expression trees. The design isolated the two axes cleanly, and the answer is
+that one of them is inert.
+
+That is a stronger result than the branch anticipated: it is not "we could not find a setting", it is
+**"operand magnitude is the wrong knob, and we know that by measurement rather than by failing to
+find one."** Anyone proposing to make Countdown learnable by easing the arithmetic now has a number
+to argue with.
+
+#### Honest limitation — the screen and TinyZero's claim are in tension
+
+Worth stating plainly rather than glossing. **The screen measures step-0 capability. TinyZero's claim
+is that search and self-verification *emerge during training*.** A low step-0 pass rate is what its
+thesis predicts, so using a step-0 measurement to rule the task out assumes reachability at step 0
+predicts trainability.
+
+That assumption is the project's own (the `p_hack@64` recursion in `CLAUDE.md` §4), it was
+pre-registered, and 38% of groups do carry gradient — not zero. What bounds the claim is the budget:
+**at 200 steps, on our loop, at affordable scale.** Anthropic needed ~1,500 steps for exploits that
+were not reachable. This screen does not show Countdown is unlearnable; it shows it is not learnable
+*within R0's budget*, which is the decision R0 actually faces.
+
+#### Consequence: option (d). R0 retires.
+
+Three independent measurements now point the same way — no affordable scale clears the band (M1), the
+task's difficulty does not yield to the one axis that preserves its character (M3), and the cheap
+route to more compute costs a loop change (M2). **R0 retires with the search-vs-pattern-completion
+limitation stated**, and what stands in its place is Phase 0.1's run 7 (0.571 -> 0.923, n=3) plus
+Phase 0.2's independent-trainer cross-check, whose step-1 eval landed inside run 7's own band.
+
+**What that leaves open, to be declared as a limitation:** every task the loop has been shown to
+learn is **pattern completion, not search**. That is exactly the gap Countdown was chosen to close,
+and it stays open.
+
 ### The run
 
 Qwen2.5-3B (the better base rate), n=200, k=G=8, 512 tokens, T=1.0, base checkpoint, same pins as M1.
@@ -371,6 +436,7 @@ run itself is planned separately.
 | date | change |
 |---|---|
 | 2026-08-03 | Plan locked. Stage 1 scoped to two measurements after research showed R0 unrunnable as written on three counts. Both decision bands pre-registered. |
+| 2026-08-03 | **M3 returned: nothing admitted, and the pre-registered reason was wrong.** Criteria 2-4 passed everywhere; only the band failed. A ~2.5x reduction in arithmetic burden moved pass@1 by z=0.30 — the arithmetic axis is **inert**, so the bottleneck is the search, not the sums. Consequence: **R0 retires (option d)**, with the step-0-vs-emergence tension recorded as a limitation. |
 | 2026-08-03 | **M2 corroborated externally.** `verl`'s `examples/rollout_correction` treats the same effect in production, with a threshold (2.0) at the edge of M2's measured ±1σ interval and self-normalisation that fixes M2's exact residual. Rung 4 has a design to adopt. Separately confirmed that **verl does not rescue R0** — no Countdown dataset, no tinyzero recipe; TinyZero is listed under "Awesome Projects Built with `verl`". |
 | 2026-08-03 | **M3 pre-registered** — difficulty screen over 3-number Countdown variants, four admission criteria plus a tie-break, both branches written down. Locked before the settings existed. |
 | 2026-08-03 | **G3 met. M2 returned `not_free`** — per-token discrepancy negligible (median 3e-6) but compounding to a ±1σ sequence ratio of [0.22, 1.55] at L=512. Both rig checks passed (HF-vs-HF exactly 0; pass@1 z=−0.64; `independence_ratio` 0.968). The drift is `−σ²/2`, i.e. the ratio stays unbiased in expectation and becomes useless per sequence. **Rung 4 un-cut on earned evidence**; `config.py`'s justification annotated. |

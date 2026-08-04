@@ -580,7 +580,12 @@ if modal is not None:
                 "gpu": SCREEN_GPU,
             },
         }
-        tag = f"screen-countdown-{model_id.split('/')[-1]}-seed{seed}"
+        # The tag must distinguish *what was screened*, not only which model. M1 and M3 ran the same
+        # model and both wrote `screen-countdown-Qwen2.5-3B-seed0`, so M3 silently overwrote M1's
+        # copy in the volume on 2026-08-03. The committed local artifacts were unaffected and remain
+        # authoritative, but `fetch` would have recovered the wrong thing.
+        scope = "-".join(settings) if settings else "all"
+        tag = f"screen-countdown-{model_id.split('/')[-1]}-{scope}-seed{seed}"
         out = Path(VOLUME_PATH) / tag
         out.mkdir(parents=True, exist_ok=True)
         (out / "result.json").write_text(_json.dumps(payload, indent=2, sort_keys=True) + "\n")
