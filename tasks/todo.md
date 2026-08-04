@@ -53,7 +53,10 @@ rather than invent.
    there — recommendation is yes; the hypotheses are already public via the Hub README).
    NSF ACCESS's window closed 2026-07-31 — find the next. **At Phase 1.1, measure one real `bisect`
    episode before optimising anything**: it collapses an $875 span single-handedly.
-6. **Next phase is 0.4 (R1) / 0.5**, per `docs/stages.md`. R1 is the reachability gate and remains on
+6. **Phase 0.4 (R1) IS RUNNING** — `phase-0.4-r1-reachability`, plan locked
+   (`docs/phases/phase-0.4-r1-plan.md`). Rule `[ADD] 4` applied first and **passed**: Prime publishes
+   a reproducible steps-to-saturation table where TinyZero published nothing. Expected **$0** on the
+   free tier (same model family). **Next after 0.4:** 0.5, per `docs/stages.md`. R1 is the reachability gate and remains on
    the never-cut list.
 
 ## DECISIONS ALREADY MADE (do not relitigate — the *why* is in `docs/conceptual.md`)
@@ -70,7 +73,13 @@ rather than invent.
   experiment.
 - **R1 sits in Crawl on purpose.** It is both a reproduction and the reachability gate, so the
   project's biggest risk surfaces in week 1 for ~$2 rather than in week 5 for a stage.
-- **`endurance` (the NAND environment) is project #2** and does not move forward.
+- **`endurance` (the NAND environment) is project #2** and does not move forward. **Re-examined
+  2026-08-04 for the grant proposal specifically, and declined again.** The reasoning goes beyond the
+  §15 rule: `endemic` (Reasoning Gym + Hub A' pairs) **already carries the generalisation leg**, and
+  `conceptual.md` calls `endurance` *"structurally identical"* to `bisect` — so adding it would
+  duplicate a covered function while putting **two unbuilt environments** in a proposal and doubling
+  the cost model's dominant uncertainty. For a solo unaffiliated applicant breadth reads as unfocus.
+  **One sentence naming it as the sequel is the most it gets.**
 - **Learning-first:** user writes the GRPO loop, the grader factorial, the battery scoring, and every
   hypothesis test. Claude scaffolds plumbing. (`CLAUDE.md` §7.)
 - **Model floor is 1.5B for anything requiring reasoning** — TinyZero found 0.5B fails on Countdown.

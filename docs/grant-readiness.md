@@ -77,11 +77,14 @@ honest about a 3× band rather than hiding it behind false precision.
 
 ### Tier 1 — do before applying
 
-1. **Make the repository public.** *The decision, not a task — see §6.* Both target programmes weight
-   open-source; a private repo means the reviewer has only our claims. Near-zero effort, highest
-   impact.
+1. ~~**Make the repository public.**~~ **DONE 2026-08-04** — `github.com/kar-ganap/assay` is public.
+   §6's decision is closed; its reasoning is kept below as the record of why.
 
-2. **Run R1 (Phase 0.4). ~$0–2.** *The highest-value experiment available for the proposal*, because
+2. **Run R1 (Phase 0.4). ~$0–2.** *In progress — `docs/phases/phase-0.4-r1-plan.md`.* **Stronger
+   than assessed here.** Prime publishes a reproducible **steps-to-saturation** table, so R1 carries
+   a pre-registered *prediction* (R1-P) that a hack's step-0 base rate predicts its onset — **H2 in
+   miniature, on someone else's published curve, for ~$0.** That is the thesis evidence §1 says the
+   case is missing, obtainable before we own an environment. *The highest-value experiment available for the proposal*, because
    **it de-risks the thing the grant would fund.** R1 asks whether a 1B model reward-hacks inside a
    100-step budget. If yes, the Run-stage experiment is demonstrably feasible and the ask becomes
    "fund a design we have shown works at small scale." If no, we have a problem credits cannot
@@ -124,7 +127,7 @@ honest about a 3× band rather than hiding it behind false precision.
   prediction question before Run lands, the fallback is the η leg. Publishing the framing accelerates
   anyone inclined to take it.
 
-**Recommendation: go public.** The priority-by-timestamp argument is strong, the hypotheses are
+**Recommendation: go public. — ADOPTED 2026-08-04.** The priority-by-timestamp argument is strong, the hypotheses are
 already out via the Hub README, and a funding application that cannot show its work is materially
 weaker. If the concern bites, the middle path is publishing the repo while keeping
 `docs/conceptual.md`'s sharpest framing in a private branch until Run lands — but that is a fiddly
