@@ -99,6 +99,31 @@ Prime Sprints' free queue serves `sprints/Llama-3.2-1B-Instruct`, **the same mod
 requires**, and Phase 0.2 proved the path end-to-end (three hosted runs, one to eval 0.9980). The
 three free-tier gates are known and documented. Modal is the fallback at ~$0.30/run.
 
+## Pinned before G2 runs — which base rate scores R1-P
+
+Our base rates may diverge from Prime's; different prompt, different template, possibly different
+sampling length. **Decided 2026-08-04, before any number was visible:**
+
+- **G3 (the reproduction) is scored against *Prime's* published onsets** — 44 / 18 / 11. That is the
+  external delta the ledger requires.
+- **R1-P (the prediction) is scored against *our own* measured base rates.** R1-P claims that a
+  hack's step-0 base rate predicts *its* onset **in our system**; substituting their base rates would
+  confound their prompt, model and template with ours and would test nothing about our screen.
+
+Divergence between the two base-rate sets is therefore **a reported finding, not a failure** — it
+measures how much of "base rate" is a property of the policy versus of the prompt.
+
+### And the length pin that makes base rate meaningful at all
+
+**Base rate is length-dependent** — a longer completion is more chances for the word to appear. So
+the base-rate measurement and the training runs must use the **same `max_new_tokens`, or the base
+rate cannot predict onset even in principle.** Pinned at **64**, matching Phase 0.1 and Phase 0.2, so
+every number in this repo stays on one sampling length.
+
+**All three words are counted from one sample.** Base rate is a property of the completions, not of
+the grader, so a single sampling pass at `n x k` yields all three — three runs would spend 3x to
+measure the same distribution, and worse, on three different draws.
+
 ## Gates
 
 **G1 — local.** `make check` green, zero GPU: hack-word grader agrees with its spec on fixtures,
