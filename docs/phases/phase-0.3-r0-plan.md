@@ -244,6 +244,25 @@ from Walk onward requires a genuine importance weight and a clip; `prime-rl` log
 only behind a loop change that Phase 0.1 deliberately did not make, and that change is the user's to
 write (§7). The cost objection is not removed — it is converted into a prerequisite.
 
+#### Independently corroborated the same day — `verl`'s `rollout_correction`
+
+Found 2026-08-03 while checking whether verl's reproducible examples bore on R0 (they do not — see
+`docs/related-work.md`). `verl-project/verl` ships `examples/rollout_correction/`, a production
+treatment of this exact effect, and its parameters line up with what M2 measured:
+
+| verl config | M2's measurement |
+|---|---|
+| `rollout_is=sequence` | the discrepancy is negligible per token (median 3e-6) and only bites at sequence level — which is the level M2 reported |
+| `rollout_is_threshold=2.0` | M2's ±1σ at L=512 is [0.218, **1.555**]; the cap sits at the edge of the measured distribution |
+| `rollout_is_batch_normalize=true` | self-normalisation fixes precisely M2's residual `E[ratio]` = 0.943 rather than 1 |
+| `rollout_is_eff_sample_size` | ESS — the importance-weight degeneracy diagnostic, i.e. effective batch < nominal batch |
+
+Two consequences. First, **`not_free` is confirmed by a second stack**: an independent codebase had
+to solve this at scale, so the effect is real and not a harness artifact. Second, **rung 4 now has a
+design to adopt rather than invent** — self-normalised *sequence-level* importance sampling with a
+threshold near 2.0, plus ESS logged every step. `prime-rl`'s `Max Off-Policy` line is the same
+conclusion from a third stack.
+
 **Not measured, and not claimed:** the actual speedup. The 7-minute app included image pull, engine
 init, model load, the HF scoring pass and the control pass, so no clean generation-throughput number
 comes out of it. Quoting one would be inventing it.
@@ -352,6 +371,7 @@ run itself is planned separately.
 | date | change |
 |---|---|
 | 2026-08-03 | Plan locked. Stage 1 scoped to two measurements after research showed R0 unrunnable as written on three counts. Both decision bands pre-registered. |
+| 2026-08-03 | **M2 corroborated externally.** `verl`'s `examples/rollout_correction` treats the same effect in production, with a threshold (2.0) at the edge of M2's measured ±1σ interval and self-normalisation that fixes M2's exact residual. Rung 4 has a design to adopt. Separately confirmed that **verl does not rescue R0** — no Countdown dataset, no tinyzero recipe; TinyZero is listed under "Awesome Projects Built with `verl`". |
 | 2026-08-03 | **M3 pre-registered** — difficulty screen over 3-number Countdown variants, four admission criteria plus a tie-break, both branches written down. Locked before the settings existed. |
 | 2026-08-03 | **G3 met. M2 returned `not_free`** — per-token discrepancy negligible (median 3e-6) but compounding to a ±1σ sequence ratio of [0.22, 1.55] at L=512. Both rig checks passed (HF-vs-HF exactly 0; pass@1 z=−0.64; `independence_ratio` 0.968). The drift is `−σ²/2`, i.e. the ratio stays unbiased in expectation and becomes useless per sequence. **Rung 4 un-cut on earned evidence**; `config.py`'s justification annotated. |
 | 2026-08-03 | **G2 met. M1 returned `starved` at both scales** — no cell in the 2×4 grid clears the pre-registered `≤ 0.50` band. Rig-broken branch did not fire. §2's `p⁸ + (1−p)⁸` prediction (0.851) matched the measurement (0.845). R0's well-posedness is now the open question; M2 proceeds regardless, since it is reusable from Walk onward. |

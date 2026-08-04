@@ -31,6 +31,61 @@
 | **Natural Emergent Misalignment from Reward Hacking** (Anthropic) | 2511.18397 | Hacking emerges ~step 1,500, saturates ~4,000; **no safe rarity threshold** | The counter-evidence to the reachability assumption — read it *against* our own design. Drives the L1–L6 ladder. | ☐ |
 | **Credit assignment survey (reasoning → agentic)** | 2604.09459 | 47 methods, 2024–early 2026 | **What we are deliberately not doing.** Cited to bound scope. | ☐ |
 
+## `verl` — read first-hand 2026-08-03, and it is prior art for M2
+
+> **This section is ⬤ first-hand**, unlike the ☐ table above: the repo, its README, its
+> `examples/` tree and the `rollout_correction` script were read directly on 2026-08-03. It is kept
+> separate so the verified content is not diluted by the unverified table.
+
+**Repo moved:** `volcengine/verl` → **`verl-project/verl`** (22.8k stars, pushed 2026-08-04). Any
+link or citation using the old path should be updated.
+
+### Prior art for M2, with parameters that corroborate our measurement
+
+`examples/rollout_correction/` ships a production treatment of the exact effect M2 measured, on the
+same afternoon and independently:
+
+| verl config | what M2 measured |
+|---|---|
+| `rollout_is=sequence` — sequence-level importance sampling | M2 reported the **sequence** ratio, because that is the level at which the discrepancy degrades; per-token it is negligible (median 3e-6) |
+| `rollout_is_threshold=2.0` — cap on IS weights | M2's ±1σ interval at L=512 is **[0.218, 1.555]**. The cap sits at the edge of the distribution we measured — it is not an arbitrary constant |
+| `rollout_is_batch_normalize=true` — self-normalised, mean→1 | Fixes exactly the residual M2 saw: `E[ratio]` = **0.943** at L=512 rather than exactly 1 |
+| `rollout_is_eff_sample_size` — ESS, monitored every step | The degeneracy diagnostic: effective batch < nominal batch, which is what a wide ratio distribution costs |
+
+**Why this matters beyond citation.** It is independent confirmation that M2's `not_free` verdict is
+a real effect and not a harness artifact, from a codebase that had to solve it at scale — and it is a
+**concrete design for rung 4**, better than one we would invent. `prime-rl`'s `Max Off-Policy` log
+line is the same conclusion reached by a second stack.
+
+### It does **not** rescue R0
+
+Checked directly, because the reproducible-examples pitch suggests otherwise:
+
+- `examples/data_preprocess/` has gsm8k, math, geo3k, aime2024, hellaswag, full_hh_rlhf — **no
+  Countdown**.
+- The `recipe/` submodule (`verl-project/verl-recipe`) has `r1`, `dapo`, `prime`, `spin`, `sppo`,
+  `entropy`, … — **no tinyzero**.
+- TinyZero appears once in the README, under the heading **"Awesome Projects Built with `verl`"**,
+  as an external link to `Jiayi-Pan/TinyZero`.
+
+So TinyZero is **community work built on verl, not a verl recipe**, and R0's blocking problem —
+*the original publishes no number to compute a delta against* — is untouched. Nothing here changes
+the R0 decision.
+
+### Where it belongs in the project
+
+`CLAUDE.md` §6 lists `prime-rl` or `trl` for Walk onward. **verl is absent, and was never
+evaluated** — one mention in the entire repo, describing TinyZero's stack. Two reasons it should be
+a candidate rather than missing:
+
+- It implements **DrGRPO**, which is independently where Phase 0.1's length-normalisation finding
+  pointed — reached here by measurement, there by design.
+- It implements **GSPO** and **DAPO**, adjacent to the grader-factorial work, and the
+  `rollout_is_*` surface above.
+
+Against that: Phase 0.2 validated `prime-rl` at **$0** on the free tier, a hard advantage verl does
+not have (its examples assume 64×H800). **This is a recorded candidate, not a proposed switch.**
+
 ## Verification protocol
 
 1. Verify every arXiv ID / URL resolves to the claimed paper (⬤ id).

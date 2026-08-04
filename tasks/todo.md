@@ -93,6 +93,14 @@ ratio at L=512. Pure core in `crawl/mismatch.py` (zero GPU, 20 tests); Modal sid
       is publishing `bisect` before the paper. Decide at Phase 0.2. **Trap:** `prime-rl` ships a
       `zero_advantage` pre-batch filter ON BY DEFAULT — a Stage-2 grid there would silently
       filter away ablation D's pathology unless the filter list is overridden.
+- [ ] **`verl` is missing from `CLAUDE.md` §6's backend list, and was never evaluated.** Read
+      first-hand 2026-08-03 (`docs/related-work.md` has the verified section). §6 says `prime-rl` or
+      `trl`; verl appeared exactly once in this repo, describing TinyZero's stack. It implements
+      **DrGRPO** — independently where Phase 0.1's length-normalisation finding pointed — plus GSPO,
+      DAPO, and the `rollout_is_*` surface that M2's result now calls for. Against it: Phase 0.2
+      validated `prime-rl` at **$0** on the free tier; verl's examples assume 64xH800.
+      **Proposed §6 amendment, to be decided at Phase 0.3's `/learn`** — add verl as a candidate,
+      not a switch. Note also the repo moved: `volcengine/verl` -> **`verl-project/verl`**.
 - [ ] **Tinker waitlist** — $150 credits would make Run and Gallop materially cheaper and could put
       the confirmatory arms at 8B.
 - [ ] **Pin the confirmatory model revision hash** (Phase 1.1). Candidate was Qwen3-1.7B;
