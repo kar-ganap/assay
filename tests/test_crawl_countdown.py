@@ -125,7 +125,16 @@ def test_every_generated_instance_is_actually_solvable() -> None:
     """
     # Fewer instances at the wide settings: cost grows steeply with the number count, and the
     # property under test does not depend on sample size the way a statistic would.
-    per_setting = {"cd-3": 12, "cd-4": 12, "cd-5": 6, "cd-6": 4}
+    per_setting = {
+        "cd-3": 12, "cd-4": 12, "cd-5": 6, "cd-6": 4,
+        # M3's variants. Three numbers each, so they cost the same as cd-3.
+        "cd-3-easy": 12, "cd-3-mid": 12,
+    }
+    missing = set(CountdownFamily().settings()) - set(per_setting)
+    assert not missing, (
+        f"settings {sorted(missing)} were added without extending this test -- the solvability "
+        "guarantee the whole screen rests on would go unchecked for them"
+    )
     for setting in CountdownFamily().settings():
         for prompt in CountdownFamily().generate(setting, per_setting[setting], seed=0):
             numbers, target = parse_countdown_question(prompt.question)

@@ -266,6 +266,13 @@ class CountdownFamily:
     #: is what grows the search space.
     _SETTINGS: ClassVar[dict[str, tuple[int, tuple[int, int], tuple[int, int]]]] = {
         "cd-3": (3, (1, 25), (20, 300)),
+        # M3 (pre-registered 2026-08-03). Three numbers in every variant, deliberately: the number
+        # count is what grows the space of expression trees, so holding it fixed and shrinking only
+        # the operand magnitudes gives an *identical structural search space* and varies only the
+        # per-step arithmetic burden. That is what lets the screen separate "can it do the
+        # arithmetic" from "can it search" — see docs/phases/phase-0.3-r0-plan.md §M3.
+        "cd-3-easy": (3, (1, 10), (10, 60)),
+        "cd-3-mid": (3, (1, 15), (15, 120)),
         "cd-4": (4, (1, 50), (100, 999)),
         "cd-5": (5, (1, 75), (100, 999)),
         "cd-6": (6, (1, 100), (100, 999)),

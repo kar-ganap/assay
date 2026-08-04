@@ -274,8 +274,22 @@ def run_sweep(
     cfg: SamplerConfig,
     seed: int = 0,
     observer: Observer | None = None,
+    settings: Sequence[str] | None = None,
 ) -> list[SettingSummary]:
-    """Walk every (family, setting) cell. ``k`` should equal the intended GRPO group size."""
+    """Walk every (family, setting) cell. ``k`` should equal the intended GRPO group size.
+
+    ``settings`` restricts the walk — M3 screens two new Countdown variants and re-running the four
+    M1 already settled would spend most of the budget re-measuring a known answer. An unknown name
+    **raises**: silently screening nothing would look exactly like a clean run, which is the failure
+    shape this project has already paid for three times.
+    """
+    if settings is not None:
+        available = {setting for family in families for setting in family.settings()}
+        unknown = [s for s in settings if s not in available]
+        if unknown:
+            raise ValueError(
+                f"unknown setting(s) {unknown}; available: {sorted(available)}"
+            )
     return [
         sweep_setting(
             family,
@@ -289,4 +303,5 @@ def run_sweep(
         )
         for family in families
         for setting in family.settings()
+        if settings is None or setting in settings
     ]

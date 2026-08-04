@@ -506,6 +506,7 @@ if modal is not None:
         seed: int,
         max_new_tokens: int,
         provenance: dict,
+        settings: list | None = None,
     ) -> dict:
         """Countdown base-rate screen for one model. Generation only.
 
@@ -555,6 +556,9 @@ if modal is not None:
             # use_chat_template=False: these are BASE checkpoints (see HFSampler).
             sampler=HFSampler(model, tokenizer, use_chat_template=False),
             n_prompts=n_prompts, k=k, cfg=cfg, seed=seed, observer=collect,
+            # M3 screens a subset. Re-running the four settings M1 already settled would spend most
+            # of the budget re-measuring a known answer. An unknown name raises in run_sweep.
+            settings=settings or None,
         )
 
         payload = {
@@ -806,6 +810,50 @@ if modal is not None:
         artifacts.commit()
         print(f"committed artifacts to volume {VOLUME_NAME}:/{tag}")
         return payload
+
+    @app.local_entrypoint()
+    def screen_difficulty(
+        model: str = "qwen2.5-3b",
+        settings: str = "cd-3-easy,cd-3-mid",
+        n_prompts: int = 200,
+        k: int = 8,
+        seed: int = 0,
+        max_new_tokens: int = 512,
+        allow_dirty: bool = False,
+    ) -> None:
+        """M3 — ``modal run --detach src/assay/modal_app.py::screen_difficulty``.
+
+        The four admission criteria and the tie-break were pre-registered in
+        ``docs/phases/phase-0.3-r0-plan.md`` §M3, in the commit *before* these settings existed.
+        They are applied here by ``assay.crawl.admission``, not by eye.
+        """
+        from assay.crawl.admission import ADMISSION, admission_report
+        from assay.crawl.calibrate import SettingSummary
+
+        provenance = _provenance()
+        _require_clean_tree(provenance, allow_dirty=allow_dirty)
+
+        wanted = [x.strip() for x in settings.split(",") if x.strip()]
+        model_id, revision = SCREEN_MODELS[model]
+        print(f"=== M3: difficulty screen, {model_id}, settings {wanted} ===")
+        result = screen_remote.remote(
+            model_id, revision, n_prompts, k, seed, max_new_tokens, provenance, wanted
+        )
+
+        out_dir = Path("experiments/phase-0.3-r0/results")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tag = f"screen-difficulty-{model_id.split('/')[-1]}-seed{seed}"
+        (out_dir / f"{tag}.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+
+        summaries = [SettingSummary(**row) for row in result["summaries"]]
+        print(f"\n  criteria (pre-registered): {ADMISSION}\n")
+        for row in admission_report(summaries):
+            c = row["criteria"]
+            print(f"  {row['setting']:<12} dead {c['dead_group_fraction']['value']:.3f}  "
+                  f"explore {c['exploration_ratio']['value']:.2f}x  "
+                  f"tok {c['median_completion_tokens']['value']:.0f}  "
+                  f"parse_fail {c['parse_fail_rate']['value']:.3f}  "
+                  f"-> {'ADMITTED' if row['admitted'] else 'rejected: ' + ','.join(row['failed'])}")
 
     @app.local_entrypoint()
     def measure_mismatch(
