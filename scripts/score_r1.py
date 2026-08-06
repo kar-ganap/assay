@@ -167,7 +167,8 @@ def report(scored: list[dict[str, Any]]) -> None:
             tt = t["test"]
             print(f"        U = {tt['u']:.1f}/{tt['u_max']:.0f}   exact one-sided p = "
                   f"{tt['p_one_sided']:.4f}   (floor for this design = {tt['p_floor']:.4f})")
-        print(f"        separated = {t['separated']}   CONFIRMED = {t['confirmed']}")
+        verdict = {True: "CONFIRMED", False: "FALSIFIED", None: "UNRESOLVED"}[t["confirmed"]]
+        print(f"        alpha = {t['alpha']}   POWERED = {t['powered']}   verdict = {verdict}")
         print(f"        {t['reason']}")
 
         # Every pair, so the coarse-vs-fine split is visible rather than asserted.

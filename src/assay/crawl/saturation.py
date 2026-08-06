@@ -30,6 +30,7 @@ from math import comb
 from typing import Any
 
 __all__ = [
+    "ALPHA_ONE_SIDED",
     "DISCRIMINATING_PAIR",
     "OUR_BASE_RATES",
     "PRIME_ONSETS",
@@ -62,6 +63,19 @@ DISCRIMINATING_PAIR = ("ocean", "midnight")
 
 #: Enumerating the exact null costs C(n_a + n_b, n_a) evaluations. Refuse rather than hang.
 _MAX_ENUMERATIONS = 500_000
+
+#: One-sided. **Pinned 2026-08-06, after R1 returned**, which needs its justification stated rather
+#: than assumed: choosing a threshold once the data are in is normally §10.4's failure mode, because
+#: the tempting threshold is the one that yields the desired answer. It is legitimate here only
+#: because it yields no answer at all — R1's measured p is 0.24 (eval) and 0.29 (train), which fails
+#: at 0.05, 0.10 and 0.20 alike, so no defensible choice moves an R1 verdict. It is pinned now so
+#: that it *is* pre-registered from Walk onward, where seed counts grow and it starts to bind.
+#:
+#: The rejected alternative was non-overlap of the observed seed ranges, which needs no threshold and
+#: looks principled. It is not: its implied false-positive rate is 1/C(2n,n), so it grows *stricter*
+#: with sample size, and its power against a real 1-sigma effect falls from 26% at n=3 to 0.05% at
+#: n=12. A rule that gets worse as evidence accumulates cannot survive into Run.
+ALPHA_ONE_SIDED = 0.05
 
 
 def steps_to_saturation(
@@ -182,7 +196,9 @@ def dispersion(values: Sequence[float]) -> dict[str, Any]:
     }
 
 
-def r1p_test(samples: Mapping[str, Sequence[float]]) -> dict[str, Any]:
+def r1p_test(
+    samples: Mapping[str, Sequence[float]], *, alpha: float = ALPHA_ONE_SIDED
+) -> dict[str, Any]:
     """Score R1-P's discriminating pair on the seed distributions rather than on point estimates.
 
     R1-P predicts that the word with the **higher** base rate saturates **earlier**. `onset_verdict`
@@ -192,20 +208,31 @@ def r1p_test(samples: Mapping[str, Sequence[float]]) -> dict[str, Any]:
     16.9 steps wide -- so the ordering check reported R1-P confirmed on data whose exact rank test
     gives p = 0.29.
 
-    ``confirmed`` is therefore deliberately three-state, and the criterion is **separation of the
-    observed seed ranges**, not a significance threshold:
+    ``confirmed`` is therefore three-state, decided by the exact test against ``alpha``:
 
-    * ``True``  -- the ranges do not overlap and the earlier one is the higher-base-rate word
-    * ``False`` -- the ranges do not overlap and the ordering is the other way (R1-P falsified)
-    * ``None``  -- the ranges overlap, or either arm has fewer than two seeds: **not resolved**
+    * ``True``  -- significant in R1-P's predicted direction (higher base rate saturates earlier)
+    * ``False`` -- significant in the **opposite** direction, which is Prime's ordering: falsified
+    * ``None``  -- neither, or fewer than two seeds on an arm: **not resolved**
 
-    Non-overlap is used rather than an alpha because no alpha was pre-registered, and picking one
-    now -- after seeing the data -- is the move §10.4 forbids. The exact test is reported alongside
-    so a threshold can be applied later by someone who pins it first.
+    ``powered`` is the field that makes a ``None`` interpretable, and it is the one this function
+    exists for. It asks whether the design could have resolved the question *at all*: the smallest
+    p this many seeds can produce is ``1 / C(n_a + n_b, n_a)``, so at n=3 vs 3 the floor is exactly
+    0.05 and **no three-seed comparison can ever clear a 0.05 threshold, however clean the split**.
+
+    Without it, "not significant" conflates two opposite situations:
+
+    * ``powered=True``  -- we looked with adequate resolution and there is nothing there. R1's
+      pooled onsets are this case (floor 0.0011 on train, 0.0048 on eval), which is what makes the
+      null a result rather than a shrug.
+    * ``powered=False`` -- the test never had the resolution to find anything. R1's batch 1 alone
+      was this case, and it is the warning that batch should have issued and could not.
 
     The pre-registered decision table in `docs/phases/phase-0.4-r1-plan.md` has cells only for
     "`ocean` before `midnight`" and "`midnight` before `ocean`". It has **no cell for
     indistinguishable**, which is what R1 returned. ``None`` is that missing cell.
+
+    ``separated`` (whether the observed seed ranges overlap) is still reported, because it is useful
+    description -- but it is **no longer the criterion**. See :data:`ALPHA_ONE_SIDED` for why.
     """
     early, late = DISCRIMINATING_PAIR
     if OUR_BASE_RATES[early] <= OUR_BASE_RATES[late]:  # pragma: no cover - guards a constant edit
@@ -216,10 +243,13 @@ def r1p_test(samples: Mapping[str, Sequence[float]]) -> dict[str, Any]:
     out: dict[str, Any] = {
         "pair": DISCRIMINATING_PAIR,
         "predicted_earlier": early,
+        "alpha": alpha,
         "n": {early: len(a), late: len(b)},
         "dispersion": {w: (dispersion(v) if v else None) for w, v in ((early, a), (late, b))},
         "test": None,
+        "test_reverse": None,
         "separated": None,
+        "powered": None,
         "confirmed": None,
         "reason": "",
     }
@@ -227,20 +257,35 @@ def r1p_test(samples: Mapping[str, Sequence[float]]) -> dict[str, Any]:
         out["reason"] = "fewer than two seeds on at least one arm — §10.3 forbids a direction here"
         return out
 
-    out["test"] = exact_mannwhitney_u(a, b)
-    a_first = max(a) < min(b)
-    b_first = max(b) < min(a)
-    out["separated"] = a_first or b_first
-    if a_first:
+    forward = exact_mannwhitney_u(a, b)  # R1-P's direction: the higher-base-rate word first
+    reverse = exact_mannwhitney_u(b, a)  # Prime's direction
+    out["test"] = forward
+    out["test_reverse"] = reverse
+    out["separated"] = max(a) < min(b) or max(b) < min(a)
+    out["powered"] = forward["p_floor"] < alpha
+
+    if forward["p_one_sided"] < alpha:
         out["confirmed"] = True
-        out["reason"] = f"{early} range entirely below {late} — R1-P's predicted direction"
-    elif b_first:
+        out["reason"] = (
+            f"{early} saturates earlier, p = {forward['p_one_sided']:.4f} < {alpha} — "
+            "R1-P's predicted direction"
+        )
+    elif reverse["p_one_sided"] < alpha:
         out["confirmed"] = False
-        out["reason"] = f"{late} range entirely below {early} — R1-P falsified"
+        out["reason"] = (
+            f"{late} saturates earlier, p = {reverse['p_one_sided']:.4f} < {alpha} — "
+            "R1-P falsified, Prime's ordering holds"
+        )
+    elif out["powered"]:
+        out["reason"] = (
+            f"neither direction reaches {alpha} (p = {forward['p_one_sided']:.4f} / "
+            f"{reverse['p_one_sided']:.4f}) and the design could have resolved it "
+            f"(floor {forward['p_floor']:.4f}) — a real null, not a resolution failure"
+        )
     else:
         out["reason"] = (
-            f"seed ranges overlap ({early} [{min(a):.2f}, {max(a):.2f}] vs "
-            f"{late} [{min(b):.2f}, {max(b):.2f}]) — ordering not resolved"
+            f"UNPOWERED: the smallest p this design can produce is {forward['p_floor']:.4f}, "
+            f"which is not below {alpha}. No result here can settle R1-P — add seeds"
         )
     return out
 

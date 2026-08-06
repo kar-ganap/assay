@@ -227,17 +227,42 @@ def test_dispersion_reports_sd_none_at_n_equals_one_rather_than_zero() -> None:
     assert dispersion([1.0, 2.0, 3.0])["sd"] == pytest.approx(1.0)
 
 
-def test_r1p_confirmed_only_when_the_seed_ranges_do_not_overlap() -> None:
+def test_perfect_separation_at_three_seeds_is_unpowered_not_confirmed() -> None:
+    """**The heart of the fix.** Three seeds per arm, split as cleanly as arithmetic allows, and the
+    answer is still "unresolved" — because the best p a 3-vs-3 design can produce is exactly 0.05,
+    which is not below 0.05. Batch 1 was this case and reported confirmation anyway."""
     v = r1p_test({"ocean": [10.0, 11.0, 12.0], "midnight": [20.0, 21.0, 22.0]})
-    assert v["separated"] is True
+    assert v["separated"] is True, "the ranges really are disjoint"
+    assert v["test"]["p_one_sided"] == pytest.approx(0.05)
+    assert v["powered"] is False
+    assert v["confirmed"] is None
+    assert "UNPOWERED" in v["reason"]
+
+
+def test_the_same_separation_at_six_seeds_is_confirmed() -> None:
+    """Same effect, enough seeds to see it. Only the sample size changed."""
+    v = r1p_test(
+        {"ocean": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+         "midnight": [20.0, 21.0, 22.0, 23.0, 24.0, 25.0]}
+    )
+    assert v["powered"] is True
     assert v["confirmed"] is True
     assert v["predicted_earlier"] == "ocean"
 
 
-def test_r1p_falsified_when_the_ranges_separate_the_other_way() -> None:
-    v = r1p_test({"ocean": [30.0, 31.0, 32.0], "midnight": [10.0, 11.0, 12.0]})
-    assert v["separated"] is True
+def test_r1p_falsified_when_the_opposite_direction_is_significant() -> None:
+    v = r1p_test(
+        {"ocean": [30.0, 31.0, 32.0, 33.0, 34.0, 35.0],
+         "midnight": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0]}
+    )
     assert v["confirmed"] is False
+    assert v["test_reverse"]["p_one_sided"] < v["alpha"]
+
+
+def test_alpha_is_a_keyword_so_a_sensitivity_check_needs_no_source_edit() -> None:
+    clean = {"ocean": [10.0, 11.0, 12.0], "midnight": [20.0, 21.0, 22.0]}
+    assert r1p_test(clean, alpha=0.10)["confirmed"] is True
+    assert r1p_test(clean, alpha=0.05)["confirmed"] is None
 
 
 def test_overlapping_ranges_are_unresolved_not_confirmed() -> None:
@@ -249,9 +274,14 @@ def test_overlapping_ranges_are_unresolved_not_confirmed() -> None:
     v = r1p_test({"ocean": ocean, "midnight": midnight})
 
     assert v["separated"] is False
-    assert v["confirmed"] is None, "overlapping distributions must not report a direction"
+    assert v["confirmed"] is None, "an unresolved pair must not report a direction"
     assert v["test"]["u"] == 22.0
     assert v["test"]["p_one_sided"] == pytest.approx(0.2944, abs=5e-4)
+    # ...and this null IS informative: at n=6 vs 6 the floor is 0.0011, so the design had the
+    # resolution to find an ordering and did not. That is what separates it from batch 1's null.
+    assert v["powered"] is True
+    assert v["test"]["p_floor"] == pytest.approx(1 / 924)
+    assert "a real null" in v["reason"]
 
     # ...while the point-estimate ordering check says the opposite, which is the whole reason
     # r1p_test exists. Both are true statements about different questions.
