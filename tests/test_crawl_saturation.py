@@ -20,8 +20,10 @@ from assay.crawl.saturation import (
     SATURATION_THRESHOLD,
     dispersion,
     exact_mannwhitney_u,
+    hodges_lehmann,
     onset_verdict,
     r1p_test,
+    shift_confidence_interval,
     steps_to_saturation,
 )
 
@@ -157,14 +159,15 @@ def test_r1p_is_scored_on_our_ordering_not_primes() -> None:
     This is the discriminating pair, and the two gates disagree about it on purpose.
     """
     v = onset_verdict({"ocean": 15.0, "midnight": 35.0, "forgotten": 8.0})
-    assert v["r1p_ordering_holds"] is True      # ocean before midnight = our base-rate order
+    assert v["order_by_onset"] == ["forgotten", "ocean", "midnight"]
+    assert v["order_our_base_rates_predict"] == ["forgotten", "ocean", "midnight"]
     assert v["ordering_matches_prime"] is False  # which is NOT Prime's order
     assert v["verdict"] == "partial"
 
 
 def test_r1p_falsified_when_the_published_ordering_wins() -> None:
     v = onset_verdict({"ocean": 42.0, "midnight": 17.0, "forgotten": 10.0})
-    assert v["r1p_ordering_holds"] is False
+    assert v["order_by_onset"] == ["forgotten", "midnight", "ocean"]
     assert v["ordering_matches_prime"] is True
     assert v["verdict"] == "reproduced"
 
@@ -179,7 +182,7 @@ def test_censored_words_are_excluded_from_ordering_not_treated_as_slowest() -> N
     assuming the bound is tight."""
     v = onset_verdict({"ocean": 20.0, "midnight": None, "forgotten": 9.0})
     assert v["censored"] == ["midnight"]
-    assert v["r1p_ordering_holds"] is None  # the discriminating pair is incomplete
+    assert "midnight" not in v["order_by_onset"]  # a bound is not a measurement
 
 
 # --------------------------------------------------------------------------------------
@@ -227,16 +230,22 @@ def test_dispersion_reports_sd_none_at_n_equals_one_rather_than_zero() -> None:
     assert dispersion([1.0, 2.0, 3.0])["sd"] == pytest.approx(1.0)
 
 
-def test_perfect_separation_at_three_seeds_is_unpowered_not_confirmed() -> None:
-    """**The heart of the fix.** Three seeds per arm, split as cleanly as arithmetic allows, and the
-    answer is still "unresolved" — because the best p a 3-vs-3 design can produce is exactly 0.05,
-    which is not below 0.05. Batch 1 was this case and reported confirmation anyway."""
+def test_perfect_separation_at_three_seeds_cannot_reject_at_any_outcome() -> None:
+    """**The heart of the fix, and stronger than it first looked.** Three seeds per arm, split as
+    cleanly as arithmetic allows, and the answer is still "unresolved".
+
+    Because BOTH directions are tested, the floor that binds is the two-direction one,
+    `2/C(6,3) = 0.10`. So a 3-vs-3 comparison under this rule cannot reject at *any* alpha below
+    0.10 — not merely at 0.05. Batch 1 was this case and reported confirmation anyway."""
     v = r1p_test({"ocean": [10.0, 11.0, 12.0], "midnight": [20.0, 21.0, 22.0]})
     assert v["separated"] is True, "the ranges really are disjoint"
     assert v["test"]["p_one_sided"] == pytest.approx(0.05)
-    assert v["powered"] is False
+    assert 2 * v["test"]["p_floor"] == pytest.approx(0.10)
+    assert v["can_ever_reject"] is False
     assert v["confirmed"] is None
-    assert "UNPOWERED" in v["reason"]
+    assert "CANNOT REJECT AT ANY OUTCOME" in v["reason"]
+    # The same fact seen through the interval: 3 v 3 cannot bound a shift at 95% either.
+    assert v["interval"]["bounded"] is False
 
 
 def test_the_same_separation_at_six_seeds_is_confirmed() -> None:
@@ -245,7 +254,7 @@ def test_the_same_separation_at_six_seeds_is_confirmed() -> None:
         {"ocean": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
          "midnight": [20.0, 21.0, 22.0, 23.0, 24.0, 25.0]}
     )
-    assert v["powered"] is True
+    assert v["can_ever_reject"] is True
     assert v["confirmed"] is True
     assert v["predicted_earlier"] == "ocean"
 
@@ -260,9 +269,17 @@ def test_r1p_falsified_when_the_opposite_direction_is_significant() -> None:
 
 
 def test_alpha_is_a_keyword_so_a_sensitivity_check_needs_no_source_edit() -> None:
+    """And the sensitivity check immediately shows how strict the two-direction rule is at n=3.
+
+    Perfect separation gives a one-sided p of exactly 0.05. Since each direction is tested at
+    alpha/2, even alpha=0.10 does not reject — the per-tail threshold is 0.05 and 0.05 is not below
+    it. Nothing short of alpha > 0.10 can produce a verdict from three seeds a side.
+    """
     clean = {"ocean": [10.0, 11.0, 12.0], "midnight": [20.0, 21.0, 22.0]}
-    assert r1p_test(clean, alpha=0.10)["confirmed"] is True
     assert r1p_test(clean, alpha=0.05)["confirmed"] is None
+    assert r1p_test(clean, alpha=0.10)["confirmed"] is None
+    assert r1p_test(clean, alpha=0.25)["confirmed"] is True
+    assert r1p_test(clean, alpha=0.25)["can_ever_reject"] is True
 
 
 def test_overlapping_ranges_are_unresolved_not_confirmed() -> None:
@@ -279,14 +296,16 @@ def test_overlapping_ranges_are_unresolved_not_confirmed() -> None:
     assert v["test"]["p_one_sided"] == pytest.approx(0.2944, abs=5e-4)
     # ...and this null IS informative: at n=6 vs 6 the floor is 0.0011, so the design had the
     # resolution to find an ordering and did not. That is what separates it from batch 1's null.
-    assert v["powered"] is True
+    assert v["can_ever_reject"] is True
     assert v["test"]["p_floor"] == pytest.approx(1 / 924)
-    assert "a real null" in v["reason"]
+    # The reason now quotes the INTERVAL rather than the floor — the floor never licensed
+    # "we looked and there is nothing there", because power against the observed gap is ~9-30%.
+    assert "the interval, not the floor" in v["reason"]
 
     # ...while the point-estimate ordering check says the opposite, which is the whole reason
     # r1p_test exists. Both are true statements about different questions.
     ordering = onset_verdict({"ocean": 26.80, "midnight": 29.50, "forgotten": 8.22})
-    assert ordering["r1p_ordering_holds"] is True
+    assert ordering["order_by_onset"] == ordering["order_our_base_rates_predict"]
 
 
 def test_a_single_seed_arm_is_unresolved_because_10_3_forbids_the_direction() -> None:
@@ -301,3 +320,60 @@ def test_ocean_variance_dominates_midnight_in_the_measured_data() -> None:
     ocean = dispersion([22.83, 25.07, 25.50, 28.10, 33.51, 39.69])
     midnight = dispersion([26.81, 27.43, 28.41, 30.59, 30.86, 31.33])
     assert ocean["sd"] > 3 * midnight["sd"]
+
+
+# --------------------------------------------------------------------------------------
+# the shift interval — what replaced `powered` after the three-reviewer pass found that
+# `p_floor < alpha` is a resolution check, not power
+# --------------------------------------------------------------------------------------
+
+
+def test_hodges_lehmann_is_the_median_pairwise_difference() -> None:
+    assert hodges_lehmann([0.0, 1.0], [10.0, 11.0]) == pytest.approx(10.0)
+    assert hodges_lehmann([0.0], [3.0, 5.0]) == pytest.approx(4.0)
+
+
+def test_interval_reproduces_r1s_measured_shift_on_both_curves() -> None:
+    """Pinned against an independent grid inversion run during the reviewer pass, which gave
+    eval [-7.84, +9.84] and train [-8.35, +5.79]. This construction uses order statistics of the
+    pairwise differences instead, so agreement to the grid's 0.01 resolution is a real cross-check."""
+    ev = shift_confidence_interval(
+        [20.51, 25.35, 25.40, 24.00, 32.57, 39.00], [30.36, 31.16, 31.39, 27.53]
+    )
+    assert ev["point"] == pytest.approx(4.98, abs=0.01)
+    assert (ev["lo"], ev["hi"]) == pytest.approx((-7.84, 9.85), abs=0.01)
+
+    tr = shift_confidence_interval(
+        [22.83, 28.10, 25.50, 25.07, 33.51, 39.69],
+        [30.59, 26.81, 28.41, 30.86, 31.33, 27.43],
+    )
+    assert tr["point"] == pytest.approx(2.14, abs=0.01)
+    assert (tr["lo"], tr["hi"]) == pytest.approx((-8.36, 5.79), abs=0.01)
+
+
+def test_the_interval_excludes_primes_published_ordering_effect() -> None:
+    """The claim that replaces "a real null". Prime separate `midnight` and `ocean` by 26 steps;
+    both our intervals exclude that, while neither excludes zero. *That* is what R1 established."""
+    for a, b in (
+        ([20.51, 25.35, 25.40, 24.00, 32.57, 39.00], [30.36, 31.16, 31.39, 27.53]),
+        ([22.83, 28.10, 25.50, 25.07, 33.51, 39.69], [30.59, 26.81, 28.41, 30.86, 31.33, 27.43]),
+    ):
+        ci = shift_confidence_interval(a, b)
+        assert not (ci["lo"] <= 26.0 <= ci["hi"]), "a Prime-sized effect is ruled out"
+        assert ci["lo"] <= 0.0 <= ci["hi"], "...but zero is not"
+
+
+def test_three_versus_three_cannot_bound_a_shift_at_95_percent() -> None:
+    """The interval's version of the floor: at n=3 vs 3 there are not enough pairwise differences
+    to trim, so the 95% interval is the whole line. It becomes bounded at 90%."""
+    assert shift_confidence_interval([1.0, 2.0, 3.0], [4.0, 5.0, 6.0])["bounded"] is False
+    assert shift_confidence_interval([1.0, 2.0, 3.0], [4.0, 5.0, 6.0], alpha=0.10)["bounded"] is True
+
+
+def test_interval_is_shift_equivariant() -> None:
+    a, b = [1.0, 4.0, 7.0, 9.0], [2.0, 5.0, 8.0, 12.0]
+    base = shift_confidence_interval(a, b)
+    moved = shift_confidence_interval(a, [x + 100.0 for x in b])
+    assert moved["lo"] == pytest.approx(base["lo"] + 100.0)
+    assert moved["hi"] == pytest.approx(base["hi"] + 100.0)
+    assert moved["point"] == pytest.approx(base["point"] + 100.0)

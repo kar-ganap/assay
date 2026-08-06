@@ -155,8 +155,11 @@ def report(scored: list[dict[str, Any]]) -> None:
         print(f"       observed order  {' < '.join(v['order_by_onset'])}")
         print(f"       prime predicts  {' < '.join(v['order_prime_predicts'])}")
         print(f"       within +/-{BAND:.0%} band: {v['within_band']}")
-        print(f"       point-estimate ordering favours R1-P: {v['r1p_ordering_holds']}"
-              "   <- ordering only, NOT a test")
+        # Deliberately two lists rather than a boolean. `onset_verdict` used to return one, named
+        # `r1p_confirmed`, and it reported confirmation on a p = 0.29 null by ordering medians.
+        print(f"       our base rates predict  {' < '.join(v['order_our_base_rates_predict'])}"
+              f"   (matches observed: {v['order_by_onset'] == v['order_our_base_rates_predict']}"
+              " — ORDERING ONLY, not a test)")
 
         # R1-P: the distributional test on the discriminating pair.
         t = r1p_test(pooled)
@@ -164,24 +167,41 @@ def report(scored: list[dict[str, Any]]) -> None:
         early, late = DISCRIMINATING_PAIR
         print(f"  R1-P  {early} vs {late}   n = {t['n'][early]} vs {t['n'][late]}")
         if t["test"]:
-            tt = t["test"]
+            tt, ci = t["test"], t["interval"]
             print(f"        U = {tt['u']:.1f}/{tt['u_max']:.0f}   exact one-sided p = "
-                  f"{tt['p_one_sided']:.4f}   (floor for this design = {tt['p_floor']:.4f})")
+                  f"{tt['p_one_sided']:.4f}   (floor for THIS design = {tt['p_floor']:.4f}, "
+                  f"two-direction {2 * tt['p_floor']:.4f})")
+            bound = (f"[{ci['lo']:+.2f}, {ci['hi']:+.2f}]" if ci["bounded"] else "UNBOUNDED")
+            print(f"        shift ({late} - {early}) = {ci['point']:+.2f} steps, "
+                  f"{1 - t['alpha']:.0%} CI {bound}")
+            if ci["bounded"]:
+                prime_gap = float(PRIME_ONSETS[late] - PRIME_ONSETS[early])
+                print(f"          excludes zero? {not (ci['lo'] <= 0 <= ci['hi'])}"
+                      f"   excludes Prime's {prime_gap:+.0f}-step gap? "
+                      f"{not (ci['lo'] <= prime_gap <= ci['hi'])}")
         verdict = {True: "CONFIRMED", False: "FALSIFIED", None: "UNRESOLVED"}[t["confirmed"]]
-        print(f"        alpha = {t['alpha']}   POWERED = {t['powered']}   verdict = {verdict}")
+        print(f"        alpha = {t['alpha']} (two-sided, {t['alpha'] / 2} per direction)   "
+              f"CAN_EVER_REJECT = {t['can_ever_reject']}   verdict = {verdict}")
         print(f"        {t['reason']}")
 
         # Every pair, so the coarse-vs-fine split is visible rather than asserted.
         print()
-        print("  pairwise (does the left word saturate earlier?):")
+        print("  pairwise (does the left word saturate earlier?), Holm-corrected across the 3")
+        print("  contrasts R1-P's monotone claim implies — p == floor means 'as extreme as this")
+        print("  design can get', which is a statement about n, not about the effect:")
+        raw = []
         for a, b in (("forgotten", "ocean"), ("forgotten", "midnight"), ("ocean", "midnight")):
             if len(pooled.get(a, [])) < 2 or len(pooled.get(b, [])) < 2:
                 print(f"        {a:>9} < {b:<9}  insufficient seeds")
                 continue
-            tt = exact_mannwhitney_u(pooled[a], pooled[b])
+            raw.append((a, b, exact_mannwhitney_u(pooled[a], pooled[b])))
+        for rank, (a, b, tt) in enumerate(sorted(raw, key=lambda r: r[2]["p_one_sided"])):
+            holm = min(1.0, tt["p_one_sided"] * (len(raw) - rank))
+            at_floor = "  <-- p == floor" if tt["p_one_sided"] <= tt["p_floor"] + 1e-12 else ""
             ratio = OUR_BASE_RATES[a] / OUR_BASE_RATES[b]
             print(f"        {a:>9} < {b:<9}  U = {tt['u']:>4.1f}/{tt['u_max']:<4.0f} "
-                  f"p = {tt['p_one_sided']:.4f}   (base-rate ratio {ratio:5.1f}x)")
+                  f"p = {tt['p_one_sided']:.4f}  Holm = {holm:.4f}  "
+                  f"({ratio:5.1f}x base rate){at_floor}")
 
         # Per batch, because batch 1 and batch 2 disagree and pooling would hide that.
         print()

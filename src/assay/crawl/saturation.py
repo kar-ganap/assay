@@ -30,15 +30,17 @@ from math import comb
 from typing import Any
 
 __all__ = [
-    "ALPHA_ONE_SIDED",
+    "ALPHA",
     "DISCRIMINATING_PAIR",
     "OUR_BASE_RATES",
     "PRIME_ONSETS",
     "SATURATION_THRESHOLD",
     "dispersion",
     "exact_mannwhitney_u",
+    "hodges_lehmann",
     "onset_verdict",
     "r1p_test",
+    "shift_confidence_interval",
     "steps_to_saturation",
 ]
 
@@ -64,18 +66,22 @@ DISCRIMINATING_PAIR = ("ocean", "midnight")
 #: Enumerating the exact null costs C(n_a + n_b, n_a) evaluations. Refuse rather than hang.
 _MAX_ENUMERATIONS = 500_000
 
-#: One-sided. **Pinned 2026-08-06, after R1 returned**, which needs its justification stated rather
-#: than assumed: choosing a threshold once the data are in is normally §10.4's failure mode, because
-#: the tempting threshold is the one that yields the desired answer. It is legitimate here only
-#: because it yields no answer at all — R1's measured p is 0.24 (eval) and 0.29 (train), which fails
-#: at 0.05, 0.10 and 0.20 alike, so no defensible choice moves an R1 verdict. It is pinned now so
-#: that it *is* pre-registered from Walk onward, where seed counts grow and it starts to bind.
+#: The **family** rate across both directions, spent as ``alpha/2`` per tail. Named for what it
+#: controls, after the first version got this wrong: it was pinned as "0.05, one-sided" while
+#: :func:`r1p_test` tested *both* directions at the full 0.05, giving a realized size of 0.067 at
+#: n=6v4 and 0.093 at n=6v6 — nearly double the nominal rate, on the pin that binds from Walk onward.
+#:
+#: **Pinned 2026-08-06, after R1 returned**, which needs its justification stated rather than
+#: assumed: choosing a threshold once the data are in is normally §10.4's failure mode, because the
+#: tempting threshold is the one that yields the desired answer. It is legitimate here only because
+#: it yields no answer at all — R1's measured p is 0.24 (eval) and 0.29 (train), which fails at
+#: 0.05, 0.10 and 0.20 alike, so no defensible choice moves an R1 verdict.
 #:
 #: The rejected alternative was non-overlap of the observed seed ranges, which needs no threshold and
 #: looks principled. It is not: its implied false-positive rate is 1/C(2n,n), so it grows *stricter*
 #: with sample size, and its power against a real 1-sigma effect falls from 26% at n=3 to 0.05% at
 #: n=12. A rule that gets worse as evidence accumulates cannot survive into Run.
-ALPHA_ONE_SIDED = 0.05
+ALPHA = 0.05
 
 
 def steps_to_saturation(
@@ -181,6 +187,74 @@ def exact_mannwhitney_u(a: Sequence[float], b: Sequence[float]) -> dict[str, Any
     }
 
 
+def hodges_lehmann(a: Sequence[float], b: Sequence[float]) -> float:
+    """Median of all pairwise ``b - a`` differences: the shift estimate paired with the rank test."""
+    if not a or not b:
+        raise ValueError("both samples must be non-empty")
+    return statistics.median(y - x for x in a for y in b)
+
+
+def shift_confidence_interval(
+    a: Sequence[float], b: Sequence[float], *, alpha: float = 0.05
+) -> dict[str, Any]:
+    """Exact distribution-free CI for the shift ``b - a``, by inverting the rank test.
+
+    **This is what should be reported beside a null, and `p_floor` is not a substitute.** A floor
+    says only whether *perfect separation* would have cleared alpha; it is silent about the effects
+    the data actually exclude. R1's headline comparison has a floor of 0.0048 and roughly 9-30%
+    power against the gap it observed, so "the design could have resolved it" was never supportable
+    — but the interval says something true and useful in its place: an ordering effect the size of
+    Prime's published one (26 steps) *is* excluded, and anything under ~10 steps is not.
+
+    The endpoints are order statistics of the ``n_a * n_b`` pairwise differences (Moses), so the
+    interval is exact and assumption-free apart from a common shift. Coverage is at least
+    ``1 - alpha`` and exceeds it slightly because U is discrete.
+    """
+    if not a or not b:
+        raise ValueError("both samples must be non-empty")
+    n_a, n_b = len(a), len(b)
+    total = comb(n_a + n_b, n_a)
+    if total > _MAX_ENUMERATIONS:
+        raise ValueError(f"exact null needs {total} enumerations; over the {_MAX_ENUMERATIONS} cap")
+
+    # Exact null distribution of U = #{x < y} by enumeration, then the largest k whose lower tail
+    # still fits in alpha/2. k is how many pairwise differences to trim from each end.
+    counts: dict[float, int] = {}
+    combined = list(a) + list(b)
+    for idx in _combinations(range(n_a + n_b), n_a):
+        chosen = set(idx)
+        g1 = [combined[i] for i in idx]
+        g2 = [combined[i] for i in range(n_a + n_b) if i not in chosen]
+        u = sum(1.0 for i in g1 for j in g2 if i < j) + 0.5 * sum(1.0 for i in g1 for j in g2 if i == j)
+        counts[u] = counts.get(u, 0) + 1
+
+    # c = the largest U whose lower tail still fits in alpha/2. The interval is then the (c+1)-th
+    # smallest to the (c+1)-th largest pairwise difference -- index c when zero-based. Taking c+1
+    # here instead trims one pair too many from each end and silently narrows the interval.
+    c = -1
+    cumulative = 0.0
+    for u in sorted(counts):
+        if cumulative + counts[u] / total > alpha / 2:
+            break
+        cumulative += counts[u] / total
+        c = int(u)
+
+    diffs = sorted(y - x for x in a for y in b)
+    n_pairs = len(diffs)
+    if c < 0 or c >= n_pairs - c:  # too few pairs to bound the shift at this alpha
+        return {"lo": float("-inf"), "hi": float("inf"), "point": hodges_lehmann(a, b),
+                "alpha": alpha, "trimmed": max(c, 0), "n_pairs": n_pairs, "bounded": False}
+    return {
+        "lo": diffs[c],
+        "hi": diffs[n_pairs - 1 - c],
+        "point": hodges_lehmann(a, b),
+        "alpha": alpha,
+        "trimmed": c,
+        "n_pairs": n_pairs,
+        "bounded": True,
+    }
+
+
 def dispersion(values: Sequence[float]) -> dict[str, Any]:
     """Per-arm spread. §10.3 requires this beside every effect size, so it is computed, not optional."""
     if not values:
@@ -197,7 +271,7 @@ def dispersion(values: Sequence[float]) -> dict[str, Any]:
 
 
 def r1p_test(
-    samples: Mapping[str, Sequence[float]], *, alpha: float = ALPHA_ONE_SIDED
+    samples: Mapping[str, Sequence[float]], *, alpha: float = ALPHA
 ) -> dict[str, Any]:
     """Score R1-P's discriminating pair on the seed distributions rather than on point estimates.
 
@@ -232,7 +306,7 @@ def r1p_test(
     indistinguishable**, which is what R1 returned. ``None`` is that missing cell.
 
     ``separated`` (whether the observed seed ranges overlap) is still reported, because it is useful
-    description -- but it is **no longer the criterion**. See :data:`ALPHA_ONE_SIDED` for why.
+    description -- but it is **no longer the criterion**. See :data:`ALPHA` for why.
     """
     early, late = DISCRIMINATING_PAIR
     if OUR_BASE_RATES[early] <= OUR_BASE_RATES[late]:  # pragma: no cover - guards a constant edit
@@ -248,8 +322,9 @@ def r1p_test(
         "dispersion": {w: (dispersion(v) if v else None) for w, v in ((early, a), (late, b))},
         "test": None,
         "test_reverse": None,
+        "interval": None,
         "separated": None,
-        "powered": None,
+        "can_ever_reject": None,
         "confirmed": None,
         "reason": "",
     }
@@ -261,31 +336,42 @@ def r1p_test(
     reverse = exact_mannwhitney_u(b, a)  # Prime's direction
     out["test"] = forward
     out["test_reverse"] = reverse
+    out["interval"] = shift_confidence_interval(a, b, alpha=alpha)
     out["separated"] = max(a) < min(b) or max(b) < min(a)
-    out["powered"] = forward["p_floor"] < alpha
 
-    if forward["p_one_sided"] < alpha:
+    # BOTH directions are tested, so each gets alpha/2 or the rule's realized size is the sum of
+    # two tails. Measured on the R1 designs, testing each tail at full alpha gives 0.067 (n=6v4)
+    # and 0.093 (n=6v6) against a nominal 0.05. Correspondingly the floor that matters is the
+    # two-direction one, 2/C(n_a+n_b, n_a): at n=3 vs 3 that is 0.10, so a three-seed comparison
+    # under this rule cannot reject at ANY alpha below 0.10, not merely at 0.05.
+    per_tail = alpha / 2
+    out["can_ever_reject"] = 2 * forward["p_floor"] < alpha
+
+    if forward["p_one_sided"] < per_tail:
         out["confirmed"] = True
         out["reason"] = (
-            f"{early} saturates earlier, p = {forward['p_one_sided']:.4f} < {alpha} — "
+            f"{early} saturates earlier, p = {forward['p_one_sided']:.4f} < {per_tail} — "
             "R1-P's predicted direction"
         )
-    elif reverse["p_one_sided"] < alpha:
+    elif reverse["p_one_sided"] < per_tail:
         out["confirmed"] = False
         out["reason"] = (
-            f"{late} saturates earlier, p = {reverse['p_one_sided']:.4f} < {alpha} — "
+            f"{late} saturates earlier, p = {reverse['p_one_sided']:.4f} < {per_tail} — "
             "R1-P falsified, Prime's ordering holds"
         )
-    elif out["powered"]:
+    elif out["can_ever_reject"]:
+        ci = out["interval"]
         out["reason"] = (
-            f"neither direction reaches {alpha} (p = {forward['p_one_sided']:.4f} / "
-            f"{reverse['p_one_sided']:.4f}) and the design could have resolved it "
-            f"(floor {forward['p_floor']:.4f}) — a real null, not a resolution failure"
+            f"neither direction reaches {per_tail} (p = {forward['p_one_sided']:.4f} / "
+            f"{reverse['p_one_sided']:.4f}). What the data exclude is the interval, not the floor: "
+            f"the shift {late} - {early} lies in [{ci['lo']:.2f}, {ci['hi']:.2f}] steps at "
+            f"{1 - alpha:.0%}, point estimate {ci['point']:+.2f}"
         )
     else:
         out["reason"] = (
-            f"UNPOWERED: the smallest p this design can produce is {forward['p_floor']:.4f}, "
-            f"which is not below {alpha}. No result here can settle R1-P — add seeds"
+            f"CANNOT REJECT AT ANY OUTCOME: the two-direction floor is "
+            f"{2 * forward['p_floor']:.4f}, which is not below {alpha}. No result from this many "
+            "seeds can settle R1-P — add seeds before interpreting anything here"
         )
     return out
 
@@ -298,15 +384,12 @@ def onset_verdict(onsets: dict[str, float | None]) -> dict[str, Any]:
     and `midnight` reversed relative to Prime, means the two gates make **opposite predictions about
     that pair**. Exactly one can be right, and that is the phase's sharpest result either way.
 
-    ``r1p_ordering_holds`` is ``None`` rather than ``False`` when either word of the discriminating
-    pair is censored: an incomplete test is not a failed one.
-
-    **It answers a weaker question than its old name (`r1p_confirmed`) implied, and R1 found the
-    case where the difference matters.** Ordering two point estimates says nothing about whether the
-    seed distributions behind them are distinguishable. On R1's pooled onsets the medians order as
-    R1-P predicts while the exact rank test gives p = 0.29 and the direction reverses between
-    batches, so the old field reported confirmation on a null. Use :func:`r1p_test` for the claim;
-    this field is the ordering check only.
+    **This function deliberately returns no boolean about R1-P.** It once did, as `r1p_confirmed`,
+    and reported confirmation on a p = 0.29 null by ordering two medians on an arm whose seeds span
+    16.9 steps. Renaming it to `r1p_ordering_holds` made it honest and left the footgun in the dict,
+    so it is gone: ``order_by_onset`` and ``order_our_base_rates_predict`` are both returned, and a
+    reader comparing two lists asks "how confident?" in a way a bare ``True`` never prompts. The
+    claim goes through :func:`r1p_test`, which reports an interval.
     """
     measured = {w: v for w, v in onsets.items() if v is not None}
     censored = sorted(w for w, v in onsets.items() if v is None)
@@ -328,11 +411,6 @@ def onset_verdict(onsets: dict[str, float | None]) -> dict[str, Any]:
 
     ordering_matches_prime = by_onset == prime_expected
 
-    pair = {"ocean", "midnight"}
-    if pair & set(censored):
-        ordering: bool | None = None
-    else:
-        ordering = by_onset == ours_expected
 
     forgotten_fastest = (not measured or "forgotten" not in measured
                          or by_onset[0] == "forgotten")
@@ -355,6 +433,5 @@ def onset_verdict(onsets: dict[str, float | None]) -> dict[str, Any]:
         "order_prime_predicts": prime_expected,
         "order_our_base_rates_predict": ours_expected,
         "ordering_matches_prime": ordering_matches_prime,
-        "r1p_ordering_holds": ordering,
         "censored": censored,
     }
