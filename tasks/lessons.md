@@ -235,3 +235,55 @@ that produced them would otherwise be the only record.*
   test to be written.
   *Trigger: without this, a convenience field acquires the authority of the hypothesis it is named
   after; with this, the gap between "what this computes" and "what we want to claim" stays visible.*
+
+- 2026-08-06 · **"Everything that passed the filter passed" is not validation — the information is
+  in what the filter excluded.** R1 screened three variants against the admission band
+  `p_hack@64 ∈ [1/64, 0.30]`. One was inside it and saturated, and I wrote "the band is validated"
+  into three documents. **Two were BELOW the lower bound and saturated anyway**, in under 40 steps,
+  where the band says "unreachable in 200" — a measured 42-68% false-negative rate on demonstrably
+  reachable exploits, and the strongest evidence the phase produced about its own screen. A
+  confirmation drawn from n=1 in-band case sat where a disconfirmation from n=2 out-of-band cases
+  should have been. The deeper error: `1/64` was never a reachability threshold, it is the
+  resolution floor of a 64-sample screen, so the bound encoded the sampling budget and read as
+  science.
+  *Trigger: without this, a gate is "validated" by the cases it admitted while the cases it wrongly
+  excluded go uncounted; with this, a screen is scored on its misses, and a threshold is checked for
+  whether it encodes a measurement limit rather than a claim.*
+
+- 2026-08-06 · **Failing to reject is not falsifying — and the error is easiest to commit in the
+  direction that flatters you.** Having caught my scorer reporting CONFIRMED on an indeterminate
+  result, I reported FALSIFIED on the same indeterminate result, in four documents and the public
+  ledger. The committed scorer printed UNRESOLVED throughout; the hypothesis's literal text was
+  *satisfied* at every point estimate (rho = +1, zero inversions, the non-significant statistic in
+  its own predicted direction). It was the identical missing-cell failure one cell the other way,
+  and it survived the fix for that failure. I did not catch it because "we self-falsified" is a
+  flattering story, and a bias toward apparent rigour is still a bias.
+  *Trigger: without this, an underpowered non-result is written up as a self-falsification and the
+  writeup contradicts its own scorer's output; with this, the verdict a claim receives is the one
+  the analysis actually returned.*
+
+- 2026-08-06 · **A design floor is not power. Report the interval.** `p_floor = 1/C(n_a+n_b, n_a)`
+  says only whether *perfect separation* would clear alpha; it is silent about the effects the data
+  exclude. I called a null "powered" on a design with 9% power against the gap it observed — after
+  rejecting a rival criterion for having 26% power against 1 sigma, and adopting one with 28%.
+  Computing power for the rule you discard and not for the one you keep is the whole error. The
+  interval says something true in its place: R1 excludes an ordering effect the size of the
+  published one and does not exclude zero.
+  *Trigger: without this, "the design could have resolved it" is asserted from a quantity that
+  cannot support it; with this, a null states which effects it rules out.*
+
+- 2026-08-06 · **Testing both directions costs 2·alpha unless each tail is charged alpha/2.** A
+  three-state verdict that checks the predicted direction and then the opposite one, each at the
+  full alpha, has a realized error rate of 0.067 at n=6v4 and 0.093 at n=6v6 — near double nominal,
+  on a pin about to bind for every downstream stage. The corresponding floor doubles too, and at
+  n=3v3 becomes 0.10, so three seeds a side cannot reject at *any* conventional alpha.
+  *Trigger: without this, a symmetric decision rule silently spends twice its stated budget; with
+  this, the family rate is what gets pinned and the per-tail threshold is derived from it.*
+
+- 2026-08-06 · **When two metrics exist, every claim names its curve.** R1 pinned eval as the
+  headline before any run, then reported "15/15 runs reached hack rate 1.0" (train; eval is 12/15),
+  quoted the train design floor of 0.0011 beside eval tables whose floor is 0.0048, and computed a
+  batch-reversal narrative that only exists on train. Each was individually the stronger number.
+  Nobody chose that; an unlabelled metric drifts to whichever series makes the sentence work.
+  *Trigger: without this, a mixed-metric writeup reads as one coherent result and is systematically
+  optimistic; with this, the curve is part of every claim and the drift is visible.*

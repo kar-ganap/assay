@@ -108,13 +108,18 @@
    *"≥4 per arm for any directional comparison"* (6 if the arm is high-variance), because n=3 cannot
    clear α = 0.05. Exploratory arms are unaffected — they carry no directional claim.
 
-8. **EXECUTED — `P-alpha` added** (0.05, one-sided, with `powered` reported beside it). Post-hoc in
-   form, not in consequence: R1's p is 0.24–0.29 and fails at 0.05, 0.10 and 0.20 alike, which is
-   what makes adopting it now legitimate. It binds from Walk onward.
+8. **EXECUTED — `P-alpha` added**, and then **corrected the same day** (see 17): the original pin
+   said "0.05 one-sided" while the rule tested both tails at full α, and reported `powered` in place
+   of power. Post-hoc in form, not in consequence: R1's p is 0.24–0.29 and fails at 0.05, 0.10 and
+   0.20 alike, which is what makes adopting it now legitimate. It binds from Walk onward.
 
-9. **EXECUTED — L1 annotated as a filter, not a ranking.** The band is validated (everything inside
-   it saturated); base rate ordering onsets finely is not. Without the annotation, `p_hack@64` reads
-   as a difficulty dial and someone ranks the Run grid by it.
+9. **EXECUTED — L1 annotated as a filter, not a ranking**, and the annotation was ~~half right~~
+   **half wrong**. The "filter not a ranking" part stands. The claim beside it — *"the band is
+   validated, everything inside it saturated"* — described **n = 1 variant** and buried the
+   phase's largest finding: two variants sat *below* `1/64` and saturated anyway, so the lower
+   bound is disconfirmed with a measured 42–68% false-negative rate. **Superseded by the L1
+   redesign** now recorded in `pre-registration.md` §4. Left visible rather than rewritten, because
+   this is the record of what was believed when.
 
 10. **PROPOSED — `CLAUDE.md` §15 gotcha 1.** *"Nothing hacks at 1.7B in 200 steps. The project's
     biggest risk... moved into Phase 0.4 (R1) so it surfaces in week 1"* describes a plan that has
@@ -180,10 +185,58 @@ Read-only, called many times per session this phase:
 Non-obvious: **`prime train <config>` hangs on an interactive confirmation without `--yes`.** Cost
 ten minutes in a prior phase and is worth carrying in any launch snippet.
 
+## Added after the three-reviewer pass (2026-08-06)
+
+The pass is §12.6's counter-measure at a critical boundary, and it earned its place: two reviewers
+converged independently on defects that had already reached the public ledger. Rules earned there,
+all with triggers in `tasks/lessons.md`:
+
+### `[ADD]` (continued)
+
+13. **A screen is scored on its misses, not on the cases it admitted.**
+    *Trigger: without this, "everything inside the band saturated" is written down as validation
+    when it describes n=1 and the two out-of-band variants that saturated are the actual finding;
+    with this, the disconfirming cases are counted first.*
+
+14. **A threshold is checked for whether it encodes a measurement limit rather than a claim.**
+    *Trigger: without this, `1/64` reads as "unreachable below here" when it is the resolution floor
+    of a 64-sample screen; with this, the sampling budget and the scientific bound are separable.*
+
+15. **The verdict written up is the one the analysis returned.**
+    *Trigger: without this, a scorer prints UNRESOLVED and four documents say FALSIFIED, because
+    self-falsification is a flattering story and a bias toward apparent rigour is still a bias; with
+    this, the writeup and the committed output cannot diverge unnoticed.*
+
+16. **Every claim names its metric when more than one exists.**
+    *Trigger: without this, an unlabelled number drifts to whichever series makes the sentence work
+    — R1 quoted train counts, train floors and a train-only narrative under an eval headline, each
+    individually the stronger figure; with this, the drift is visible.*
+
+### `[MODIFY]` (continued)
+
+17. **EXECUTED — `P-alpha` corrected to a family rate spent α/2 per direction**, and `powered`
+    replaced by the exact shift interval. The original pin was wrong in both respects on the day it
+    was made.
+
+18. **EXECUTED — `[MODIFY] 10` and `[DELETE] 11`**, both ratified: §15's gotcha 1 now states what
+    R1 retired and what it did not, and `r1p_ordering_holds` is gone from `onset_verdict`.
+
+19. **EXECUTED — `docs/grant-readiness.md` marked superseded.** It still sold R1-P as the missing
+    thesis evidence. The reviewer caught that it was absent from this document's own cleanup list —
+    a cleanup list is only as good as its coverage, and mine was assembled from the files I had
+    recently touched.
+
 ## Open, carried forward
 
-- **Three-reviewer pass (§12.6) is DUE.** Crawl→Walk is a named critical boundary and R1 is its
-  gate. Not run — it is user-triggered.
-- **`[DELETE] 11` and `[MODIFY] 10`** await the user's word.
-- **Why `ocean` is 10.8× more variable than `midnight`** is unexplained (retro §3.2).
+- **L1 redesign** — raise k, re-derive the lower bound, report the false-negative rate. Before any
+  Run grid. This is the phase's largest downstream debt.
+- **§4's recursion claim vs "nothing may rank by base rate"** — H1's primary metric is a rank
+  correlation and Phase 1.4 selects variants by ranking predicted pathology. Unresolved; needed
+  before Walk.
+- **The `ocean` batch effect (+7 steps)** is attributed to rollout staleness by elimination, not by
+  measurement (retro §3.2). CHERRL (`2606.04923`) offers a testable rival: generation difficulty
+  rather than frequency.
+- **Prior-art gaps** — three papers at the novelty perimeter for Phase 0.5's read list
+  (`2606.16062`, `2606.04923`, `2507.14843`), plus the missing canonical reward-hacking and
+  deep-RL-seeds literature.
 - **`mismatch_verdict`'s ±1σ-vs-median choice** remains open from Phase 0.3.
