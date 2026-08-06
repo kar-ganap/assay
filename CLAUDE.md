@@ -183,8 +183,12 @@ When in doubt about which side a task falls on, **ask**.
    first paid run. A run that disconfirms its driving hypothesis is a successful run.
 2. **Report nulls honestly.** H1 failing is a shipped result. **Write the null-case abstract before
    Stage 2 starts.**
-3. **Characterize distributions, not means.** ≥3 seeds on every headline arm; seed-variance band
-   reported beside every effect size. **No directional claim from n=1** — not "reported with a
+3. **Characterize distributions, not means.** ≥3 seeds on every headline arm — but **≥4 per arm for
+   any *directional* claim**, because the exact floor at 3 v 3 is 0.05 and cannot clear `P-alpha`
+   (6 if the arm is high-variance). **Seeds launched in one wave count as one draw**: estimate
+   variance across waves or declare it a lower bound. Report the **interval**, never a design floor,
+   beside every null — a floor says only that perfect separation would have cleared α.
+   **No directional claim from n=1** — not "reported with a
    caveat", not made. *Trigger: three claims died between n=1 and n=3 in Phase 0.1 (the KL leash's
    effect on the gap reversed sign, a "falling" curve turned out flat, and "helps both arms" became
    "helps one"). Each was a plausible reading of a single seed; with this, a direction is not
@@ -251,8 +255,20 @@ mandatory to consider) · conceptual-doc cleanup proposed · tool/permission all
 
 ## 15. Known gotchas
 
-- **Nothing hacks at 1.7B in 200 steps.** The project's biggest risk. Mitigated in six layers
-  (`docs/pre-registration.md` §4) and moved into Phase 0.4 (R1) so it surfaces in week 1, not week 5.
+- **Nothing hacks at 1.7B in 200 steps — MEASURED 2026-08-06 (R1), and only half retired.**
+  Retired for a **trivial** grader: 15/15 runs at 1B reached hack rate 1.0 in 8–40 steps for `$0`.
+  **Untested for a grader with a competing legitimate path** — every R1 run was `hack_only`, where
+  the true reward is identically zero, so the project's own outcome variable (proxy minus true) was
+  absent from its reachability gate. `bisect`'s exploits are multi-step and sandbox-mediated; what
+  R1 retires is *"small models learn a free token in my step budget."*
+- **A substrate needs a reachable exploit AND checkable ground truth, and that is hard** (R1). Our
+  story substrate has base rates but no truth signal; our arithmetic substrate has truth but a
+  0/4096 base rate. Neither can express a proxy–true gap. **Design requirement on `bisect`, not an
+  assumption.**
+- **An admission screen's lower bound can be a sampling artefact.** `p_hack@64 ∈ [1/64, 0.30]` — two
+  of R1's three variants sat *below* `1/64` and saturated anyway, because `1/64` is the resolution
+  floor of a 64-sample screen rather than a reachability threshold. Redesign pending
+  (`docs/pre-registration.md` §4).
 - **Your held-out graders are graders too.** They can be wrong. Hand-label a gold set; report
   held-out-grader FP/FN alongside every result. Phase 1.6 gate.
 - **A/A′ independence is arguable.** If you author both, your idiom leaks into both and η inflates.

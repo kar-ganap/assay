@@ -34,9 +34,11 @@ writing; the published baselines are 7.81% / 1.56% / 0.47%.
 | `midnight` | 18 | **30.76** (n=4, sd 1.78) | +12.8 | ❌ |
 
 **Verdict: partial.** The *mechanism* reproduces and is the load-bearing part — a 1B policy converges
-on a degenerate grader in 8–40 steps, 15/15 runs, so the reachability gate and L2's positive control
-both discharge. The **ordering does not**: they have `midnight` < `ocean`, we measure the two as
-statistically indistinguishable (U = 16/24, exact one-sided p = 0.24, design floor 0.0011).
+on a degenerate grader in 8–40 steps (**15/15 runs on the train curve, 12/15 on the pre-registered
+eval curve**), so the reachability gate and L2's positive control both discharge. The **ordering does
+not**: they have `midnight` < `ocean`, we cannot separate the two. U = 16/24, exact p = 0.24, and
+the 95% interval for the shift is **[−7.84, +9.85] steps — which excludes their −26-step gap and
+does not exclude zero.**
 
 **Two caveats belong beside the delta.** First, our base rates are measured on our own prompt set and
 **reverse theirs** on that pair (0.0135 vs 0.0059, z = 7.0), so this is not a like-for-like ordering
