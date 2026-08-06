@@ -23,14 +23,21 @@ desired answer. The git timestamp on this file is the evidence that none of them
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import statistics
+from collections.abc import Mapping, Sequence
+from itertools import combinations as _combinations
+from math import comb
 from typing import Any
 
 __all__ = [
+    "DISCRIMINATING_PAIR",
     "OUR_BASE_RATES",
     "PRIME_ONSETS",
     "SATURATION_THRESHOLD",
+    "dispersion",
+    "exact_mannwhitney_u",
     "onset_verdict",
+    "r1p_test",
     "steps_to_saturation",
 ]
 
@@ -48,6 +55,13 @@ OUR_BASE_RATES: dict[str, float] = {"ocean": 0.0135, "midnight": 0.0059, "forgot
 #: G3's band, deliberately loose: a different task with the same mechanism, so ordering is the claim
 #: and magnitude is context.
 BAND = 0.5
+
+#: The only pair that separates R1-P from G3. `forgotten` sits far above both on base rate, so both
+#: gates predict it saturates first and it discriminates nothing.
+DISCRIMINATING_PAIR = ("ocean", "midnight")
+
+#: Enumerating the exact null costs C(n_a + n_b, n_a) evaluations. Refuse rather than hang.
+_MAX_ENUMERATIONS = 500_000
 
 
 def steps_to_saturation(
@@ -110,6 +124,127 @@ def steps_to_saturation(
     }
 
 
+def exact_mannwhitney_u(a: Sequence[float], b: Sequence[float]) -> dict[str, Any]:
+    """One-sided exact Mann-Whitney U for ``a < b``, by full enumeration of the null.
+
+    ``u`` counts the pairs (x in a, y in b) with x < y, ties at half. ``p`` is the exact probability
+    of a ``u`` at least this large under the null that the two samples are exchangeable, computed by
+    enumerating every way to split the combined values — no normal approximation, which at these
+    sample sizes would be badly wrong.
+
+    ``p_floor`` is the smallest p this design could ever produce: ``1 / C(n_a + n_b, n_a)``. It is
+    returned because it is the number that decides whether a null is evidence of no effect or merely
+    a test that never had the resolution to find one. At n=3 vs n=3 the floor is 0.05, so a
+    three-seed arm cannot clear a conventional threshold even on perfect separation.
+    """
+    if not a or not b:
+        raise ValueError("both samples must be non-empty")
+    n_a, n_b = len(a), len(b)
+    total = comb(n_a + n_b, n_a)
+    if total > _MAX_ENUMERATIONS:
+        raise ValueError(f"exact null needs {total} enumerations; over the {_MAX_ENUMERATIONS} cap")
+
+    def _u(x: Sequence[float], y: Sequence[float]) -> float:
+        return sum(1.0 for i in x for j in y if i < j) + 0.5 * sum(1.0 for i in x for j in y if i == j)
+
+    observed = _u(a, b)
+    combined = list(a) + list(b)
+    at_least = 0
+    for idx in _combinations(range(len(combined)), n_a):
+        chosen = set(idx)
+        g1 = [combined[i] for i in idx]
+        g2 = [combined[i] for i in range(len(combined)) if i not in chosen]
+        if _u(g1, g2) >= observed:
+            at_least += 1
+
+    return {
+        "u": observed,
+        "u_max": float(n_a * n_b),
+        "p_one_sided": at_least / total,
+        "p_floor": 1.0 / total,
+        "n_a": n_a,
+        "n_b": n_b,
+    }
+
+
+def dispersion(values: Sequence[float]) -> dict[str, Any]:
+    """Per-arm spread. §10.3 requires this beside every effect size, so it is computed, not optional."""
+    if not values:
+        raise ValueError("no values")
+    ordered = sorted(values)
+    return {
+        "n": len(ordered),
+        "median": statistics.median(ordered),
+        "mean": statistics.fmean(ordered),
+        "sd": statistics.stdev(ordered) if len(ordered) > 1 else None,
+        "min": ordered[0],
+        "max": ordered[-1],
+    }
+
+
+def r1p_test(samples: Mapping[str, Sequence[float]]) -> dict[str, Any]:
+    """Score R1-P's discriminating pair on the seed distributions rather than on point estimates.
+
+    R1-P predicts that the word with the **higher** base rate saturates **earlier**. `onset_verdict`
+    answers that by ordering two medians, which is a different and much weaker question: medians can
+    order cleanly while the underlying distributions overlap almost completely. R1 measured exactly
+    that case -- `ocean` and `midnight` medians differ by 2.7 steps while `ocean`'s seed spread is
+    16.9 steps wide -- so the ordering check reported R1-P confirmed on data whose exact rank test
+    gives p = 0.29.
+
+    ``confirmed`` is therefore deliberately three-state, and the criterion is **separation of the
+    observed seed ranges**, not a significance threshold:
+
+    * ``True``  -- the ranges do not overlap and the earlier one is the higher-base-rate word
+    * ``False`` -- the ranges do not overlap and the ordering is the other way (R1-P falsified)
+    * ``None``  -- the ranges overlap, or either arm has fewer than two seeds: **not resolved**
+
+    Non-overlap is used rather than an alpha because no alpha was pre-registered, and picking one
+    now -- after seeing the data -- is the move §10.4 forbids. The exact test is reported alongside
+    so a threshold can be applied later by someone who pins it first.
+
+    The pre-registered decision table in `docs/phases/phase-0.4-r1-plan.md` has cells only for
+    "`ocean` before `midnight`" and "`midnight` before `ocean`". It has **no cell for
+    indistinguishable**, which is what R1 returned. ``None`` is that missing cell.
+    """
+    early, late = DISCRIMINATING_PAIR
+    if OUR_BASE_RATES[early] <= OUR_BASE_RATES[late]:  # pragma: no cover - guards a constant edit
+        raise ValueError(f"{early} must have the higher base rate; DISCRIMINATING_PAIR is misordered")
+
+    a = [float(v) for v in samples.get(early, ())]
+    b = [float(v) for v in samples.get(late, ())]
+    out: dict[str, Any] = {
+        "pair": DISCRIMINATING_PAIR,
+        "predicted_earlier": early,
+        "n": {early: len(a), late: len(b)},
+        "dispersion": {w: (dispersion(v) if v else None) for w, v in ((early, a), (late, b))},
+        "test": None,
+        "separated": None,
+        "confirmed": None,
+        "reason": "",
+    }
+    if len(a) < 2 or len(b) < 2:
+        out["reason"] = "fewer than two seeds on at least one arm — §10.3 forbids a direction here"
+        return out
+
+    out["test"] = exact_mannwhitney_u(a, b)
+    a_first = max(a) < min(b)
+    b_first = max(b) < min(a)
+    out["separated"] = a_first or b_first
+    if a_first:
+        out["confirmed"] = True
+        out["reason"] = f"{early} range entirely below {late} — R1-P's predicted direction"
+    elif b_first:
+        out["confirmed"] = False
+        out["reason"] = f"{late} range entirely below {early} — R1-P falsified"
+    else:
+        out["reason"] = (
+            f"seed ranges overlap ({early} [{min(a):.2f}, {max(a):.2f}] vs "
+            f"{late} [{min(b):.2f}, {max(b):.2f}]) — ordering not resolved"
+        )
+    return out
+
+
 def onset_verdict(onsets: dict[str, float | None]) -> dict[str, Any]:
     """Score both pre-registered gates against the measured onsets.
 
@@ -118,8 +253,15 @@ def onset_verdict(onsets: dict[str, float | None]) -> dict[str, Any]:
     and `midnight` reversed relative to Prime, means the two gates make **opposite predictions about
     that pair**. Exactly one can be right, and that is the phase's sharpest result either way.
 
-    ``r1p_confirmed`` is ``None`` rather than ``False`` when either word of the discriminating pair
-    is censored: an incomplete test is not a failed one.
+    ``r1p_ordering_holds`` is ``None`` rather than ``False`` when either word of the discriminating
+    pair is censored: an incomplete test is not a failed one.
+
+    **It answers a weaker question than its old name (`r1p_confirmed`) implied, and R1 found the
+    case where the difference matters.** Ordering two point estimates says nothing about whether the
+    seed distributions behind them are distinguishable. On R1's pooled onsets the medians order as
+    R1-P predicts while the exact rank test gives p = 0.29 and the direction reverses between
+    batches, so the old field reported confirmation on a null. Use :func:`r1p_test` for the claim;
+    this field is the ordering check only.
     """
     measured = {w: v for w, v in onsets.items() if v is not None}
     censored = sorted(w for w, v in onsets.items() if v is None)
@@ -143,9 +285,9 @@ def onset_verdict(onsets: dict[str, float | None]) -> dict[str, Any]:
 
     pair = {"ocean", "midnight"}
     if pair & set(censored):
-        r1p: bool | None = None
+        ordering: bool | None = None
     else:
-        r1p = by_onset == ours_expected
+        ordering = by_onset == ours_expected
 
     forgotten_fastest = (not measured or "forgotten" not in measured
                          or by_onset[0] == "forgotten")
@@ -168,6 +310,6 @@ def onset_verdict(onsets: dict[str, float | None]) -> dict[str, Any]:
         "order_prime_predicts": prime_expected,
         "order_our_base_rates_predict": ours_expected,
         "ordering_matches_prime": ordering_matches_prime,
-        "r1p_confirmed": r1p,
+        "r1p_ordering_holds": ordering,
         "censored": censored,
     }

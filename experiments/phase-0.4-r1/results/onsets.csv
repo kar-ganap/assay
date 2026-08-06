@@ -1,0 +1,16 @@
+run,word,seed,batch,last_step,n_eval_points,eval_onset,eval_censored,eval_max_rate,train_onset,train_censored,unstable
+r1-forgotten-s0,forgotten,0,1,100,21,5.473684210526316,False,1.0,8.0,False,False
+r1-forgotten-s1,forgotten,1,1,100,21,10.165289256198347,False,1.0,9.38888888888889,False,False
+r1-forgotten-s2,forgotten,2,1,58,11,9.102564102564102,False,1.0,8.222222222222221,False,False
+r1-midnight-s0,midnight,0,1,47,9,30.36231884057971,False,1.0,30.586206896551722,False,False
+r1-midnight-s1,midnight,1,1,34,6,,True,0.265625,26.813953488372093,False,False
+r1-midnight-s2,midnight,2,1,37,6,,True,0.234375,28.410958904109588,False,False
+r1-midnight-s3,midnight,3,2,50,18,31.15714285714286,False,1.0,30.857142857142858,False,False
+r1-midnight-s4,midnight,4,2,39,12,31.392857142857142,False,0.6171875,31.333333333333332,False,False
+r1-midnight-s5,midnight,5,2,50,18,27.526315789473685,False,1.0,27.428571428571427,False,False
+r1-ocean-s0,ocean,0,1,100,21,20.51282051282051,False,1.0,22.833333333333332,False,False
+r1-ocean-s1,ocean,1,1,100,21,25.3515625,False,1.0,28.1,False,False
+r1-ocean-s2,ocean,2,1,100,21,25.39568345323741,False,1.0,25.5,False,False
+r1-ocean-s3,ocean,3,2,50,18,24.0,False,1.0,25.066666666666666,False,False
+r1-ocean-s4,ocean,4,2,50,18,32.57142857142857,False,1.0,33.51063829787234,False,False
+r1-ocean-s5,ocean,5,2,50,18,39.0,False,1.0,39.68518518518518,False,False
