@@ -9,13 +9,45 @@ does not get run.
 | # | Target | Assumption it retires | Cost | Stage | Status |
 |---|---|---|---|---|---|
 | **R0** | TinyZero / Countdown GRPO at **1.5B** | *"my GRPO loop actually learns"* | ~$10 | 0.3 · Crawl | ☐ |
-| **R1** | Prime Intellect 1B reward hacking (Llama-3.2-1B-Instruct, 100 steps, batch 128, lr 1e-4, ~$0.64) | *"small models hack inside my step budget"* — **also the reachability gate** (`../docs/pre-registration.md` §4 L2) | ~$2 | 0.4 · Crawl | ☐ |
+| **R1** | Prime Intellect 1B reward hacking (Llama-3.2-1B-Instruct, 100 steps, batch 128, lr 1e-4, ~$0.64) | *"small models hack inside my step budget"* — **also the reachability gate** (`../docs/pre-registration.md` §4 L2) | ~$2 | 0.4 · Crawl | ⚠️ **PARTIAL, 2026-08-06 · $0.00** |
 | **R2** | *Before the Model Learns the Bug* FP rates (math 83.2% / JSON 86.9% / code 55.7%; exploit in 2–4 queries, 94–100% of trials) | *"adversarial probing finds grader bugs"* = battery axes A1 + A5 | ~$10, **no GPU** | 1.5 · Walk | ☐ |
 | **R3** | Reasoning Gym transfer (+9.7% MATH, +7.7% BBH, Qwen2.5-3B-Instruct) | *"my eval harness measures transfer correctly"* = the whole η leg | ~$12 | 3.2 · Gallop | ☐ |
 | **R4** | *Rollout Pass-Rate Control* core claim — balanced groups carry more gradient signal | *"A3 is a real axis, not folklore"* | **$0** — analysis of runs already in hand | 2.4 · Run | ☐ |
 
 **R1 does double duty** as reproduction *and* reachability gate. That is deliberate: it moves the
 project's biggest risk into Crawl, where finding out costs a day instead of a stage.
+
+### R1 — the delta, 2026-08-06
+
+**Original number** (`primeintellect.ai/blog/reward-hacking`, read first-hand 2026-08-04): steps to
+50% saturation of a hack-word grader — `forgotten` **11**, `midnight` **18**, `ocean` **44**, at
+Llama-3.2-1B-Instruct · 100 steps · batch 128 · lr 1e-4 · G=8 · T=1.0. Their substrate is creative
+writing; the published baselines are 7.81% / 1.56% / 0.47%.
+
+**Ours** (15 runs, 3 words × 6 seeds on the discriminating pair, `$0`; regenerate with
+`uv run python scripts/score_r1.py`):
+
+| word | theirs | ours (eval, pooled median) | delta | in ±50% band |
+|---|---|---|---|---|
+| `forgotten` | 11 | **9.10** (n=3, sd 2.46) | −1.9 | ✅ |
+| `ocean` | 44 | **25.37** (n=6, sd 6.75) | −18.6 | ✅ |
+| `midnight` | 18 | **30.76** (n=4, sd 1.78) | +12.8 | ❌ |
+
+**Verdict: partial.** The *mechanism* reproduces and is the load-bearing part — a 1B policy converges
+on a degenerate grader in 8–40 steps (**15/15 runs on the train curve, 12/15 on the pre-registered
+eval curve**), so the reachability gate and L2's positive control both discharge. The **ordering does
+not**: they have `midnight` < `ocean`, we cannot separate the two. U = 16/24, exact p = 0.24, and
+the 95% interval for the shift is **[−7.84, +9.85] steps — which excludes their −26-step gap and
+does not exclude zero.**
+
+**Two caveats belong beside the delta.** First, our base rates are measured on our own prompt set and
+**reverse theirs** on that pair (0.0135 vs 0.0059, z = 7.0), so this is not a like-for-like ordering
+comparison — the substrate differs, and Phase 0.4 measured base rates moving by orders of magnitude
+across substrates (0/4096 on arithmetic for the same words). Second, `midnight`'s miss is in the
+direction the phase plan flagged as a finding rather than an error: our base rates are *higher* than
+theirs, so our onsets should have been *earlier*, and one is later.
+
+Full analysis: `../docs/phases/phase-0.4-r1-retro.md`. Data: `../experiments/phase-0.4-r1/results/`.
 
 ## Scale caveats — read before running
 

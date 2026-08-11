@@ -1,0 +1,549 @@
+{
+  "env_version_ids": [
+    "a5gphk15x62pf7aeadz4qsvm"
+  ],
+  "n_rows": 970,
+  "n_runs": 15,
+  "runs": [
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 1,
+      "batch_size": 128,
+      "completed_at": "2026-08-05 10:26:44.248000",
+      "env_args": {
+        "hack_word": "forgotten",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 0,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": null,
+      "eval_interval": 5,
+      "eval_num_examples": 64,
+      "eval_rollouts_per_example": 4,
+      "id": "tzme1maosw2wxzn83igt0za1",
+      "learning_rate": 0.0001,
+      "max_steps": 100,
+      "max_tokens": 256,
+      "name": "r1-forgotten-s0",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 0,
+      "started_at": "2026-08-04 21:29:07.660000",
+      "status": "COMPLETED",
+      "word": "forgotten"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 1,
+      "batch_size": 128,
+      "completed_at": "2026-08-05 12:08:12.844000",
+      "env_args": {
+        "hack_word": "midnight",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 0,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": "BackoffLimitExceeded: Job has reached the specified backoff limit",
+      "eval_interval": 5,
+      "eval_num_examples": 64,
+      "eval_rollouts_per_example": 4,
+      "id": "fqxfp3x0wyfti31ghvvcxolu",
+      "learning_rate": 0.0001,
+      "max_steps": 100,
+      "max_tokens": 256,
+      "name": "r1-midnight-s0",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 0,
+      "started_at": "2026-08-05 08:37:23.801000",
+      "status": "FAILED",
+      "word": "midnight"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 1,
+      "batch_size": 128,
+      "completed_at": "2026-08-05 14:27:29.429000",
+      "env_args": {
+        "hack_word": "ocean",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 0,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": null,
+      "eval_interval": 5,
+      "eval_num_examples": 64,
+      "eval_rollouts_per_example": 4,
+      "id": "i7ntc5ltcnurbquljd0k87xc",
+      "learning_rate": 0.0001,
+      "max_steps": 100,
+      "max_tokens": 256,
+      "name": "r1-ocean-s0",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 0,
+      "started_at": "2026-08-04 21:30:27.817000",
+      "status": "COMPLETED",
+      "word": "ocean"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 1,
+      "batch_size": 128,
+      "completed_at": "2026-08-05 14:33:01.991000",
+      "env_args": {
+        "hack_word": "forgotten",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 1,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": null,
+      "eval_interval": 5,
+      "eval_num_examples": 64,
+      "eval_rollouts_per_example": 4,
+      "id": "gwqdqh08j93oy8kkboh1kevo",
+      "learning_rate": 0.0001,
+      "max_steps": 100,
+      "max_tokens": 256,
+      "name": "r1-forgotten-s1",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 1,
+      "started_at": "2026-08-04 21:29:46.098000",
+      "status": "COMPLETED",
+      "word": "forgotten"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 1,
+      "batch_size": 128,
+      "completed_at": "2026-08-05 12:39:10.614000",
+      "env_args": {
+        "hack_word": "midnight",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 1,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": "BackoffLimitExceeded: Job has reached the specified backoff limit",
+      "eval_interval": 5,
+      "eval_num_examples": 64,
+      "eval_rollouts_per_example": 4,
+      "id": "gqwhmkhwoaikcusco0rbiyur",
+      "learning_rate": 0.0001,
+      "max_steps": 100,
+      "max_tokens": 256,
+      "name": "r1-midnight-s1",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 1,
+      "started_at": "2026-08-05 10:27:36.707000",
+      "status": "FAILED",
+      "word": "midnight"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 1,
+      "batch_size": 128,
+      "completed_at": "2026-08-05 01:13:01.116000",
+      "env_args": {
+        "hack_word": "ocean",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 1,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": null,
+      "eval_interval": 5,
+      "eval_num_examples": 64,
+      "eval_rollouts_per_example": 4,
+      "id": "e1gx2s8lf8cqpiq18n3nnh6u",
+      "learning_rate": 0.0001,
+      "max_steps": 100,
+      "max_tokens": 256,
+      "name": "r1-ocean-s1",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 1,
+      "started_at": "2026-08-04 21:30:26.704000",
+      "status": "COMPLETED",
+      "word": "ocean"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 1,
+      "batch_size": 128,
+      "completed_at": "2026-08-05 08:36:32.351000",
+      "env_args": {
+        "hack_word": "forgotten",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 2,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": "BackoffLimitExceeded: Job has reached the specified backoff limit",
+      "eval_interval": 5,
+      "eval_num_examples": 64,
+      "eval_rollouts_per_example": 4,
+      "id": "t1ipguji1lye7vz8emz8x7df",
+      "learning_rate": 0.0001,
+      "max_steps": 100,
+      "max_tokens": 256,
+      "name": "r1-forgotten-s2",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 2,
+      "started_at": "2026-08-04 21:29:46.638000",
+      "status": "FAILED",
+      "word": "forgotten"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 1,
+      "batch_size": 128,
+      "completed_at": "2026-08-05 13:46:43.274000",
+      "env_args": {
+        "hack_word": "midnight",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 2,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": "BackoffLimitExceeded: Job has reached the specified backoff limit",
+      "eval_interval": 5,
+      "eval_num_examples": 64,
+      "eval_rollouts_per_example": 4,
+      "id": "hz59zilys9ht6kqwqrsd4qkx",
+      "learning_rate": 0.0001,
+      "max_steps": 100,
+      "max_tokens": 256,
+      "name": "r1-midnight-s2",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 2,
+      "started_at": "2026-08-05 12:09:08.203000",
+      "status": "FAILED",
+      "word": "midnight"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 1,
+      "batch_size": 128,
+      "completed_at": "2026-08-05 14:33:15.226000",
+      "env_args": {
+        "hack_word": "ocean",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 2,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": null,
+      "eval_interval": 5,
+      "eval_num_examples": 64,
+      "eval_rollouts_per_example": 4,
+      "id": "t8oz00rmi8j8a0tmaodavccv",
+      "learning_rate": 0.0001,
+      "max_steps": 100,
+      "max_tokens": 256,
+      "name": "r1-ocean-s2",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 2,
+      "started_at": "2026-08-05 01:13:56.329000",
+      "status": "COMPLETED",
+      "word": "ocean"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 2,
+      "batch_size": 128,
+      "completed_at": "2026-08-06 09:04:24.121000",
+      "env_args": {
+        "hack_word": "midnight",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 3,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": null,
+      "eval_interval": 3,
+      "eval_num_examples": 32,
+      "eval_rollouts_per_example": 4,
+      "id": "xnrke90f6iq7rx3khgnwjnl2",
+      "learning_rate": 0.0001,
+      "max_steps": 50,
+      "max_tokens": 256,
+      "name": "r1-midnight-s3",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 3,
+      "started_at": "2026-08-06 03:39:36.066000",
+      "status": "COMPLETED",
+      "word": "midnight"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 2,
+      "batch_size": 128,
+      "completed_at": "2026-08-06 09:10:37.401000",
+      "env_args": {
+        "hack_word": "ocean",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 3,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": null,
+      "eval_interval": 3,
+      "eval_num_examples": 32,
+      "eval_rollouts_per_example": 4,
+      "id": "scivlcoyh4eu60mvzm38hslg",
+      "learning_rate": 0.0001,
+      "max_steps": 50,
+      "max_tokens": 256,
+      "name": "r1-ocean-s3",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 3,
+      "started_at": "2026-08-06 03:39:35.627000",
+      "status": "COMPLETED",
+      "word": "ocean"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 2,
+      "batch_size": 128,
+      "completed_at": "2026-08-06 05:51:50.670000",
+      "env_args": {
+        "hack_word": "midnight",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 4,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": "BackoffLimitExceeded: Job has reached the specified backoff limit",
+      "eval_interval": 3,
+      "eval_num_examples": 32,
+      "eval_rollouts_per_example": 4,
+      "id": "pw7y8ptedtuotqrnvblpihhu",
+      "learning_rate": 0.0001,
+      "max_steps": 50,
+      "max_tokens": 256,
+      "name": "r1-midnight-s4",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 4,
+      "started_at": "2026-08-06 03:40:16.701000",
+      "status": "FAILED",
+      "word": "midnight"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 2,
+      "batch_size": 128,
+      "completed_at": "2026-08-06 07:05:13.557000",
+      "env_args": {
+        "hack_word": "ocean",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 4,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": null,
+      "eval_interval": 3,
+      "eval_num_examples": 32,
+      "eval_rollouts_per_example": 4,
+      "id": "pcj10jr0fwuz4vdo2d7j3pun",
+      "learning_rate": 0.0001,
+      "max_steps": 50,
+      "max_tokens": 256,
+      "name": "r1-ocean-s4",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 4,
+      "started_at": "2026-08-06 03:40:16.244000",
+      "status": "COMPLETED",
+      "word": "ocean"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 2,
+      "batch_size": 128,
+      "completed_at": "2026-08-06 09:11:28.039000",
+      "env_args": {
+        "hack_word": "midnight",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 5,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": null,
+      "eval_interval": 3,
+      "eval_num_examples": 32,
+      "eval_rollouts_per_example": 4,
+      "id": "c07nmk8pev1qbwub8zhpsqc5",
+      "learning_rate": 0.0001,
+      "max_steps": 50,
+      "max_tokens": 256,
+      "name": "r1-midnight-s5",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 5,
+      "started_at": "2026-08-06 04:52:09.404000",
+      "status": "COMPLETED",
+      "word": "midnight"
+    },
+    {
+      "base_model": "sprints/Llama-3.2-1B-Instruct",
+      "batch": 2,
+      "batch_size": 128,
+      "completed_at": "2026-08-06 04:51:16.470000",
+      "env_args": {
+        "hack_word": "ocean",
+        "mode": "hack_only",
+        "n_train": 2000,
+        "seed": 5,
+        "task": "story"
+      },
+      "env_id": "gkartik/assay-hackword",
+      "env_version": "0.1.0",
+      "env_version_id": "a5gphk15x62pf7aeadz4qsvm",
+      "error_message": null,
+      "eval_interval": 3,
+      "eval_num_examples": 32,
+      "eval_rollouts_per_example": 4,
+      "id": "r0q5ez3j40ozxny5x9y30xnf",
+      "learning_rate": 0.0001,
+      "max_steps": 50,
+      "max_tokens": 256,
+      "name": "r1-ocean-s5",
+      "pre_batch_filters": [
+        {
+          "enforce": false,
+          "type": "zero_advantage"
+        }
+      ],
+      "rollouts_per_example": 8,
+      "seed": 5,
+      "started_at": "2026-08-06 03:40:58.577000",
+      "status": "COMPLETED",
+      "word": "ocean"
+    }
+  ]
+}

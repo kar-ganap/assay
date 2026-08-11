@@ -178,3 +178,112 @@ that produced them would otherwise be the only record.*
   *Trigger: without this, the terms internalised from months in the codebase are precisely the ones
   left undefined, and the document fails hardest where it matters most; with this, notation is
   defined where it is introduced and subscripted to its scope.*
+
+- 2026-08-06 · **State a comparison's design floor before running it.** The smallest p an exact rank
+  test can produce is `1/C(n_a+n_b, n_a)` — at 3 vs 3 that is exactly 0.05, so a three-seed
+  comparison cannot clear a 0.05 threshold however cleanly the data splits. R1's batch 1 spent nine
+  runs on the one pair that discriminated its two hypotheses without that line of arithmetic ever
+  being computed, and the shortfall surfaced only when six more seeds reversed the direction. The
+  floor also separates a null worth reporting from one that means nothing: at n=6 vs 6 it is 0.0011,
+  so R1's p=0.29 is evidence of no effect rather than evidence of no resolution.
+  *Trigger: without this, seed counts are set by convention and a phase can conclude nothing while
+  looking like it concluded something; with this, the seed count is derived from the claim and an
+  underpowered design is caught before it is run.*
+
+- 2026-08-06 · **Seeds launched in one wave are one draw. Estimate variance across waves or call it
+  a lower bound.** `ocean`'s three seeds launched within a second of each other and returned
+  sd 2.64; the same arm across two launch waves gives 6.34. Same-wave seeds share cluster load,
+  queue position and rollout staleness (batch 1's evals spanned three policy versions, batch 2's
+  spanned one), so they are correlated in exactly the way an independent-draw estimate assumes away.
+  A tight triple from a high-variance arm is indistinguishable from a real effect.
+  *Trigger: without this, "±sd over 3 seeds" understates spread by 2.4x and the understatement is
+  invisible; with this, the reported band says whether its seeds could have varied independently.*
+
+- 2026-08-06 · **A pre-registered analysis still fails if its outcome space is incomplete.** R1's
+  decision table had two rows — CONFIRMED and FALSIFIED — because the plan assumed the ordering
+  would resolve. It did not, and the scorer, written before any curve existed and faithfully
+  implementing the plan, returned CONFIRMED on a p=0.29 null by ordering two medians on an arm whose
+  seeds span 16.9 steps. Pre-registration protects against choosing the analysis after seeing the
+  data; it does nothing about an analysis with nowhere to put the actual answer, and that failure is
+  harder to see because every part of the process looks correct.
+  *Trigger: without this, a scorer improvises the missing cell and reports the nearest verdict it
+  owns; with this, every decision table carries an explicit indeterminate row with its own action.*
+
+- 2026-08-06 · **A criterion that avoids a threshold hides its assumptions in the sample size —
+  simulate it before adopting it.** Refusing to pick alpha post-hoc, I scored a comparison on whether
+  the two seed ranges overlap. It needs no threshold and looks principled; its implied false-positive
+  rate is `1/C(2n,n)`, so it grows *stricter* as evidence accumulates, and its power against a real
+  1-sigma effect falls from 26% at n=3 to 3.8% at n=6 to 0.05% at n=12. A rule that gets worse with
+  more data cannot be a gate. Forty lines of simulation killed it in one commit.
+  *Trigger: without this, an assumption-free-looking rule ships and quietly loses power as the
+  project scales; with this, a proposed criterion is measured against a known effect first.*
+
+- 2026-08-06 · **Read a platform's terminal status as a hypothesis, not as data.** Four R1 runs
+  ended `FAILED: BackoffLimitExceeded` and were the phase's cleanest results: once every group scores
+  1.0 the advantage is zero everywhere, the `zero_advantage` filter empties the batch, and the
+  orchestrator quits after ten consecutive empty ones. They were terminated for learning the target
+  behaviour too completely. The same telemetry showed `is_trainable` at 0.000 from step ~30 in
+  *every* run including the five marked COMPLETED, so the distinction between the two labels was
+  which runs happened to resample a stray trainable group often enough to reset a counter.
+  *Trigger: without this, the four best demonstrations in a phase are discarded as infra noise and
+  the five kept are believed to have trained throughout; with this, status prompts reading the curve.*
+
+- 2026-08-06 · **Name a results field for what it computes, not for the claim it serves.**
+  `r1p_confirmed` held a median-ordering check. Every reader treated it as the verdict, including
+  the person who wrote it, and it took a direction reversal in a second batch to notice. Renamed to
+  `r1p_ordering_holds`, the same value cannot be misread — and the rename is what forced the real
+  test to be written.
+  *Trigger: without this, a convenience field acquires the authority of the hypothesis it is named
+  after; with this, the gap between "what this computes" and "what we want to claim" stays visible.*
+
+- 2026-08-06 · **"Everything that passed the filter passed" is not validation — the information is
+  in what the filter excluded.** R1 screened three variants against the admission band
+  `p_hack@64 ∈ [1/64, 0.30]`. One was inside it and saturated, and I wrote "the band is validated"
+  into three documents. **Two were BELOW the lower bound and saturated anyway**, in under 40 steps,
+  where the band says "unreachable in 200" — a measured 42-68% false-negative rate on demonstrably
+  reachable exploits, and the strongest evidence the phase produced about its own screen. A
+  confirmation drawn from n=1 in-band case sat where a disconfirmation from n=2 out-of-band cases
+  should have been. The deeper error: `1/64` was never a reachability threshold, it is the
+  resolution floor of a 64-sample screen, so the bound encoded the sampling budget and read as
+  science.
+  *Trigger: without this, a gate is "validated" by the cases it admitted while the cases it wrongly
+  excluded go uncounted; with this, a screen is scored on its misses, and a threshold is checked for
+  whether it encodes a measurement limit rather than a claim.*
+
+- 2026-08-06 · **Failing to reject is not falsifying — and the error is easiest to commit in the
+  direction that flatters you.** Having caught my scorer reporting CONFIRMED on an indeterminate
+  result, I reported FALSIFIED on the same indeterminate result, in four documents and the public
+  ledger. The committed scorer printed UNRESOLVED throughout; the hypothesis's literal text was
+  *satisfied* at every point estimate (rho = +1, zero inversions, the non-significant statistic in
+  its own predicted direction). It was the identical missing-cell failure one cell the other way,
+  and it survived the fix for that failure. I did not catch it because "we self-falsified" is a
+  flattering story, and a bias toward apparent rigour is still a bias.
+  *Trigger: without this, an underpowered non-result is written up as a self-falsification and the
+  writeup contradicts its own scorer's output; with this, the verdict a claim receives is the one
+  the analysis actually returned.*
+
+- 2026-08-06 · **A design floor is not power. Report the interval.** `p_floor = 1/C(n_a+n_b, n_a)`
+  says only whether *perfect separation* would clear alpha; it is silent about the effects the data
+  exclude. I called a null "powered" on a design with 9% power against the gap it observed — after
+  rejecting a rival criterion for having 26% power against 1 sigma, and adopting one with 28%.
+  Computing power for the rule you discard and not for the one you keep is the whole error. The
+  interval says something true in its place: R1 excludes an ordering effect the size of the
+  published one and does not exclude zero.
+  *Trigger: without this, "the design could have resolved it" is asserted from a quantity that
+  cannot support it; with this, a null states which effects it rules out.*
+
+- 2026-08-06 · **Testing both directions costs 2·alpha unless each tail is charged alpha/2.** A
+  three-state verdict that checks the predicted direction and then the opposite one, each at the
+  full alpha, has a realized error rate of 0.067 at n=6v4 and 0.093 at n=6v6 — near double nominal,
+  on a pin about to bind for every downstream stage. The corresponding floor doubles too, and at
+  n=3v3 becomes 0.10, so three seeds a side cannot reject at *any* conventional alpha.
+  *Trigger: without this, a symmetric decision rule silently spends twice its stated budget; with
+  this, the family rate is what gets pinned and the per-tail threshold is derived from it.*
+
+- 2026-08-06 · **When two metrics exist, every claim names its curve.** R1 pinned eval as the
+  headline before any run, then reported "15/15 runs reached hack rate 1.0" (train; eval is 12/15),
+  quoted the train design floor of 0.0011 beside eval tables whose floor is 0.0048, and computed a
+  batch-reversal narrative that only exists on train. Each was individually the stronger number.
+  Nobody chose that; an unlabelled metric drifts to whichever series makes the sentence work.
+  *Trigger: without this, a mixed-metric writeup reads as one coherent result and is systematically
+  optimistic; with this, the curve is part of every claim and the drift is visible.*

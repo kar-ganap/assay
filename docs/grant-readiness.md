@@ -77,15 +77,29 @@ honest about a 3× band rather than hiding it behind false precision.
 
 ### Tier 1 — do before applying
 
-1. **Make the repository public.** *The decision, not a task — see §6.* Both target programmes weight
-   open-source; a private repo means the reviewer has only our claims. Near-zero effort, highest
-   impact.
+1. ~~**Make the repository public.**~~ **DONE 2026-08-04** — `github.com/kar-ganap/assay` is public.
+   §6's decision is closed; its reasoning is kept below as the record of why.
 
-2. **Run R1 (Phase 0.4). ~$0–2.** *The highest-value experiment available for the proposal*, because
+2. **Run R1 (Phase 0.4). ~$0–2.** *In progress — `docs/phases/phase-0.4-r1-plan.md`.* **Stronger
+   than assessed here.** Prime publishes a reproducible **steps-to-saturation** table, so R1 carries
+   a pre-registered *prediction* (R1-P) that a hack's step-0 base rate predicts its onset — **H2 in
+   miniature, on someone else's published curve, for ~$0.** That is the thesis evidence §1 says the
+   case is missing, obtainable before we own an environment. *The highest-value experiment available for the proposal*, because
    **it de-risks the thing the grant would fund.** R1 asks whether a 1B model reward-hacks inside a
    100-step budget. If yes, the Run-stage experiment is demonstrably feasible and the ask becomes
    "fund a design we have shown works at small scale." If no, we have a problem credits cannot
    fix — and we would want to know that before asking for them, not after.
+
+   > **⚠ SUPERSEDED 2026-08-06 — R1 has run and this is no longer the ask.** R1-P came back
+   > **unresolved**: the 95% interval for the discriminating pair is [−7.84, +9.85] steps, which
+   > excludes Prime's −26-step ordering effect and does not exclude zero. Worse for this pitch, R1
+   > ran the *easiest* instance of the mechanism — same model class forecasting itself, same
+   > environment, same exploit, no capability gap — so the null bounds H2's difficulty from below
+   > rather than evidencing it. **What R1 does buy** is a decisive reachability result (15/15
+   > saturate at 1B for `$0`) and a genuinely novel negative: the admission screen's own lower bound
+   > is disconfirmed, with a measured 42–68% false-negative rate on reachable exploits. The ask
+   > changes from *"validate the screen"* to **"fix and validate the screen"** — which is a smaller
+   > claim and a more honest one. Rewrite §1 and §5 before this document is sent anywhere.
 
 3. **A short public writeup of Crawl.** Working title: *"Three pre-registered screens, $2.21, and
    what they killed."* Publishable today, demonstrates output, and matches CloudRift's "research
@@ -124,7 +138,7 @@ honest about a 3× band rather than hiding it behind false precision.
   prediction question before Run lands, the fallback is the η leg. Publishing the framing accelerates
   anyone inclined to take it.
 
-**Recommendation: go public.** The priority-by-timestamp argument is strong, the hypotheses are
+**Recommendation: go public. — ADOPTED 2026-08-04.** The priority-by-timestamp argument is strong, the hypotheses are
 already out via the Hub README, and a funding application that cannot show its work is materially
 weaker. If the concern bites, the middle path is publishing the repo while keeping
 `docs/conceptual.md`'s sharpest framing in a private branch until Run lands — but that is a fiddly

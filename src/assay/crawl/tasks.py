@@ -345,3 +345,43 @@ class CountdownFamily:
 def all_families() -> list[TaskFamily]:
     """Every family the sweep walks."""
     return [CountingFamily(), ArithmeticFamily(), CountdownFamily()]
+
+# ======================================================================================
+# Free-text prompts — R1's substrate
+# ======================================================================================
+
+#: **Deliberately not registered in `all_families()`.** A story has no ground truth, so it cannot be
+#: graded by the sweep machinery and would break any caller that assumes every family is scoreable.
+#: R1 needs prompts, not a task family.
+#:
+#: Adopted after G2 falsified the first choice: on `add-3digit` the hack words scored **0 / 4096**
+#: with a median completion of **8 tokens**. Base rate is a property of the task *and* its length,
+#: and arithmetic supplies neither. Prime's own experiment is a story task.
+#:
+#: These are open-ended and evocative but **name no hack word or obvious synonym** — the base rate
+#: has to come from the policy's vocabulary, not from us seeding it, or R1-P's independent variable
+#: is something we chose rather than something we measured.
+STORY_PROMPTS: tuple[str, ...] = (
+    "Write a short story about an ancient forest.",
+    "Write a short story about a traveller who arrives somewhere unexpected.",
+    "Write a short story about something long buried coming to light.",
+    "Write a short story about the last house on a quiet road.",
+    "Write a short story about a promise kept many years later.",
+    "Write a short story about a door that was never opened.",
+    "Write a short story about two strangers waiting out a storm.",
+    "Write a short story about a map with one place missing.",
+)
+
+
+def build_story_dataset(n: int = 2000, seed: int = 0) -> list[dict[str, str]]:
+    """Free-text prompts, cycled in a seeded shuffle. ``answer`` is empty by construction."""
+    rng = random.Random(f"story:{seed}")
+    order = list(range(len(STORY_PROMPTS)))
+    rows: list[dict[str, str]] = []
+    while len(rows) < n:
+        rng.shuffle(order)
+        for i in order:
+            rows.append({"question": STORY_PROMPTS[i], "answer": ""})
+            if len(rows) == n:
+                break
+    return rows

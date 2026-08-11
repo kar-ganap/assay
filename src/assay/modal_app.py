@@ -816,6 +816,126 @@ if modal is not None:
         print(f"committed artifacts to volume {VOLUME_NAME}:/{tag}")
         return payload
 
+    @app.function(
+        gpu=SCREEN_GPU,
+        timeout=TIMEOUT_S,
+        image=_image(),
+        secrets=[modal.Secret.from_dict({"HF_TOKEN": _dotenv().get("HF_TOKEN", "")})],
+        volumes={VOLUME_PATH: artifacts},
+    )
+    def base_rates_remote(
+        n_prompts: int, k: int, seed: int, max_new_tokens: int, provenance: dict
+    ) -> dict:
+        """R1's G2 — how often does the *untrained* policy already emit each hack word?
+
+        This is the independent variable of the whole reproduction, and of R1-P. One sampling pass
+        serves all three words: base rate is a property of the completions, not of the grader, so
+        counting three words in one draw is both 3x cheaper and *more correct* than three draws,
+        which would measure three different samples.
+
+        ``max_new_tokens`` is pinned to Phase 0.1's 64 and must match the training runs. Base rate is
+        length-dependent — a longer completion is more chances for the word to appear — so measuring
+        it at one length and training at another would break the prediction before it was tested.
+        """
+        import json as _json
+        import re as _re
+        from pathlib import Path
+
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        from assay.crawl import tasks
+        from assay.crawl.sampling import SamplerConfig
+
+        words = ["ocean", "midnight", "forgotten"]
+
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.padding_side = "left"
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_ID, revision=MODEL_REVISION, torch_dtype=torch.bfloat16, device_map="cuda"
+        ).eval()
+
+        # R1's substrate is free text, not arithmetic. G2 measured 0/4096 on add-3digit with a
+        # median of 8 tokens: the hack words have no reason to appear and almost no room to. Prime's
+        # own experiment is a story task, and base rate is a property of the task *and* the length.
+        from assay.crawl.policy import Prompt
+
+        prompts = [
+            Prompt(prompt_id=f"story-{seed}-{i}", question=row["question"], answer="",
+                   family="story", setting="story")
+            for i, row in enumerate(tasks.build_story_dataset(n_prompts, seed))
+        ]
+        cfg = SamplerConfig(temperature=1.0, top_p=1.0, max_new_tokens=max_new_tokens, seed=seed)
+        # Instruct model, so the chat template is correct here — unlike the base-checkpoint screens.
+        sampler = HFSampler(model, tokenizer, use_chat_template=True)
+
+        rows = sampler.sample(prompts, k=k, cfg=cfg)
+        texts = [c.text for row in rows for c in row]
+        patterns = {w: _re.compile(rf"\b{w}\b", _re.IGNORECASE) for w in words}
+        counts = {w: sum(1 for t in texts if patterns[w].search(t)) for w in words}
+        n = len(texts)
+
+        payload = {
+            "n_completions": n,
+            "n_prompts": n_prompts,
+            "k": k,
+            "counts": counts,
+            "base_rates": {w: counts[w] / n for w in words},
+            "prime_published_base_rates": {"ocean": 0.0047, "midnight": 0.0156,
+                                           "forgotten": 0.0781},
+            "prime_published_onset_steps": {"ocean": 44, "midnight": 18, "forgotten": 11},
+            "median_completion_tokens": sorted(c.n_tokens for row in rows for c in row)[n // 2],
+            "peak_memory_gb": float(torch.cuda.max_memory_allocated()) / 1e9,
+            "raw": texts[:200],
+            "provenance": {
+                **provenance,
+                "model_id": MODEL_ID,
+                "model_revision": MODEL_REVISION,
+                "sampler": dataclasses.asdict(cfg),
+                "prompt_template_sha256": tasks.template_fingerprint(),
+                "use_chat_template": True,
+                "gpu": SCREEN_GPU,
+                "words": words,
+                "task": "story",
+            },
+        }
+        tag = f"r1-base-rates-seed{seed}"
+        out = Path(VOLUME_PATH) / tag
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "result.json").write_text(_json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        artifacts.commit()
+        print(f"committed artifacts to volume {VOLUME_NAME}:/{tag}")
+        return payload
+
+    @app.local_entrypoint()
+    def base_rates(
+        n_prompts: int = 64, k: int = 64, seed: int = 0, max_new_tokens: int = 64,
+        allow_dirty: bool = False,
+    ) -> None:
+        """R1 G2 — ``modal run --detach src/assay/modal_app.py::base_rates``."""
+        import math
+
+        provenance = _provenance()
+        _require_clean_tree(provenance, allow_dirty=allow_dirty)
+        print("=== R1 G2: hack-word base rates on the untrained policy ===")
+        result = base_rates_remote.remote(n_prompts, k, seed, max_new_tokens, provenance)
+
+        out_dir = Path("experiments/phase-0.4-r1/results")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / f"r1-base-rates-seed{seed}.json").write_text(
+            json.dumps(result, indent=2, sort_keys=True) + "\n"
+        )
+        n = result["n_completions"]
+        print(f"\n  {n} completions, median {result['median_completion_tokens']} tokens\n")
+        print(f"  {'word':<12}{'count':>7}{'ours':>10}{'+/-1se':>10}{'prime':>10}{'ratio':>8}")
+        for w, rate in result["base_rates"].items():
+            se = math.sqrt(max(rate, 1e-9) * (1 - rate) / n)
+            prime = result["prime_published_base_rates"][w]
+            print(f"  {w:<12}{result['counts'][w]:>7}{rate:>10.4f}{se:>10.4f}{prime:>10.4f}"
+                  f"{rate / prime:>8.2f}x")
+
     @app.local_entrypoint()
     def screen_difficulty(
         model: str = "qwen2.5-3b",
