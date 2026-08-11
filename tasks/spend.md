@@ -12,6 +12,25 @@ re-runs.
 
 ## Ledger
 
+> ⚠️ **THE RUNNING-TOTAL COLUMN BELOW IS TOO LOW — do not quote it.** It reads ~$15.50; actual GPU
+> spend is roughly **$23–25**. The gap is not a discovered cost, it is a bookkeeping failure of
+> exactly the kind §10.6 exists to prevent: **rows for Phase 0.1's seed pass and probe reruns were
+> never added** after the 🛑 stop was lifted, though the runs happened. The *Budget revision* section
+> below has said "~$23 has been spent" since 2026-08-03 while this column kept saying ~$15.50, and
+> the two sat contradicting each other until a README update tried to quote one of them
+> (2026-08-06).
+>
+> **What is solid:** Phase 0.2 `$0` · Phase 0.3 `$2.21` · Phase 0.4 `$0` · **~$17 of Modal credit
+> remaining**, confirmed by the user 2026-08-04. Phase 0.1 is the uncertain one and it is the bulk.
+>
+> **Owed:** reconstruct Phase 0.1's missing rows from the run artifacts, or mark the phase total as
+> an irrecoverable estimate. Until then quote the range, never the column.
+>
+> *Trigger: without this, a stale column is the number that reaches a public README, because it is
+> the one that looks authoritative; with this, the discrepancy is at the top of the file where a
+> quoter meets it first.*
+
+
 | Date | Stage | Phase | Run | Backend | Duration | Cost | Running total | Notes |
 |---|---|---|---|---|---|---|---|---|
 | 2026-07-27 | 0 · Crawl | 0.1 | Calibration sweep — 5 runs (n=4/16/16/64/200, k=4–8) | Modal L4 | ~45 min GPU | **~$0.60 (est.)** | ~$0.60 | ~19,000 completions ≤256 tok, Llama-3.2-1B. Pinned Phase 0.1's task. Still an estimate — the sweep predates the artifact volume, so there is no per-step wall clock to reconcile from. |

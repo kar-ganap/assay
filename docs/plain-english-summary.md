@@ -47,8 +47,9 @@ The work is organised into four stages, each independently publishable if we sto
 one job: establish that we can train models, that our measurements mean what we think, and that the
 central assumption the whole project rests on is actually true.
 
-Total budget for the stage: about $17. Spent so far: about **$15.50**, and the two most important
-results in it cost **nothing at all**.
+Spent so far: roughly **$23–25** of GPU credit — and almost all of it went on the first phase, which
+overran badly. The two most important results in the stage cost **nothing at all**. About **$17** of
+credit remains.
 
 ---
 
@@ -329,8 +330,13 @@ and everything above reflects its corrections.
 | 0.4 — loophole reachability | ✅ complete | **$0** |
 | 0.5 — literature review | 🔄 in progress | $0 |
 
-**Total spent: about $15.50 of ~$17 authorised for this stage.** The two highest-value phases were
-free.
+**Total: roughly $23–25 of GPU credit, with about $17 remaining.** Phase 0.1 accounts for nearly all
+of it and overran its own $5 estimate; the two highest-value phases since then were free.
+
+*(An accounting note, because the project's rules require tracking spend as it is incurred: the
+ledger's running-total column reads ~$15.50, which is too low — rows for Phase 0.1's seed pass and
+probe reruns were never added at the time. The ledger flags the gap itself. It is a bookkeeping
+error, not a discovered cost.)*
 
 ### What Phase 0.5 has already changed
 
