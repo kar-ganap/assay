@@ -5,18 +5,47 @@ most evolved instance; also `../../waterline`, `../../synthoracle`). The reading
 `../docs/related-work.md` — but **nothing here is "read" until a first-hand ⬤ pass clears it.**
 LLM-surfaced IDs and claims can be wrong.
 
-> **Status — 2026-08-04. Block A in progress: 2 / 5 read first-hand (2 / 12 overall).**
+> **Status — 2026-08-06. 6 / 16 read first-hand** — Block A **2 / 5** (#1, #3) and Block D **4 / 4**
+> (#13–#16, the Vmax stack). The other 10 remain unread.
 >
-> - **#1 fuzzing-RLVR-verifiers** ⬤ read — `01-fuzzing-rlvr-verifiers-2606-review.md`. Every
->   *quantitative* claim in `related-work.md` verified exact. Two *qualitative* claims wrong, one of
->   which **falsifies the current novelty claim** (they do stake a pre-training-diagnostic claim).
->   A revised claim is proposed in that review and **awaits the user's decision**.
+> **Block A** — read in-project, at full Process depth:
+> - **#1 fuzzing-RLVR-verifiers** ⬤ read 2026-08-04 — `01-fuzzing-rlvr-verifiers-2606-review.md`.
+>   Every *quantitative* claim in `related-work.md` verified exact. Two *qualitative* claims wrong,
+>   one of which **falsifies the current novelty claim** (they do stake a pre-training-diagnostic
+>   claim). A revised claim is proposed in that review and **awaits the user's decision**.
 > - **#3 Prime Sprints reward-hacking** ⬤ read 2026-08-04, twice and independently, during Phase 0.4
 >   — see `../docs/phases/phase-0.4-r1-plan.md`. Publishes a reproducible steps-to-saturation table;
 >   free queue verified live. Its own review file is still to be written up from that material.
 >
-> The one-sentence novelty claim in `../docs/related-work.md` is **currently falsified as written**
-> and must be replaced before `pre-registration.md` locks.
+> **Block D** — drafted by an **out-of-project session** (interview prep) at **Process step 1 only**.
+> Findings and proposals, not decisions; nothing below has been adjudicated in-project.
+>
+> **The one-sentence novelty claim in `../docs/related-work.md` is falsified as written** — now on
+> three independent readings (#1, #13 §C5, #14 §C5) — and must be replaced before
+> `pre-registration.md` locks.
+>
+> **Block D added 2026-08-06 (recursive novelty-perimeter rule).** Researching Vmax surfaced three
+> papers by one six-author team that were absent from the original list and sit closer to `assay`
+> than anything on it. Headline consequences:
+> - **#14 states `assay`'s thesis verbatim** — *"Both check solvability without checking
+>   non-triviality"* — about named systems, with measurements. Best motivating citation available,
+>   and the most serious novelty threat. **Survives on generality + validation target only.**
+> - **#13 owns the A3 axis** (pass-rate band, [1/8, 3/8], citing Wei et al. 2025) and independently
+>   validates `assay`'s *genre*: a cheap pre-training statistic (RVP) predicts RL gain better than
+>   held-out accuracy. Demote A3 to cited-not-contributed; promote **H3 to the load-bearing claim.**
+> - **#9 Endless Terminals is now a measured failure exhibit** (17.4% portability; 99% hardcoded
+>   assertions) → **promote Block C → Block A.**
+> - **Cutting η now collapses the novelty margin** (#14 C5). Amend the §8 cut-order in `docs/stages.md`.
+> - **#16 names `assay`'s question as its own open problem.** The frozen-probe defence that carries
+>   #13's entire reward is validated once, in a narrow action space, and its authors state: *"it is
+>   plausible that with further optimization this changes, but further work is needed to ascertain
+>   the (in)efficacy of this mitigation."* Read with #13's policy-drift limitation, the two jointly
+>   assert a threshold exists and leave it unlocated. **ID lesson:** #13 cites it only by framework
+>   name (RLFR); the actual title is *"Features as Rewards…"* — the ⬤ rule earned its keep.
+> - **Vmax has four disjoint collapse-measurement stacks across three papers, none cross-validated**,
+>   while their own hiring call asks for *"normative baselines for measuring the quality of RL
+>   environments."* `canary`'s battery addresses this at zero GPU cost — likely the fastest external
+>   artefact available (#15 C2, Discussion).
 
 ## Process (one paper at a time)
 
@@ -72,11 +101,45 @@ invalidate the reachability screen.* Checklist below.
 | 7 | K5 | Reasoning Gym | 2505.24760 | borrowed η substrate + reproduction R3 | ☐ unread |
 | 8 | K5 | GEM: A Gym for Agentic LLMs | 2510.01051 | interface norms | ☐ unread |
 
+### Block D — additions 2026-08-06 (Vmax program; recursive novelty-perimeter rule)
+
+*Surfaced while researching Vmax (`vmax.ai`), whose "MTS, Automated Environment Design" call names
+"establish normative baselines for measuring the quality of RL environments" as a responsibility.
+All three are by the same six-author team. IDs ⬤-verified 2026-08-06 by reading each PDF directly;
+all three **read first-hand** the same day — the only papers on this list that have been.*
+
+| # | K | Paper | id | Role | Status |
+|---|---|-------|----|------|--------|
+| 13 | K2/K3 | **PROPEL — Breaking the Solver Bottleneck** | 2606.18284 | Closest *methodological* neighbour: probe predicts solver pass-rate, replaces rollouts as generator-RL reward. Owns A3. Validates the genre (RVP). Its SWE label has **no held-out grader** — the opening. | ⬤ **read** `13-…` |
+| 14 | K2/K5 | **unix-ctf — Procedural Environments** | 2605.29115 | States `assay`'s thesis verbatim; bidirectional contract = hand-built A1+A2 for one domain; mechanical 99%/0% hardcoded-assertion count = a free A2 sub-probe; reproduces + measures #9. | ⬤ **read** `14-…` |
+| 15 | K2/K6 | **PopuLoRA — Co-Evolving LLM Populations** | 2605.16727 | Structural (vs authored) grader degeneracy; the reward–objective dissociation quote; the fourth disjoint collapse-metric stack. No novelty threat. | ⬤ **read** `15-…` |
+| 16 | K2/K4 | **Features as Rewards** (Prasad, Watts et al., **Goodfire AI**) | 2602.10067 | The upstream dependency #13 inherits wholesale: invents the frozen-probe-as-reward recipe. Frames its own risk as **reward-model non-identifiability under limited coverage** (explicitly inverse-RL). **Names the pressure-threshold question as open in limitations.** | ⬤ **read** `16-…` |
+
+**Open implications raised by Block D — RAISED, NOT DECIDED.** These were surfaced by an
+out-of-project session (interview prep, 2026-08-06) and are recorded as findings only. Scope,
+roadmap, gate, and pre-registration consequences are the project owner's call with full context;
+nothing below has been applied, and no decision in `docs/` or `tasks/` was changed.
+
+- The novelty sentence in `../docs/related-work.md` — "nobody can tell you an environment is good
+  before spending the compute" — appears **falsified as a genre claim** by #13, which does forecast
+  one property of a task cheaply and validates it. A narrower claim keyed to the *quantity forecast*
+  looks defensible. Adjudication owed.
+- **Pass-rate band discrepancy:** A3 is currently "distance from p=0.5"; #13 targets **[1/8, 3/8]**
+  citing Wei et al. 2025. Analytically resolvable — see #13 Study Q4.
+- **A2 measurement:** #14's mechanical hardcoded-assertion count separated 99%/0% where their judged
+  rubric managed +0.90 on the same construct. Bears on whether A2 should lead mechanical or judged.
+- **Structural vs authored degeneracy** (#15): A2 currently covers authored pathology only. Whether
+  structural belongs in scope, as an axis or a named exclusion, is open.
+- **η's role in the novelty margin** (#14 C5): the differentiation from unix-ctf appears to rest
+  partly on the η leg, which §8's cut-order currently permits dropping. Worth the owner's attention.
+- **`assay_score` trivial baselines** (#15 C1): #15's operator controls are a model for pre-registering
+  uniform-weight and best-single-axis comparisons.
+
 ### Block C — Supporting (intro / related work)
 
 | # | K | Paper | id | Role | Status |
 |---|---|---|---|---|---|
-| 9 | K1 | Endless Terminals | 2601.16443 | env supply at scale; a consumer of `assay`, not a competitor | ☐ unread |
+| 9 | K1 | Endless Terminals | 2601.16443 | env supply at scale; a consumer of `assay`, not a competitor. **New evidence 2026-08-06 (from #14, not from reading #9):** a controlled n=120 reproduction measured 17.4% portability, and 99% of its tasks carry ≥1 hardcoded exact-string assertion. *Whether this changes #9's block/role is for the owner to triage.* | ☐ unread |
 | 10 | K6 | Environment Scaling survey | 2511.09586 | GEF-loop taxonomy; check it doesn't already name our question as open | ☐ unread |
 | 12 | K6 | Credit-assignment survey | 2604.09459 | cited to bound scope — what we deliberately are not doing | ☐ unread |
 
