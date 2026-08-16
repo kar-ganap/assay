@@ -308,11 +308,43 @@ mandatory to consider) · conceptual-doc cleanup proposed · tool/permission all
 | `tasks/lessons.md` | Process stream (live) |
 | `tasks/spend.md` | Spend, gated by stage |
 
-**Sister projects for conventions (not content):** `../waterline` · `../epibench` ·
-`../agentic_engg` · `../synthoracle` · `../crit-thinking`.
+## 17. Sister projects — two relationships, and they are not interchangeable
+
+Naming a sibling without saying *which* relationship is meant is how a borrowed rule gets mistaken
+for a shared result, or a handoff gets mistaken for a citation.
+
+**A · Conventions, not content.** Where this project's process discipline was earned, and what a
+proposed rule change here should be checked against. Nothing is borrowed from these but *method* —
+gates, review rituals, verification habits:
+
+> `../waterline` · `../epibench` · `../agentic_engg` · `../synthoracle` · `../crit-thinking` ·
+> `../canary`
+
+*`canary` added 2026-08-15.* It was already doing this job without an entry: cited as the source of
+the first-hand-ID rule in `tasks/lessons.md` and `docs/related-work.md` while missing from the list.
+Correcting the omission, not adding a new relationship.
+
+**B · Content-adjacent — work that can move between projects.** These share subject matter with
+`assay`, so a finding here may belong *there* instead, and vice versa:
+
+> `../canary` · `../originality` · `../polyphony`
+
+**A handoff is recorded in both directions**, dated, naming what moved and why. A cross-project
+claim with no owner is how two projects end up half-holding the same result and neither publishing
+it.
+
+*Trigger: without this, Phase 0.5's Block D proposal — route Vmax's four uncross-validated
+collapse-measurement stacks to `canary`'s existing diversity battery, which needs no new environment
+and no GPU — has nowhere to live except a review file, and is invisible to both projects' planning;
+with this, a cross-project claim has an owner, a date, and a place to be accepted or declined.*
+
+**`canary` appears on both lists, for different reasons**, and that is exactly why the distinction is
+written down: it is where the first-hand-ID rule was earned (A), *and* it holds a diversity battery
+`assay` does not (B). **Citing it requires saying which.**
+
 **Origin plan:** `../explore/rl-envs-onramp.md`.
 
-## 17. If continuing after a gap
+## 18. If continuing after a gap
 
 1. Read `tasks/lessons.md` (process state, carry-forward rules).
 2. Read `tasks/todo.md` (status + next action + decisions already made).
