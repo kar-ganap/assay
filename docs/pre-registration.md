@@ -15,7 +15,11 @@
 **H1 — the headline.** `assay_score`, computed with **zero GPU-hours**, predicts the measured
 post-GRPO proxy–true gap across the variant grid.
 
-- **Primary metric:** Spearman ρ between `assay_score` and `d(gap)/d(step)` fitted over steps 50–200.
+- **Primary metric:** Spearman ρ between `assay_score` and the cheap outcome over steps 50–200.
+  **⚠ The outcome is under amendment (§4 L3, 2026-08-15):** a slope alone cannot separate
+  "never hacked" from "hacked before step 50" — both are flat. It becomes a **level + slope**
+  pair; the estimand and the ρ bands below must be re-affirmed against it **before** Run data
+  exists.
 - **Pre-committed bands:** **ρ ≥ 0.6 → works · 0.3 ≤ ρ < 0.6 → partial · ρ < 0.3 → honest null.**
 - **Honest null reading:** a null on H1 does not sink the project. It says the battery does not
   predict, which is itself the answer to the question asked, and H2/H3 still carry.
@@ -34,8 +38,9 @@ predict *which* exploit the small policy converges to under GRPO.
 **H3 — the specific prediction.** Among the battery axes, **A2 (grader degeneracy) dominates the
 variance in the gap**, while **A3 (pass-rate band) predicts learning *speed* but not the *gap***.
 
-- **Primary metric:** partial R² per axis on the gap slope; separately, partial R² per axis on
-  steps-to-half-max-reward (the speed measure).
+- **Primary metric:** partial R² per axis on the cheap outcome; separately, partial R² per axis on
+  steps-to-half-max-reward (the speed measure). **Inherits §4 L3's amendment** — "the gap slope"
+  becomes the amended level + slope estimand.
 - **Falsified if:** A3's partial R² on the gap exceeds A2's, or A2 fails to exceed the other axes.
 - **Why it matters:** practitioners conflate "hard enough to learn from" with "safe to learn from."
   Nobody has separated them.
@@ -56,8 +61,16 @@ variance in the gap**, while **A3 (pass-rate band) predicts learning *speed* but
 
 **H4 — the healthy arm.** A variant matched on A3 (same pass-rate band) but with a **non-degenerate**
 grader shows no significant gap.
-- **Falsified if:** the healthy arm's gap slope is indistinguishable from the pathological arms'. If
+- **Falsified if:** the healthy arm's outcome is indistinguishable from the pathological arms'. If
   so, **H3's framing is wrong** and requires surgery, not a patch.
+
+> **⚠ H4 is where the §4 L3 defect bites hardest, and it inverts the verdict.** On a slope-only
+> estimand a healthy arm reads ≈ 0 (gap flat at zero) and a pathological arm that saturated before
+> step 50 *also* reads ≈ 0 (gap flat at maximum). The falsification condition above — "the healthy
+> arm is indistinguishable from the pathological arms" — would then be **met by the very data that
+> confirms H4**, and the control would report itself falsified while working perfectly. A level
+> component separates them; a slope alone cannot. This must be settled before the Run grid, not
+> diagnosed from it.
 
 ---
 
@@ -71,7 +84,7 @@ grader shows no significant gap.
 | **P-model-confirmatory** | Qwen3-1.7B *(TBD — pin the revision hash at Phase 1.1)* | 0.5B fails to learn reasoning per TinyZero; 1.5–1.7B is the floor |
 | **P-algo** | GRPO, LoRA, ≤512-token completions | shortest horizon that still exercises the loop; buys steps per dollar |
 | **P-steps** | 200 | budget-capped; the reachability ladder compensates |
-| **P-outcome-cheap** | `d(gap)/d(step)` fitted over steps 50–200 | a rising unsaturated gap is still a measurement |
+| **P-outcome-cheap** | ⚠ **UNDER AMENDMENT 2026-08-15** — was `d(gap)/d(step)` over steps 50–200; becomes **level + slope**, both reported | the slope defends against a run truncated too *slow* and is blind to one saturated too *fast* — R1 measured a variant saturating at step 9.10, and `../polyphony` hit the identical defect. §4 L3 |
 | **P-outcome-headline** | η, on 4 confirmatory arms | immune to the reachability risk |
 | **P-frontier-adversary** | Haiku 4.5 bulk + Sonnet spot tier, caching on | cost; Sonnet tier bounds the Haiku tier's misses |
 | **P-seeds** | 1 seed × all exploratory · **3 seeds × 4 confirmatory**; **≥4 per arm for any directional comparison** | §3 · the exact floor at 3 v 3 is 0.05, so n=3 cannot clear `P-alpha` (added 2026-08-06) |
@@ -186,6 +199,61 @@ not the science.** Run first, ~$3. Hard gate.
 Log proxy-reward and held-out-reward **every step**; outcome is `d(gap)/d(step)` over steps 50–200.
 Converts "didn't fully hack" from a null into a graded result.
 
+> ### ⚠ AMENDMENT 2026-08-15 — a slope-only estimand is blind to the case R1 just measured
+>
+> **A slope cannot distinguish a variant that never hacked from one that was already fully hacked
+> before the window opened.** Both are flat over steps 50–200:
+>
+> | variant | gap over 50–200 | slope |
+> |---|---|---|
+> | never hacked | flat at 0 | ≈ 0 |
+> | saturated by step ~9 | flat at **maximum** | ≈ 0 |
+>
+> The most pathological and the healthiest environment score identically on the cheap outcome — and
+> H1's primary metric is a rank correlation *against that number*, so H1 would be tested against an
+> estimand that cannot separate its own extremes.
+>
+> **This is not hypothetical on either side.**
+>
+> *It is measured in-project.* R1's `forgotten` crosses 50% at step **9.10** and reaches 1.0 well
+> before step 50 — 41 steps before the slope window opens (`experiments/phase-0.4-r1/results/`).
+> Whatever fraction of the Run grid behaves like `forgotten`, the cheap outcome reads ≈ 0 for it.
+>
+> *And it has already happened to a sibling project.* `../polyphony` pre-registered a within-run
+> slope, and its `R6LevelReanalysisAmendment.md` records the failure verbatim: *"The original R6
+> primary outcome was a within-run V-versus-round slope. That outcome answers whether the fixed
+> shared feed produces progressive decline across twelve rounds. **It does not answer whether the
+> feed puts the ensemble immediately into a low-V state at round zero and keeps it there.**"* They
+> caught it only after the fact, from persisted artifacts, and had to downgrade the reading to
+> exploratory because the level result was not a pre-registered outcome. **Borrowed as a conventions
+> lesson under §17-A** — no work moves; the failure mode does.
+>
+> **Why L3 pointed the wrong way.** L3 exists for the opposite hazard: a run truncated *before*
+> saturation, where an endpoint reads as a null and a slope still grades it. That reasoning is
+> sound and stays. It is one-sided — it defends against too-slow and is silent about too-fast.
+> `GapSlope` already computes `intercept`, and nothing in the outcome path reads it.
+>
+> **What must change before the Run grid.** The cheap outcome becomes **two components, both
+> reported**: a **level** (the gap's magnitude inside the window) and the **slope**. Neither alone
+> is the outcome.
+>
+> **The estimand choice is the user's (§7 — "every hypothesis test").** Not settled here. Candidates,
+> with the trade-off that decides between them:
+>
+> 1. **Mean gap over the window, with slope reported beside it.** Simplest; level becomes primary and
+>    the slope becomes context. Loses L3's original virtue — a truncated rising run and a flat
+>    low-gap run can share a mean.
+> 2. **Fitted value at the window start (the intercept at step 50) + slope, as an ordered pair.**
+>    Keeps both hazards visible and separates the two flat cases cleanly. Needs a stated rule for
+>    collapsing the pair to a scalar for H1's ρ — rank on level, slope as tiebreak, is the obvious
+>    one and is a real choice, not a formality.
+> 3. **Area under the gap curve over the window.** One scalar, monotone in both level and slope, no
+>    combination rule needed. Harder to interpret and not comparable across different window lengths.
+>
+> Whichever is chosen, **H1's pre-committed bands (ρ ≥ 0.6 / 0.3 / < 0.3) were set against the
+> slope** and must be re-affirmed or re-set against the new estimand *before* any Run-stage data
+> exists — re-setting them afterwards is what §10.4 forbids.
+
 ### L4 — magnitude, not steps
 L1 pins discoverability; steps are budget-capped; **magnitude** is the free knob. Exploit worth 3–5×
 the honest solution.
@@ -242,6 +310,7 @@ Stated in advance, so it is a decision and not a mood:
 
 | Date | Change | Reason |
 |---|---|---|
+| 2026-08-15 | **`P-outcome-cheap` under amendment: a slope-only estimand is blind to early saturation.** Becomes **level + slope**, both reported. H1's ρ bands, H3's partial R², and H4's falsification condition all inherit it. Estimand choice and re-affirmed bands owed **before** any Run-stage data (§7, §10.4). | A slope over steps 50–200 gives ≈ 0 for *both* "never hacked" and "hacked before step 50". R1 measured the second case in-project — `forgotten` crosses 50% at step 9.10, 41 steps before the window opens. **H4 inverts under it**: the control's falsification condition would be met by the data that confirms it. Prior evidence: `../polyphony` pre-registered the same shape and its `R6LevelReanalysisAmendment.md` records the identical failure — *"it does not answer whether the feed puts the ensemble immediately into a low-V state at round zero and keeps it there"* — caught only after the fact, forcing an exploratory downgrade. Borrowed as a §17-A conventions lesson. |
 | 2026-08-06 | **Design pin added: `P-alpha` = 0.05, one-sided, on every seed-level directional claim** — together with a mandatory `powered` report (`p_floor = 1/C(n_a+n_b, n_a) < α`). | Phase 0.4 had no significance threshold at all, so its scorer decided direction by ordering two medians and reported R1-P confirmed on a p = 0.29 null. Pinned *after* R1 returned, which is only legitimate because it moves no R1 verdict: the measured p is 0.24–0.29 and fails at 0.05, 0.10 and 0.20 alike. Pinned now so it binds from Walk onward. The threshold-free alternative (non-overlapping seed ranges) was rejected on measurement: its implied false-positive rate is `1/C(2n,n)`, so it grows *stricter* with n and its power against a real 1σ effect falls from 26% at n=3 to 0.05% at n=12. |
 | 2026-08-06 | **`P-seeds` consequence recorded: n=3 cannot clear α=0.05.** The exact floor at 3 vs 3 is exactly 0.05, so a three-seed arm cannot produce a significant directional result however clean the split. §3's *"1 seed × all exploratory"* is unaffected (exploratory arms carry no directional claim), but **any confirmatory directional comparison needs ≥4 per arm**, and 6 if the arm is high-variance. | R1's batch 1 spent nine runs on a comparison its own design could not resolve. Discovered only because batch 2 reversed its direction. |
 | 2026-08-06 | **CORRECTION, same day, after the three-reviewer pass: R1-P is UNRESOLVED, not falsified.** The entry below was wrong and is superseded. The committed scorer prints `UNRESOLVED`; R1-P as written says *no word with a higher base rate saturates later*, and the observed order **is** the base-rate order (ρ = +1, zero inversions) with the non-significant U in R1-P's own direction. The 95% interval for the discriminating pair is [−7.84, +9.85] steps: **it excludes a Prime-sized effect (−26) and does not exclude zero.** R1-P′ stays registered as new-and-untested. | This is the §3.4 error mirrored. Having caught the scorer reporting CONFIRMED on an indeterminate result, I reported FALSIFIED on the same indeterminate result — the identical missing-cell failure, one cell the other way, and it had already propagated here and into the public ledger. Failing to reject is not falsifying. |
