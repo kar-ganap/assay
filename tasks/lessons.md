@@ -287,3 +287,19 @@ that produced them would otherwise be the only record.*
   Nobody chose that; an unlabelled metric drifts to whichever series makes the sentence work.
   *Trigger: without this, a mixed-metric writeup reads as one coherent result and is systematically
   optimistic; with this, the curve is part of every claim and the drift is visible.*
+
+- 2026-08-18 · **When a retro corrects a claim, walk the claim outward — the correction does not
+  propagate itself.** Phase 0.4's retro recorded "15/15 train · 12/15 eval" and `lessons.md` already
+  carried the rule that every claim names its curve. In the same session I then wrote the unqualified
+  "15/15" into `README.md` twice, `CLAUDE.md`, and `grant-readiness.md`. Two more claims drifted the
+  same way: the README quoted the 52-point gap that breakage B was *built* to produce while dropping
+  the finding one line below it (the KL leash made the gap wider on 3/3 seeds), and led Phase 0.2
+  with the 99.8% endpoint on three-digit addition while leaving the step-1 band agreement —
+  the number that actually validates the port — unquantified and second.
+  **All three drifted toward the more flattering version, and nobody chose that**, which is the same
+  asymmetry the framing-stress reviewer found inside Phase 0.4, one layer out. The inner documents
+  were right the whole time; only the outward-facing surfaces were wrong, and those are the ones
+  strangers read.
+  *Trigger: without this, corrections stay in `docs/phases/` while `README.md` keeps the version that
+  reads better, and the gap is invisible from inside because the retro is correct; with this, a
+  corrected claim is grepped across every surface that quotes it before the phase closes.*

@@ -17,7 +17,8 @@ converges to after training.
 
 > **One premise of that bet has already been measured, and it was wrong.** This README used to say a
 > small policy *"needs thousands of steps to discover it can pass by `assert True`."* At 1B, on a
-> grader with a reachable exploit, it takes **8–40 steps** — 15 runs out of 15, for `$0`
+> grader with a reachable exploit, it takes **8–40 steps** — 15 runs of 15 on the train curve,
+> 12 of 15 on the pre-registered eval curve, for `$0`
 > ([Phase 0.4](docs/phases/phase-0.4-r1-retro.md)). Good news for feasibility; it narrows the
 > capability gap the forecasting story leans on, and that is now an open question rather than an
 > assumption.
@@ -38,10 +39,10 @@ account of what exists and what it found. **[`CLAUDE.md`](CLAUDE.md)** has the f
 
 | Phase | | Result |
 |---|---|---|
-| **0.1** GRPO written by hand | ✅ | Trains: 43% → **92%** on 3-digit addition. Four deliberate breakages, each a committed figure. A degenerate grader produced a **52-point** proxy–true gap on demand. |
-| **0.2** Ported to the `verifiers` / `prime-rl` stack | ✅ | Published to the Environments Hub; an independent trainer reached **99.8%**, starting inside our own measured pre-training band. `$0`. |
+| **0.1** GRPO written by hand | ✅ | Trains: 43% → **92%** on 3-digit addition. Four deliberate breakages, each a committed figure. A degenerate grader produced a **52-point** proxy–true gap on demand — **and the KL leash meant to restrain it made the gap *wider*, by 0.037 on 3/3 seeds**, while carrying 54% of the loss. |
+| **0.2** Ported to the `verifiers` / `prime-rl` stack | ✅ | Published to the Environments Hub. An independent trainer's **first** measurement — **58.8%**, before any training — landed inside our own hand-built band of **57.1% ± 1.9%**; that agreement, not the 99.8% endpoint it reached by step 200, is the evidence the port is faithful. `$0`. |
 | **0.3** R0 (Countdown) | ✅ retired | Disqualified on our own ledger rule — the target publishes no number to reproduce. Three screens instead, `$2.21` of a `$10` line. |
-| **0.4** R1 (reachability) | ✅ | **The project's biggest risk is retired.** 15/15 runs exploit a broken grader in 8–40 steps, `$0`. Details below. |
+| **0.4** R1 (reachability) | ✅ | **The project's biggest risk is retired.** Every run exploits a broken grader in 8–40 steps — **15/15 on the train curve, 12/15 on the pre-registered eval curve** — for `$0`. Details below. |
 | **0.5** Literature gate | 🔄 | In progress. |
 | **1.x** Walk — build `bisect`, `assay` v0 | ☐ | Not started. |
 
@@ -59,8 +60,8 @@ were never added, and the file says so.)
 
 ### What Phase 0.4 found
 
-- **Exploits are cheap and fast to reach at 1B** — 8–40 steps, not thousands. The gate the whole Run
-  stage rests on passes.
+- **Exploits are cheap and fast to reach at 1B** — 8–40 steps, not thousands (15/15 train, 12/15
+  eval). The gate the whole Run stage rests on passes.
 - **The admission screen is broken, and that is the more useful finding.** Two of three variants sat
   *below* the pre-registered lower bound of `1/64` and saturated anyway. `1/64` is the resolution
   floor of a 64-sample screen, not a reachability threshold — a literal application would have

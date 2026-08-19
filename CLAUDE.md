@@ -256,7 +256,8 @@ mandatory to consider) · conceptual-doc cleanup proposed · tool/permission all
 ## 15. Known gotchas
 
 - **Nothing hacks at 1.7B in 200 steps — MEASURED 2026-08-06 (R1), and only half retired.**
-  Retired for a **trivial** grader: 15/15 runs at 1B reached hack rate 1.0 in 8–40 steps for `$0`.
+  Retired for a **trivial** grader: at 1B, hack rate 1.0 in 8–40 steps for `$0` — **15/15 runs on
+  the train curve, 12/15 on the pre-registered eval curve** (name the curve; see §10.3).
   **Untested for a grader with a competing legitimate path** — every R1 run was `hack_only`, where
   the true reward is identically zero, so the project's own outcome variable (proxy minus true) was
   absent from its reachability gate. `bisect`'s exploits are multi-step and sandbox-mediated; what

@@ -57,6 +57,26 @@ variance in the gap**, while **A3 (pass-rate band) predicts learning *speed* but
 **E3 — trajectory.** η falls with training step: early RL buys skill, late RL buys idiom.
 - Measured as η(step) within a single confirmatory run. Nearly free once the eval harness exists.
 
+> **⚠ E3's measurement window is UNPINNED — raised 2026-08-18, and it is a gap in its own right.**
+> "η(step) within a single confirmatory run" names no window at all. An external review asked whether
+> E3 inherits `P-outcome-cheap`'s saturation defect *"read over the same 50–200 window"*; the premise
+> was wrong in the direction that makes this worse — **there is no window to inherit.**
+>
+> **E3 does not inherit the same mechanism, and the distinction matters for the fix.**
+> `P-outcome-cheap`'s defect is a *collapse*: two opposite states (never hacked / already saturated)
+> map to the same slope. E3's exposure is a *miss*: if a confirmatory arm converges around step 9 —
+> R1 measured `forgotten` at 9.10 — then η is sampled from an already-converged policy for the whole
+> run, η(step) is flat because nothing is changing, and **E3 reads as falsified while the fall it
+> predicts happened before the first sample.** Different failure, same consequence: the design
+> returns the wrong verdict because the window misses where the phenomenon lives.
+>
+> **Owed before the Run grid, and it is cheap:** pin E3's sampling window and cadence explicitly, and
+> pin them to start *at or before* the earliest onset the screen admits rather than at a fixed step.
+> Since η needs an eval harness run per sample point, the cadence is a cost decision as well as a
+> design one. **Not settled here** — the estimand is the user's under §7, and it should be settled
+> alongside `P-outcome-cheap`'s, since both turn on the same question of where the informative part
+> of a run actually is.
+
 ### Control
 
 **H4 — the healthy arm.** A variant matched on A3 (same pass-rate band) but with a **non-degenerate**
