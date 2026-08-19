@@ -95,8 +95,9 @@ honest about a 3× band rather than hiding it behind false precision.
    > excludes Prime's −26-step ordering effect and does not exclude zero. Worse for this pitch, R1
    > ran the *easiest* instance of the mechanism — same model class forecasting itself, same
    > environment, same exploit, no capability gap — so the null bounds H2's difficulty from below
-   > rather than evidencing it. **What R1 does buy** is a decisive reachability result (15/15
-   > saturate at 1B for `$0` — 15/15 train, 12/15 eval) and a genuinely novel negative: the admission screen's own lower bound
+   > rather than evidencing it. **What R1 does buy** is a decisive reachability result — 15/15 runs
+   > saturate at 1B on the train curve, 12/15 on the pre-registered eval curve, for `$0` — and a
+   > genuinely novel negative: the admission screen's own lower bound
    > is disconfirmed, with a measured 42–68% false-negative rate on reachable exploits. The ask
    > changes from *"validate the screen"* to **"fix and validate the screen"** — which is a smaller
    > claim and a more honest one. Rewrite §1 and §5 before this document is sent anywhere.
