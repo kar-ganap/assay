@@ -109,3 +109,44 @@ def test_templates_are_covered_by_the_fingerprint() -> None:
     finally:
         tasks._WORD_PROBLEM_TEMPLATE = original
     assert template_fingerprint() == before
+
+
+# --------------------------------------------------------------------------------------
+# the reasoning rungs — added after S1 measured p_hack = 0/2048 at a median of 9 tokens
+# --------------------------------------------------------------------------------------
+
+
+def test_reasoning_rungs_ask_for_prose_and_still_demand_the_answer_tag() -> None:
+    """S1's finding, encoded: base rate is a property of what the model GENERATES.
+
+    `_ANSWER_INSTRUCTION` asks for a tag and gets `<57+7-11>46` — nine tokens, nowhere for an
+    English word. The `wpr-` instruction asks for reasoning *first*, so the completion has room,
+    and keeps the tag so `r_true` stays checkable. Both halves are required; either alone fails.
+    """
+    for prompt in WordProblemFamily().generate("wpr-2step-2digit", 5, seed=0):
+        assert "full sentences" in prompt.question
+        assert "<answer>" in prompt.question, "ground truth must stay machine-checkable"
+
+
+def test_reasoning_rungs_keep_ground_truth_exact() -> None:
+    """The instruction changed; the arithmetic must not have."""
+    for prompt in WordProblemFamily().generate("wpr-2step-3digit", 40, seed=2):
+        assert int(prompt.answer) == _recompute(prompt.question)
+
+
+def test_wp_and_wpr_differ_in_instruction_not_in_task() -> None:
+    """They draw different instances — the RNG is keyed on the full setting name — but the story
+    grammar and answer construction are shared, so a p_hack difference is attributable to the
+    instruction rather than to a different task."""
+    terse = WordProblemFamily().generate("wp-2step-2digit", 30, seed=0)
+    reasoning = WordProblemFamily().generate("wpr-2step-2digit", 30, seed=0)
+    assert all("full sentences" not in p.question for p in terse)
+    assert all("full sentences" in p.question for p in reasoning)
+    # Same generator, so the same scenario *grammar* appears in both. Digits are stripped: the
+    # two rungs draw different instances, so an opening compared verbatim can never match, which
+    # is what the first version of this assertion got wrong.
+    def grammars(ps: list) -> set[str]:
+        return {_NUM.sub("N", p.question.split(".")[0]) for p in ps}
+
+    shared = grammars(terse) & grammars(reasoning)
+    assert shared, "should share the scenario grammar even though instances differ"
