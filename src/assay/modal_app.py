@@ -965,6 +965,7 @@ if modal is not None:
         """
         import json as _json
         import re as _re
+        import time as _time
         from pathlib import Path
 
         import torch
@@ -987,59 +988,95 @@ if modal is not None:
         prompts = tasks.WordProblemFamily().generate(setting, n_prompts, seed=seed)
         cfg = SamplerConfig(temperature=1.0, top_p=1.0, max_new_tokens=max_new_tokens, seed=seed)
         sampler = HFSampler(model, tokenizer, use_chat_template=True)
-        rows = sampler.sample(prompts, k=k, cfg=cfg)
 
         patterns = {w: _re.compile(rf"\b{w}\b", _re.IGNORECASE) for w in words}
         counts = {w: 0 for w in words}
-        n_correct = 0
-        n_parse_fail = 0
-        n = 0
+        n_correct = n_parse_fail = n = 0
         per_prompt_hits: list[int] = []
-        for prompt, row in zip(prompts, rows, strict=True):
-            hits = 0
-            for completion in row:
-                n += 1
-                for w in words:
-                    if patterns[w].search(completion.text):
-                        counts[w] += 1
-                        hits += 1 if w == words[0] else 0
-                grade = grade_binary(completion.text, prompt.answer)
-                if grade.outcome is Outcome.PARSE_FAIL:
-                    n_parse_fail += 1
-                elif grade.outcome is Outcome.CORRECT:
-                    n_correct += 1
-            per_prompt_hits.append(hits)
+        token_counts: list[int] = []
+        raw: list[str] = []
 
-        payload = {
-            "setting": setting,
-            "n_completions": n,
-            "n_prompts": n_prompts,
-            "k": k,
-            "counts": counts,
-            "p_hack": {w: counts[w] / n for w in words},
-            "pass_at_1": n_correct / n,
-            "parse_fail_rate": n_parse_fail / n,
-            # Per-prompt concentration: if the hack mass sits in a few prompts, a small-k screen is
-            # worse than binomial implies, which would explain L1's 42-68% miss rate mechanically.
-            "per_prompt_hits_word0": per_prompt_hits,
-            "median_completion_tokens": sorted(c.n_tokens for row in rows for c in row)[n // 2],
-            "peak_memory_gb": float(torch.cuda.max_memory_allocated()) / 1e9,
-            "raw": [c.text for row in rows[:4] for c in row[:10]],
-            "provenance": {
-                **provenance,
-                "model_id": MODEL_ID,
-                "model_revision": MODEL_REVISION,
-                "sampler": dataclasses.asdict(cfg),
-                "prompt_template_sha256": tasks.template_fingerprint(),
-                "use_chat_template": True,
-                "gpu": SCREEN_GPU,
-                "words": words,
-                "task": "wordproblem",
-            },
-        }
         tag = f"s1-substrate-{setting}-seed{seed}"
         out = Path(VOLUME_PATH) / tag
         out.mkdir(parents=True, exist_ok=True)
+
+        def _payload(complete: bool) -> dict:
+            return {
+                "setting": setting,
+                "complete": complete,
+                "n_completions": n,
+                "n_prompts_done": len(per_prompt_hits),
+                "n_prompts": n_prompts,
+                "k": k,
+                "counts": dict(counts),
+                "p_hack": {w: (counts[w] / n if n else 0.0) for w in words},
+                "pass_at_1": (n_correct / n if n else 0.0),
+                "parse_fail_rate": (n_parse_fail / n if n else 0.0),
+                "per_prompt_hits_word0": list(per_prompt_hits),
+                "median_completion_tokens": (
+                    sorted(token_counts)[len(token_counts) // 2] if token_counts else 0
+                ),
+                "peak_memory_gb": float(torch.cuda.max_memory_allocated()) / 1e9,
+                "raw": raw[:40],
+                "provenance": {
+                    **provenance,
+                    "model_id": MODEL_ID,
+                    "model_revision": MODEL_REVISION,
+                    "sampler": dataclasses.asdict(cfg),
+                    "prompt_template_sha256": tasks.template_fingerprint(),
+                    "use_chat_template": True,
+                    "gpu": SCREEN_GPU,
+                    "words": words,
+                    "task": "wordproblem",
+                },
+            }
+
+        # **Checkpoint per chunk.** S1b generated ~28x more tokens than S1a, blew through the 90
+        # minute cap, and lost everything -- because the original wrote once, at the end. A volume
+        # only protects a run that reaches its final line. Partial data now survives a kill.
+        CHUNK = 16
+        t0 = _time.monotonic()
+        for chunk_i, start in enumerate(range(0, len(prompts), CHUNK)):
+            chunk = prompts[start : start + CHUNK]
+            rows = sampler.sample(chunk, k=k, cfg=cfg)
+            for prompt, row in zip(chunk, rows, strict=True):
+                hits = 0
+                for completion in row:
+                    n += 1
+                    token_counts.append(completion.n_tokens)
+                    for w in words:
+                        if patterns[w].search(completion.text):
+                            counts[w] += 1
+                            hits += 1 if w == words[0] else 0
+                    grade = grade_binary(completion.text, prompt.answer)
+                    if grade.outcome is Outcome.PARSE_FAIL:
+                        n_parse_fail += 1
+                    elif grade.outcome is Outcome.CORRECT:
+                        n_correct += 1
+                    if len(raw) < 40:
+                        raw.append(completion.text)
+                per_prompt_hits.append(hits)
+
+            (out / "result.json").write_text(
+                _json.dumps(_payload(complete=False), indent=2, sort_keys=True) + "\n"
+            )
+            artifacts.commit()
+
+            elapsed = _time.monotonic() - t0
+            done = start + len(chunk)
+            projected = elapsed * len(prompts) / done
+            print(
+                f"  chunk {chunk_i}: {done}/{len(prompts)} prompts, {n} completions, "
+                f"median {sorted(token_counts)[len(token_counts) // 2]} tok, "
+                f"elapsed {elapsed / 60:.1f}m, projected {projected / 60:.1f}m"
+            )
+            if chunk_i == 0 and projected > 0.8 * TIMEOUT_S:
+                print(
+                    f"  !! PROJECTED {projected / 60:.0f}m EXCEEDS 80% OF THE {TIMEOUT_S // 60}m "
+                    "CAP — checkpoints will survive a kill, but expect a partial result"
+                )
+
+        payload = _payload(complete=True)
         (out / "result.json").write_text(_json.dumps(payload, indent=2, sort_keys=True) + "\n")
         artifacts.commit()
         print(f"committed artifacts to volume {VOLUME_NAME}:/{tag}")
