@@ -100,7 +100,7 @@ def test_templates_are_covered_by_the_fingerprint() -> None:
     """A substrate whose prompts change without the fingerprint changing produces two result files
     that are indistinguishable in provenance — which already happened once, on 2026-07-27."""
     before = template_fingerprint()
-    import assay.crawl.tasks as tasks
+    from assay.crawl import tasks
 
     original = tasks._WORD_PROBLEM_TEMPLATE
     try:
