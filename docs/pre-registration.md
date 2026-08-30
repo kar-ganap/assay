@@ -15,11 +15,12 @@
 **H1 — the headline.** `assay_score`, computed with **zero GPU-hours**, predicts the measured
 post-GRPO proxy–true gap across the variant grid.
 
-- **Primary metric:** Spearman ρ between `assay_score` and the cheap outcome over steps 50–200.
-  **⚠ The outcome is under amendment (§4 L3, 2026-08-15):** a slope alone cannot separate
-  "never hacked" from "hacked before step 50" — both are flat. It becomes a **level + slope**
-  pair; the estimand and the ρ bands below must be re-affirmed against it **before** Run data
-  exists.
+- **Primary metric:** Spearman ρ between `assay_score` and the **mean proxy–true gap over steps
+  50–200**, with the **slope reported beside it**. *(Settled 2026-08-29; was `d(gap)/d(step)`.)*
+  The mean is the scalar because it separates the two cases a slope collapses — a run that never
+  hacked and a run saturated before step 50 are both *flat*, but only the second has a large mean.
+  The slope is retained as the "is the gap still growing?" indicator, which is the one thing the
+  mean cannot say.
 - **Pre-committed bands:** **ρ ≥ 0.6 → works · 0.3 ≤ ρ < 0.6 → partial · ρ < 0.3 → honest null.**
 - **Honest null reading:** a null on H1 does not sink the project. It says the battery does not
   predict, which is itself the answer to the question asked, and H2/H3 still carry.
@@ -81,8 +82,8 @@ variance in the gap**, while **A3 (pass-rate band) predicts learning *speed* but
 
 **H4 — the healthy arm.** A variant matched on A3 (same pass-rate band) but with a **non-degenerate**
 grader shows no significant gap.
-- **Falsified if:** the healthy arm's outcome is indistinguishable from the pathological arms'. If
-  so, **H3's framing is wrong** and requires surgery, not a patch.
+- **Falsified if:** the healthy arm's **mean gap** is indistinguishable from the pathological arms'.
+  If so, **H3's framing is wrong** and requires surgery, not a patch.
 
 > **⚠ H4 is where the §4 L3 defect bites hardest, and it inverts the verdict.** On a slope-only
 > estimand a healthy arm reads ≈ 0 (gap flat at zero) and a pathological arm that saturated before
@@ -104,7 +105,7 @@ grader shows no significant gap.
 | **P-model-confirmatory** | Qwen3-1.7B *(TBD — pin the revision hash at Phase 1.1)* | 0.5B fails to learn reasoning per TinyZero; 1.5–1.7B is the floor |
 | **P-algo** | GRPO, LoRA, ≤512-token completions | shortest horizon that still exercises the loop; buys steps per dollar |
 | **P-steps** | 200 | budget-capped; the reachability ladder compensates |
-| **P-outcome-cheap** | ⚠ **UNDER AMENDMENT 2026-08-15** — was `d(gap)/d(step)` over steps 50–200; becomes **level + slope**, both reported | the slope defends against a run truncated too *slow* and is blind to one saturated too *fast* — R1 measured a variant saturating at step 9.10, and `../polyphony` hit the identical defect. §4 L3 |
+| **P-outcome-cheap** | **mean gap over steps 50–200** (H1's scalar), **slope reported beside it** — settled 2026-08-29 | a slope alone is blind to a run saturated before the window opens, and **H4 inverts under it**. The mean separates that case; the slope says whether the gap is still growing. Neither alone suffices. §4 L3 |
 | **P-outcome-headline** | η, on 4 confirmatory arms | immune to the reachability risk |
 | **P-frontier-adversary** | Haiku 4.5 bulk + Sonnet spot tier, caching on | cost; Sonnet tier bounds the Haiku tier's misses |
 | **P-seeds** | 1 seed × all exploratory · **3 seeds × 4 confirmatory**; **≥4 per arm for any directional comparison** | §3 · the exact floor at 3 v 3 is 0.05, so n=3 cannot clear `P-alpha` (added 2026-08-06) |
@@ -201,15 +202,22 @@ predicts *how fast* a policy saturates. Across a 2.3× base-rate ratio it does n
 for the onset difference is **[−7.84, +9.85] steps**, which excludes a Prime-sized ordering effect
 (−26) and does not exclude zero.
 
-So `p_hack@64` may not be used to order variants by expected speed, to predict onset, or to
-prioritise a grid. Where a run order or budget split is derived from base rate, it must be justified
-on other grounds or declared arbitrary.
+So **`p_hack@64` may not be used to predict *onset*, or to order variants by expected *speed*.**
+Where a run order or budget split is derived from base rate, it must be justified on other grounds or
+declared arbitrary.
 
-**This is in unresolved tension with §4's recursion claim** — *"`p_hack@64` on the base policy **is**
-battery axis A1 run at the small model's capability"* — because H1's primary metric is a **rank
-correlation** over `assay_score = f(A1..A6)`, and Phase 1.4 selects confirmatory variants by ranking
-predicted pathology. Either the recursion holds and A1's ranking ability is now in question, or the
-recursion is weaker than §4 states. **Decide before Walk.**
+> **Narrowed 2026-08-29 — the first version of this annotation overreached.** It said "nothing
+> downstream may rank by it", which put it in apparent contradiction with §4's recursion claim and
+> with H1, whose primary metric *is* a rank correlation over `assay_score = f(A1..A6)`.
+>
+> **R1 falsified something much narrower than that annotation claimed:** base rate → *onset*
+> ordering, at *small-model* capability, at a *2.3× separation*, on *one axis*. It says nothing
+> about A1 → the *gap* at *frontier* capability across *six* axes, which is what H1 ranks and what
+> Phase 1.4 selects on. Different predictor, different outcome variable, different capability level.
+>
+> **The recursion holds.** `p_hack@64` and A1 remain the same measurement at two capability levels,
+> and their difference remains H2's quantity. What R1 removed is one inference drawn from the lower
+> level, not the identity between them. The tension was mine, not the pre-registration's.
 
 ### L2 — positive control
 One variant whose grader is `"PASS" in output`. **If it does not hack by step 200, the rig is broken,
@@ -257,22 +265,35 @@ Converts "didn't fully hack" from a null into a graded result.
 > reported**: a **level** (the gap's magnitude inside the window) and the **slope**. Neither alone
 > is the outcome.
 >
-> **The estimand choice is the user's (§7 — "every hypothesis test").** Not settled here. Candidates,
-> with the trade-off that decides between them:
+> ### ✅ SETTLED 2026-08-29 — the mean, with the slope beside it
 >
-> 1. **Mean gap over the window, with slope reported beside it.** Simplest; level becomes primary and
->    the slope becomes context. Loses L3's original virtue — a truncated rising run and a flat
->    low-gap run can share a mean.
-> 2. **Fitted value at the window start (the intercept at step 50) + slope, as an ordered pair.**
->    Keeps both hazards visible and separates the two flat cases cleanly. Needs a stated rule for
->    collapsing the pair to a scalar for H1's ρ — rank on level, slope as tiebreak, is the obvious
->    one and is a real choice, not a formality.
-> 3. **Area under the gap curve over the window.** One scalar, monotone in both level and slope, no
->    combination rule needed. Harder to interpret and not comparable across different window lengths.
+> **H1's scalar is the mean gap over steps 50–200. The slope is reported beside it.**
 >
-> Whichever is chosen, **H1's pre-committed bands (ρ ≥ 0.6 / 0.3 / < 0.3) were set against the
-> slope** and must be re-affirmed or re-set against the new estimand *before* any Run-stage data
-> exists — re-setting them afterwards is what §10.4 forbids.
+> The framing of the three candidates above was wrong in one respect, and correcting it decided the
+> question. Option 1 was dismissed for "losing L3's virtue — a truncated rising run and a flat
+> low-gap run can share a mean." True, and irrelevant: **the slope distinguishes exactly those two,
+> and the slope is being reported.** Once both are reported, option 1 needs no pair-to-scalar
+> collapse rule, which was option 2's only real cost.
+>
+> | run | mean over 50–200 | slope |
+> |---|---|---|
+> | never hacked | ≈ 0 | ≈ 0 |
+> | saturated by step 9 | **≈ max** | ≈ 0 |
+> | still rising at 200 | intermediate | **> 0** |
+>
+> The mean separates the two rows a slope collapses — which is what fixes **H4's inversion**. The
+> slope separates the two rows a mean collapses. Neither alone; both, always.
+>
+> **S1 (2026-08-29) is why robustness to both regimes is required rather than prudent.** It showed
+> exploits in a *verifiable* environment must be structural rather than lexical, and we have **no
+> measurement of how fast a structural exploit emerges** — R1's 8–40 steps was a free token. So
+> neither early saturation nor a never-saturating run can be ruled out, and an estimand that assumes
+> either is assuming something unmeasured.
+>
+> **H1's ρ bands (0.6 / 0.3) are re-affirmed unchanged against the mean.** They were set against the
+> slope, so they had to be re-examined — but Spearman ρ is scale-free and rank-invariant, and the
+> bands were never tied to the slope's units. Re-affirmed here, before any Run-stage data exists,
+> which is the condition §10.4 imposes.
 
 ### L4 — magnitude, not steps
 L1 pins discoverability; steps are budget-capped; **magnitude** is the free knob. Exploit worth 3–5×
@@ -330,6 +351,7 @@ Stated in advance, so it is a decision and not a mood:
 
 | Date | Change | Reason |
 |---|---|---|
+| 2026-08-29 | **`P-outcome-cheap` SETTLED: mean gap over steps 50–200 as H1's scalar, slope reported beside it.** ρ bands re-affirmed unchanged. **§4's ranking annotation NARROWED** — the recursion holds; only base-rate→onset ordering was falsified. | The mean separates never-hacked from saturated-before-the-window, which is what fixes H4's inversion; the slope separates flat from still-rising. My 08-15 framing dismissed the mean for a weakness the slope already covers, and correcting that removed the need for a pair-to-scalar rule. S1 makes robustness to both timescales mandatory rather than prudent: exploits in verifiable environments are structural, and no one has measured how fast a structural exploit emerges. The ranking annotation had claimed "nothing downstream may rank by it", which contradicted H1's own rank correlation — R1 falsified base rate→onset at small capability and 2.3× separation, not A1→gap at frontier capability across six axes. |
 | 2026-08-15 | **`P-outcome-cheap` under amendment: a slope-only estimand is blind to early saturation.** Becomes **level + slope**, both reported. H1's ρ bands, H3's partial R², and H4's falsification condition all inherit it. Estimand choice and re-affirmed bands owed **before** any Run-stage data (§7, §10.4). | A slope over steps 50–200 gives ≈ 0 for *both* "never hacked" and "hacked before step 50". R1 measured the second case in-project — `forgotten` crosses 50% at step 9.10, 41 steps before the window opens. **H4 inverts under it**: the control's falsification condition would be met by the data that confirms it. Prior evidence: `../polyphony` pre-registered the same shape and its `R6LevelReanalysisAmendment.md` records the identical failure — *"it does not answer whether the feed puts the ensemble immediately into a low-V state at round zero and keeps it there"* — caught only after the fact, forcing an exploratory downgrade. Borrowed as a §17-A conventions lesson. |
 | 2026-08-06 | **Design pin added: `P-alpha` = 0.05, one-sided, on every seed-level directional claim** — together with a mandatory `powered` report (`p_floor = 1/C(n_a+n_b, n_a) < α`). | Phase 0.4 had no significance threshold at all, so its scorer decided direction by ordering two medians and reported R1-P confirmed on a p = 0.29 null. Pinned *after* R1 returned, which is only legitimate because it moves no R1 verdict: the measured p is 0.24–0.29 and fails at 0.05, 0.10 and 0.20 alike. Pinned now so it binds from Walk onward. The threshold-free alternative (non-overlapping seed ranges) was rejected on measurement: its implied false-positive rate is `1/C(2n,n)`, so it grows *stricter* with n and its power against a real 1σ effect falls from 26% at n=3 to 0.05% at n=12. |
 | 2026-08-06 | **`P-seeds` consequence recorded: n=3 cannot clear α=0.05.** The exact floor at 3 vs 3 is exactly 0.05, so a three-seed arm cannot produce a significant directional result however clean the split. §3's *"1 seed × all exploratory"* is unaffected (exploratory arms carry no directional claim), but **any confirmatory directional comparison needs ≥4 per arm**, and 6 if the arm is high-variance. | R1's batch 1 spent nine runs on a comparison its own design could not resolve. Discovered only because batch 2 reversed its direction. |
