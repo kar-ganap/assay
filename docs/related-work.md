@@ -53,6 +53,37 @@ without it:
 | **eval-side** swap | everyone varies the training reward and holds the eval grader fixed |
 | **grader vs environment** idiom | Mahmoud decomposes two kinds of *grader* failure, with no independently authored task set |
 
+### Evidence behind each clause — and they are not equally well established
+
+**Clause 1 (the structural factorial) rests on positive findings** — specific papers occupy specific
+qualifiers, each read first-hand. Incomplete search can only strengthen that reasoning, never weaken
+it, so the clause is as safe as the wording is careful.
+
+**Clause 2 (grader vs environment idiom) is a NEGATIVE claim, and negative claims are exactly what
+incomplete search destroys.** Recording its evidence and its holes rather than asserting it flat:
+
+| instrument | result |
+|---|---|
+| Keyword sweeps, two independent agents | TIER 1 empty. `"grader" AND "reinforcement learning" AND "decompose"` returned **zero** |
+| Forward citations of Mahmoud `2605.12474` | one flagged, **verified false positive** — Zhang `2607.11022` swaps the *training* reward and always scores held-out with MBPP+ extras |
+| Forward citations of Wen `2410.05584` | **33 papers, none qualify**; RewardBench 2 benchmarks models on fixed sets rather than one policy under many graders, Bradley-Terry trains with different rewards |
+| Concept search on Semantic Scholar | **not completed — HTTP 429** |
+
+**Holes that remain, stated so the lock is not taken on a false sense of coverage:**
+
+- Gao `2210.10760`'s citation graph is large and **unwalked**. It is the canonical overoptimization
+  paper; anyone doing a proxy-vs-gold decomposition would plausibly cite it.
+- **Non-arXiv venues barely touched** — OpenReview bot-blocks, ACL Anthology untouched. `djinn`, a
+  directly relevant artifact, is **blog-only** and was found by luck.
+- **Keyword search structurally misses this claim.** The decomposition is often a secondary analysis
+  inside a section, not a title or abstract. Autorubric `2603.00077` does its cross-judge probe in
+  **Section 6** — no abstract-level query reaches that.
+- The WebSearch budget was **exhausted mid-sweep** (200/200), so the later queries ran on weaker
+  instruments.
+
+**Confidence: Clause 1 high, Clause 2 moderate.** Clause 2 should not be published as an unqualified
+"nobody has" until the Gao walk and the non-arXiv venues are covered.
+
 **Not novelty, but worth knowing:** η = G_skill / G_total has **no equivalent named ratio** in the
 literature — a targeted sweep found none. And `2606.16062` names our contribution as its own open
 problem: *"We do not claim that fixing the broken tasks improves training outcomes; a direct causal
