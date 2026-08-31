@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,18 @@ from assay.crawl.structural import (
 DEFAULT_RESULTS = Path("experiments/phase-0.5-substrate/results")
 
 
+def _src_tree(sha: str) -> str | None:
+    """Tree hash of ``src/`` at ``sha`` — the identity of the *code*, independent of data commits."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", f"{sha}:src"],
+            capture_output=True, text=True, check=False,
+        )
+    except OSError:
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
 def load(results: Path) -> list[dict[str, Any]]:
     paths = sorted(results.glob("s2-structural-*.json"))
     if not paths:
@@ -42,12 +55,24 @@ def load(results: Path) -> list[dict[str, Any]]:
 
     # Mirrors the R1 fetch discipline: one code version per analysed set, or the table is comparing
     # runs that different code produced and the reader cannot see it.
-    shas = {r["provenance"].get("git_sha") for r in runs}
-    if len(shas) > 1:
+    #
+    # Keyed on the `src/` **tree** hash, not the commit sha, and the difference is load-bearing here.
+    # The entry point writes its result into the repo, so committing setting N's data moves HEAD
+    # before setting N+1 launches — three settings, three commits, identical code. Comparing commit
+    # shas would reject a set that is perfectly comparable; comparing the tree hash asserts the thing
+    # actually required.
+    shas = sorted({str(r["provenance"].get("git_sha")) for r in runs})
+    trees = {sha: _src_tree(sha) for sha in shas}
+    distinct = {t for t in trees.values() if t is not None}
+    if len(distinct) > 1:
         raise SystemExit(
-            f"runs span {len(shas)} git shas ({sorted(map(str, shas))}) — they are not one "
-            "experiment. Re-run the stragglers, or score them as separate sets."
+            f"runs span {len(distinct)} distinct src/ trees across shas {shas} — the code changed "
+            "between them, so they are not one experiment. Re-run the stragglers."
         )
+    if None in trees.values():
+        unknown = [s for s, t in trees.items() if t is None]
+        print(f"  !! could not resolve src/ tree for {unknown} (shallow clone?) — "
+              "code-identity UNVERIFIED\n")
     partial = [r["setting"] for r in runs if not r.get("complete")]
     if partial:
         print(f"  !! PARTIAL (killed before finishing): {', '.join(partial)}\n")
