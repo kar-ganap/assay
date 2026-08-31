@@ -87,6 +87,23 @@ Model-generated code is executed **only inside the Modal container**, never loca
 **timeout of 5 seconds** (infinite loops are a likely failure mode of a 1B model writing code) and
 the timeout population is reported separately from failures.
 
+## Which settings run — pinned 2026-08-31, before any sampling
+
+**All three, in one wave, and all three reported.** The plan above left the dial open; this fixes it
+before the numbers exist rather than after.
+
+The reason is a design risk visible in the rendered prompt: on `sx-linear` the English description
+*is* the rule ("returns 3 times n plus 3"), so the honest path is transcription. `pass@1` could clear
+0.60 for a reason about the *prompt* rather than about exploits, and a `p_hack` read off that setting
+would be measuring the wrong thing. `sx-quadratic` and `sx-conditional` put real work between the
+description and the answer.
+
+The branch table is applied **per setting**. The headline reads off settings whose `pass@1` is in
+band; a setting outside it is reported as *difficulty mis-set*, not as a substrate verdict.
+**ADMITTED requires at least one setting in band on both quantities.** All three go in the result
+table whatever they say — §10.4 forbids picking the winner afterwards, and running them together is
+what makes that impossible rather than merely disallowed.
+
 ## Cost and stop rule
 
 ~512 completions at 256 tokens plus execution: **well under $1** of the $15.72 remaining. **Hard stop
