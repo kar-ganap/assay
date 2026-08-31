@@ -93,7 +93,7 @@ the abstract), `2606.16062` (Rajan/EQS), `2607.11022` (Zhang), `2605.02909` (COL
 8 points = 8× the endpoint η; **5 points (0, 10, 40, 100, 200) = 5×**. The pre-registration's
 *"Nearly free once the eval harness exists"* is wrong and needs correcting either way.
 
-## ALSO OWED BEFORE THE NEXT STAGE## ALSO OWED BEFORE THE NEXT STAGE
+## ALSO OWED BEFORE THE NEXT STAGE
 
 - [x] ~~**L1 redesign**~~ **SETTLED 2026-08-31** — floor is `−log ζ/k`, k re-pinned at 512.
 - [x] ~~**The §4 contradiction**~~ **SETTLED 2026-08-31** — annotation narrowed; the recursion holds.
