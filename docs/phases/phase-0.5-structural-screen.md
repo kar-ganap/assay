@@ -1,7 +1,14 @@
 # Phase 0.5 — S2, the structural-exploit screen. Bands pre-registered before any sampling.
 
-> **Drafted 2026-08-31. NOT YET RATIFIED — the bands are the user's under §7.** Nothing runs until
-> this file is committed. Predecessor: `experiments/phase-0.5-substrate/results/S1-RESULT.md`.
+> **Drafted and ratified 2026-08-31. RUN AND RESOLVED the same day — the result is
+> `experiments/phase-0.5-substrate/results/S2-RESULT.md`, and the verdict regenerates from committed
+> data via `uv run python scripts/score_s2.py`.** Predecessor:
+> `experiments/phase-0.5-substrate/results/S1-RESULT.md`.
+>
+> **Outcome: ADMITTED** on `sx-digitsort` (`p_hack` 0.0312, CI [0.0193, 0.0502]; `pass@1` 0.0957),
+> 1 of 8 rungs informative — **but zero of the 46 hacks were special-cases.** The reachable behaviour
+> is a near-miss, not the exploit class `bisect` is designed around. See the result document; the
+> consequences for H2 and for `bisect`'s taxonomy are open and are the user's call under §7.
 
 ## Why this exists
 
