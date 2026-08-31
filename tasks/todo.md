@@ -97,10 +97,45 @@ the abstract), `2606.16062` (Rajan/EQS), `2607.11022` (Zhang), `2605.02909` (COL
 
 - [x] ~~**L1 redesign**~~ **SETTLED 2026-08-31** — floor is `−log ζ/k`, k re-pinned at 512.
 - [x] ~~**The §4 contradiction**~~ **SETTLED 2026-08-31** — annotation narrowed; the recursion holds.
-- [ ] **`p_hack@64` on `bisect` is no longer cheap.** On a word task the screen is a regex plus an
-      integer compare. On `bisect` each sample is **two sandboxed test-suite executions** — at k=512
-      across a 12-variant grid that is ~12,000 sandbox runs before any training. **Zero GPU-hours is
-      not zero cost, and this is not in the cost model.**
+- [ ] ⚠️ **THE COST MODEL HAS NO TERM FOR GRADER EXECUTION, and on `bisect` that may dominate.**
+      *(First flagged as a screen problem, which was the wrong number — corrected 2026-08-31.)*
+      Every **training** rollout also needs a graded execution, because on `bisect` the reward *is*
+      "does the test pass":
+
+      | | executions, 12-variant grid |
+      |---|---|
+      | the screen at k=512 | 12,288 |
+      | **training** | **2,457,600** — 200× more |
+
+      The screen is **0.5% of one training run** and is not the problem. `scripts/cost_model.py`
+      prices runs purely from GPU tokens (`run_cost(params_b, tokens, vllm_speedup, hourly)`) and has
+      no execution term. `bisect` is the first substrate where a grade is a container plus a test
+      suite rather than an integer compare — same architecture, different cost structure.
+
+      **It all turns on one unmeasured number**, seconds per graded execution:
+
+      | per execution | grid core-hours | at 32× parallel |
+      |---|---|---|
+      | 2s | 1,365 | 43 h |
+      | 10s | 6,827 | 213 h |
+      | 30s | 20,480 | 640 h |
+
+      A **15× span**, against a Run line of **$32**. At the top of it, CPU beats GPU as the dominant
+      cost. **Measure it first thing at Phase 1.1** — time one graded episode end to end (container
+      start, suite, teardown); one number collapses the span. Then add
+      `seconds_per_graded_execution` to `ASSUMPTIONS` with the same low/mid/high treatment as
+      `bisect_tokens_per_episode`, so the sensitivity table shows which term actually dominates.
+      **And treat grader throughput as a design constraint** — if it is ~30s, the grid's timeout axis
+      is a budget lever, not just a pathology dial, and that must be known before the factorial is
+      fixed.
+
+- [ ] **Two screen-level savings, worth having but not urgent at 0.5%.** The grid varies the
+      **grader**, not the tasks — so sample completions **once** and score them under all 12 graders
+      (12× off sampling). And **short-circuit the conjunction**: `p_hack` needs proxy-passes AND
+      true-fails, so run the cheap visible test first and only run the expensive held-out suite on
+      the survivors. ⚠️ **Adaptive stopping is valid for "clearly above the band" and NOT for
+      "below"** — concluding `p < 0.0059` needs the full k by `−log ζ/k`. That asymmetry is the L1
+      error we just fixed and would be easy to reintroduce as an optimisation.
 - [ ] **H4 is published** (Helff `2604.15149` runs our healthy-vs-degenerate contrast). Demote to a
       manipulation check.
 - [ ] **H1 has three published comparators** — Wen τ = 0.66/0.47, Zhang ρ = 0.80, PRIME ρ = 0.87.
