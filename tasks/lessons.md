@@ -303,3 +303,63 @@ that produced them would otherwise be the only record.*
   *Trigger: without this, corrections stay in `docs/phases/` while `README.md` keeps the version that
   reads better, and the gap is invisible from inside because the retro is correct; with this, a
   corrected claim is grepped across every surface that quotes it before the phase closes.*
+
+## 2026-08-31 — S2: five process failures, four of them caught by the rig
+
+**1. A branch table's *precedence* is logic, and untested logic.** The S2 entry point applied five
+pre-registered branches in the wrong order and printed *"structural exploits are unreachable at 1B"*
+— the branch that would have redirected the project — off `pass@1 = 1.0000, p_hack = 0`, which says
+only that the model never needed to hack. The plan already said `pass@1` outside band means
+*"re-screen before drawing any conclusion about `p_hack`"*. The bands were right; the order was not.
+
+> **[ADD] A pre-registered branch table is applied by a pure function with a test per branch, and a
+> test that every branch is reachable.** *Trigger: without this, precedence is written once inline
+> and read by nobody, and the phase-0.4 failure recurs in a new shape — there, a scorer returned the
+> nearest verdict it owned; here, a scorer returned a real verdict from an uninformative number. With
+> this, "which guard outranks which" is a test rather than a reading.*
+
+**2. Guards that make a measurement *uninformative* must outrank guards that interpret it.** The
+generalisation of #1, and the part worth carrying: a low number and a meaningless number look
+identical downstream. Rig-broken and difficulty-mis-set both destroy `p_hack`'s meaning, so both
+belong above every branch that reads `p_hack`.
+
+**3. A dial that does not move the quantity it is a dial for is not a dial.** Three difficulty rungs
+varied the *rule's arithmetic* and all three scored `pass@1 ≥ 0.883`, because the English description
+*was* the rule and the task was transcription. Two Modal waves were spent before the diagnosis.
+
+> **[ADD] A difficulty dial is validated by measuring the metric it claims to move, on the cheapest
+> rung, before the full sweep.** *Trigger: without this, "linear → quadratic → conditional" reads as
+> obviously monotone and is not, and the sweep's cost is paid before the design error surfaces. With
+> this, one 512-completion run at ~$0.02 falsifies the ladder before seven more are launched.*
+
+**4. §10.6 was skipped in silence for S1, and nothing noticed.** S1 ran 2026-08-29 and reached
+`tasks/spend.md` only on 08-31, inside this entry. The rule did not fail — it was never invoked.
+Worth noting *what* it hid: the largest single line in the whole screen programme is **~$1.20 for a
+90-minute S1b run that wrote its result only at the end and was killed at the cap**, producing
+nothing. That is more than every other screen combined, S2 included, by 4×.
+
+> **[MODIFY] §10.6 — spend is logged in the same commit as the run's first result artifact.**
+> *Trigger: without this, "at time of incurring" has no enforcement point and a two-day gap is
+> invisible; with this, the ledger entry and the data land together or the data is not committed.*
+
+**5. Self-inflicted: editing a tracked file while a run loop is live.** The clean-tree guard blocked
+three launches across two waves — twice because the entry point writes results *into* the repo (so
+each run dirties the tree for the next), and once because I edited `spend.md` mid-loop. The guard was
+right every time; the loop was wrong.
+
+> **[ADD] A multi-setting sweep commits each result before launching the next, and no tracked file is
+> edited while a sweep is live.** *Trigger: without this the clean-tree guard silently converts a
+> sweep into a single run and the remaining settings look like they were never wanted; with this the
+> conflict between "results are committed data" and "runs require a clean tree" is resolved in the
+> loop rather than discovered in the logs.*
+
+**What worked.** Every one of these except #4 was caught by the rig rather than by reading:
+the clean-tree guard blocked three unreproducible launches; the honest-path test failed on
+`sx-collatz` and exposed an extractor that dropped model-written helpers (a bug that would have
+deflated `pass@1` on exactly the rungs that mattered); the stash-proof confirmed the timeout test
+actually hangs without its fix; and re-running all eight rungs after the extractor fix cost ~$0.16
+and proved the six earlier numbers reproduced to four decimals. **The screen being cheap is what made
+"re-run everything on a doubt" the obvious call instead of a budget decision** — which is the
+project's own thesis applied to itself.
+
+**[DELETE]** None this session.
