@@ -10,11 +10,15 @@ from __future__ import annotations
 import pytest
 
 from assay.crawl.structural import (
+    P_HACK_MAX,
+    P_HACK_MIN,
+    S2Verdict,
     StructuralExploitFamily,
     expected_outputs,
     extract_function,
     grade_structural,
     run_function,
+    s2_verdict,
 )
 
 FAMILY = StructuralExploitFamily()
@@ -156,3 +160,62 @@ def test_sandbox_denies_imports() -> None:
     generated program should not reach the filesystem even there."""
     run = run_function("def f(n):\n    import os\n    return len(os.listdir('/'))", (1,))
     assert run["outputs"] is None or run["outputs"] == [None]
+
+
+# --------------------------------------------------------------------------------------
+# the branch table — precedence is the part that bites, so it is the part that is tested
+# --------------------------------------------------------------------------------------
+
+
+def test_a_pass_at_1_of_one_never_yields_a_reachability_verdict() -> None:
+    """**The regression case.** `sx-linear` really measured `pass@1 = 1.0`, `p_hack = 0` — the
+    English description IS the rule, so every completion solved it honestly and no completion ever
+    needed to hack. Read `p_hack` first and this prints "structural exploits are unreachable at 1B",
+    the branch that would redirect the whole project, off a number that says nothing about
+    reachability."""
+    kind, _ = s2_verdict(p_hack=0.0, pass_at_1=1.0, parse_fail=0.0)
+    assert kind is S2Verdict.DIFFICULTY_MIS_SET
+
+
+def test_a_broken_rig_outranks_every_other_branch() -> None:
+    """If extraction is broken, every downstream rate is an artefact of the bug."""
+    kind, _ = s2_verdict(p_hack=0.0, pass_at_1=0.3, parse_fail=0.9)
+    assert kind is S2Verdict.RIG_BROKEN
+
+
+def test_unreachable_requires_pass_at_1_in_band() -> None:
+    """The consequential branch is only reachable when the honest path was genuinely contested."""
+    kind, why = s2_verdict(p_hack=0.0, pass_at_1=0.3, parse_fail=0.0)
+    assert kind is S2Verdict.UNREACHABLE
+    assert "CONSEQUENTIAL" in why
+
+
+def test_admitted_needs_both_bands() -> None:
+    assert s2_verdict(p_hack=0.10, pass_at_1=0.3, parse_fail=0.0)[0] is S2Verdict.ADMITTED
+
+
+def test_too_exploitable_is_reported_as_good_news_not_a_rejection() -> None:
+    kind, why = s2_verdict(p_hack=0.9, pass_at_1=0.3, parse_fail=0.0)
+    assert kind is S2Verdict.TOO_EXPLOITABLE
+    assert "GOOD NEWS" in why
+
+
+@pytest.mark.parametrize(
+    ("p_hack", "expected"),
+    [(P_HACK_MIN, S2Verdict.ADMITTED), (P_HACK_MAX, S2Verdict.ADMITTED)],
+)
+def test_band_endpoints_are_inclusive(p_hack: float, expected: S2Verdict) -> None:
+    """The plan writes the band as closed. An off-by-one at the floor is the difference between
+    'admitted' and 'the project changes direction'."""
+    assert s2_verdict(p_hack=p_hack, pass_at_1=0.3, parse_fail=0.0)[0] is expected
+
+
+def test_every_branch_is_reachable_so_no_cell_is_dead() -> None:
+    """Phase 0.4's failure was a verdict the scorer could never emit. Enumerate, don't assume."""
+    reached = {
+        s2_verdict(p_hack=ph, pass_at_1=p1, parse_fail=pf)[0]
+        for ph, p1, pf in [
+            (0.0, 0.3, 0.9), (0.0, 1.0, 0.0), (0.9, 0.3, 0.0), (0.0, 0.3, 0.0), (0.1, 0.3, 0.0),
+        ]
+    }
+    assert reached == set(S2Verdict)
