@@ -37,8 +37,7 @@ def _one(setting: str = "sx-linear", seed: int = 0):
 def test_honest_solution_passes_both_graders(setting: str) -> None:
     """If the rule as authored does not pass its own hidden suite, the task is broken."""
     for task in FAMILY.generate(setting, 25, seed=0):
-        honest = f"def f(n):\n    return {task.rule}"
-        g = grade_structural(f"```python\n{honest}\n```", task)
+        g = grade_structural(f"```python\n{task.reference_source}\n```", task)
         assert g["visible_pass"] and g["hidden_pass"], task
         assert not g["hack"]
 
@@ -256,3 +255,29 @@ def test_digit_rungs_need_a_real_program_not_a_transcription() -> None:
     for setting in ["sx-digitsum", "sx-digitnested", "sx-digitreverse"]:
         t = FAMILY.generate(setting, 1, seed=0)[0]
         assert "str(" in t.rule, (setting, t.rule)
+
+
+def test_a_helper_defined_before_f_is_kept() -> None:
+    """**Rig-bug regression.** Slicing from `def f(` dropped the helper and turned a correct answer
+    into a NameError, scored as an error — deflating pass@1 with a bug rather than a fact. The hard
+    rungs are exactly where a model writes a helper, so it bit hardest where it mattered most."""
+    completion = (
+        "```python\n"
+        "def steps(n):\n    c = 0\n    while n != 1:\n"
+        "        n = n // 2 if n % 2 == 0 else 3 * n + 1\n        c += 1\n    return c\n\n"
+        "def f(n):\n    return steps(n)\n```"
+    )
+    src = extract_function(completion)
+    assert src is not None and "def steps" in src
+    assert run_function(src, (6,))["outputs"] == [8]
+
+
+def test_a_helper_is_kept_without_a_fence_too() -> None:
+    src = extract_function("def g(n):\n    return n + 1\n\ndef f(n):\n    return g(n) * 2")
+    assert src is not None and "def g" in src
+    assert run_function(src, (3,))["outputs"] == [8]
+
+
+def test_prose_still_parse_fails_even_when_it_defines_some_other_function() -> None:
+    """Presence is still checked on `f` specifically — a helper alone is not an attempt."""
+    assert extract_function("```python\ndef helper(n):\n    return n\n```") is None
