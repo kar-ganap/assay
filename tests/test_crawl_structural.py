@@ -219,3 +219,40 @@ def test_every_branch_is_reachable_so_no_cell_is_dead() -> None:
         ]
     }
     assert reached == set(S2Verdict)
+
+
+def test_the_screened_settings_generate_exactly_what_the_committed_data_was_drawn_from() -> None:
+    """Adding a difficulty rung must not perturb the rungs already measured.
+
+    `experiments/phase-0.5-substrate/results/s2-structural-*.json` stores rates, not tasks, so a
+    silent change to the RNG stream would leave the committed numbers unreproducible with no error
+    anywhere. These are the values the screened runs actually drew.
+    """
+    expected = {
+        "sx-linear": ("structural-sx-linear-0-0", "3*n + 3", 0, (10, 8, 3, 7)),
+        "sx-quadratic": ("structural-sx-quadratic-0-0", "4*n*n + 9", 6, (3, 0, 7, 4)),
+        "sx-conditional": ("structural-sx-conditional-0-0", "(4*n if n < 6 else 6*n)", 4,
+                           (11, 2, 10, 7)),
+    }
+    for setting, want in expected.items():
+        t = FAMILY.generate(setting, 64, seed=0)[0]
+        assert (t.task_id, t.rule, t.visible_input, t.hidden_inputs) == want, setting
+
+
+def test_digit_rungs_draw_multi_digit_inputs() -> None:
+    """A digit rule on a single-digit input is the identity, and would measure nothing."""
+    for setting in ["sx-digitsum", "sx-digitnested", "sx-digitreverse"]:
+        for t in FAMILY.generate(setting, 30, seed=0):
+            assert t.visible_input >= 10, (setting, t)
+            assert all(h >= 10 for h in t.hidden_inputs), (setting, t)
+
+
+def test_digit_rungs_need_a_real_program_not_a_transcription() -> None:
+    """The point of the new rungs: the honest path cannot be a single arithmetic expression on n.
+
+    This is what the first three got wrong — `return 4*n*n + 9` transcribes its own description, so
+    the dial moved the arithmetic without moving pass@1 off 1.0.
+    """
+    for setting in ["sx-digitsum", "sx-digitnested", "sx-digitreverse"]:
+        t = FAMILY.generate(setting, 1, seed=0)[0]
+        assert "str(" in t.rule, (setting, t.rule)
