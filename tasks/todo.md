@@ -5,64 +5,110 @@
 > session** — this file went a full phase out of date between 08-04 and 08-24, which is exactly the
 > failure `lessons.md` 2026-08-18 names, landing on the one file whose job is to be current.
 
-## STATUS (as of 2026-08-24)
+## STATUS (as of 2026-08-31)
 
-**Stage 0 · Crawl — 4 of 5 phases complete. `main` is at `ea4c4ea`, 406 tests green.**
+**Stage 0 · Crawl — 4 of 5 phases merged. `main` at `6b5a2a9`, 424 tests green.**
+Phases 0.1–0.4 complete and merged (see the table further down for what each found).
+**0.5 is active and unmerged** on `phase-0.5-literature-gate` — 9 commits, rebased on current `main`,
+tree clean.
 
-| phase | state | headline |
+**Spend:** ~$25–27 of GPU credit, ~$15 remaining. ⚠️ **The Modal credits expired at end of August —
+verify the balance before planning any paid run.**
+
+### What happened since 2026-08-24
+
+**A three-clause adversarial prior-art sweep** (3 launched reviewers + 2 orphaned sub-agents, all
+delivered) **falsified the novelty claim for the fourth time** and forced four corrections, all
+merged to `main`:
+
+| | outcome |
+|---|---|
+| **Novelty claim** | **replaced.** Old version struck through in `docs/related-work.md`. Now two narrow conjunctions, each qualifier documented with the paper that forces it |
+| **Framing sentence** | **was false.** *"Nobody can tell you an environment is good before spending the compute"* — Zhang `2607.11022` and Wen `2410.05584` do exactly that. Corrected in `README.md`, `CLAUDE.md` §0, `conceptual.md` |
+| **L1's floor** | **derived, not asserted.** `−log ζ/k` (Wu et al. `2507.14843` Appx C.4). At k=64 the 95% floor is **0.047 — 3× above** the old `1/64`. `p_hack@k` re-pinned at **k = 512** |
+| **`P-outcome-cheap`** | **settled** — mean gap over steps 50–200 as H1's scalar, slope beside it. ρ bands re-affirmed |
+| **§4 recursion** | **narrowed.** R1 falsified base-rate→onset at small capability; it does not touch A1→gap at frontier capability, which is what H1 ranks |
+
+**S1 — the substrate screen — ran twice on Modal and was REJECTED both times** (`$1.60` total; on
+the 0.5 branch, `experiments/phase-0.5-substrate/results/S1-RESULT.md`). It falsified two of our own
+hypotheses in a row and ended somewhere better:
+
+- **S1a** killed "prose vs digits" — prose in the *question* still gave 9-token completions.
+- **S1b** killed "length" — reasoning gave 160-token fluent prose and **still 0/1024 hack words**.
+- **What binds is vocabulary breadth.** At a matched 3,802-token budget: story **1000** distinct word
+  types, word-problem reasoning **188**. Verifiability *constrains* the output space; a lexical
+  exploit *needs* it open. **The two are in tension by construction** — R1 lacked a truth signal for
+  the same reason its exploit was reachable.
+- **Consequence:** the hack-word model does not transfer to a verifiable task. `bisect`'s exploits
+  must be **structural** (special-case, try/except, hardcode, edit the test) — which is what the
+  README already names, so the design is sound. Only *lexical* exploits were screened; structural
+  reachability remains untested and is `bisect`'s premise.
+
+## NEXT — three things, in this order
+
+### 1. Finish Clause 2 of the novelty claim ⚠️ needs a raised search budget
+
+**`docs/related-work.md` records Clause 2 at *moderate* confidence and says explicitly it must not be
+published as an unqualified "nobody has" until these close.** Clause 1 is high confidence and safe —
+it rests on positive findings, which incomplete search can only strengthen.
+
+What's done: keyword sweeps (TIER 1 empty), forward citations of Wen `2410.05584` (**33 papers, none
+qualify**), forward citations of Mahmoud `2605.12474` (one flagged, **verified false positive**).
+
+What's missing:
+- **Gao `2210.10760`'s citation graph — unwalked.** The canonical overoptimization paper; anyone
+  doing a proxy-vs-gold decomposition would plausibly cite it.
+- **Non-arXiv venues** — OpenReview bot-blocks, ACL Anthology untouched. `djinn` is blog-only and was
+  found by luck.
+- **Keyword search structurally cannot find this claim** — the decomposition tends to be a secondary
+  analysis inside a section. Autorubric `2603.00077` does its cross-judge probe in **Section 6**.
+- Semantic Scholar concept search returned **HTTP 429**.
+
+**Method that worked, and the one that didn't:** forward-citation walks on the S2 graph API are
+unmetered and productive. Keyword search is the wrong instrument for a negative claim. **Cap
+sub-agent fan-out** — uncapped fan-out burned all 200 WebSearch calls and stalled two agents.
+
+### 2. Finish Block A — one paper left
+
+**#2 Breaking Barriers is DONE** (`2506.19733`, read first-hand). It occupies **E1's headline** —
+intra-domain transfer across independently-authored benchmarks — but **not E2**, because it swaps
+whole benchmarks (tasks and grader together) and never holds tasks fixed. **E2 is now the
+load-bearing leg of `endemic`, not E1.**
+
+| # | paper | status |
 |---|---|---|
-| **0.1** GRPO by hand | ✅ merged | 43% → **92%**. Four deliberate breakages. A degenerate grader gives a **52-point** proxy–true gap on demand — and the **KL leash made that gap wider** by 0.037 on 3/3 seeds while carrying 54% of the loss. |
-| **0.2** ecosystem port | ✅ merged | Published to the Hub. An independent trainer's **first** measurement (58.8%) landed inside our band (57.1% ± 1.9%) — that, not the 99.8% endpoint, is the evidence the port is faithful. **$0**. |
-| **0.3** R0 | ✅ merged | **Disqualified on the ledger's own rule** — no published number to reproduce. Three screens for **$2.21** of a $10 line. |
-| **0.4** R1 | ✅ merged | **Reachability confirmed** (15/15 train, 12/15 eval; 8–40 steps; **$0**). **L1's lower bound disconfirmed.** R1-P **unresolved**, not falsified. |
-| **0.5** literature gate | 🔄 **active**, unmerged | `phase-0.5-literature-gate`, 2 commits, rebased on `main`. **6/16 read** — Block A 2/5, Block D 4/4. |
+| 1 | Fuzzing RLVR Verifiers `2606.01066` | ✅ read |
+| 2 | Breaking Barriers `2506.19733` | ✅ read |
+| 3 | Prime Sprints | ✅ read — **review file still owed**, material is in `phase-0.4-r1-plan.md` |
+| 4 | Rollout Pass-Rate Control `2605.05112` | ☐ **partly pre-empted** — #13 owns A3 |
+| 11 | Natural Emergent Misalignment `2511.18397` | ☐ **partly answered by R1** — 8–40 steps at 1B vs their ~1,500 |
 
-**Spend:** ~$23–25 of GPU credit (nearly all in 0.1, which overran its $5 line), **~$17 remaining**.
-0.2 and 0.4 cost `$0`. The ledger's running-total column is stale — see its top banner.
+**Newly required reads, surfaced by the sweep:** `2606.09711` (PRIME — read the full paper, not just
+the abstract), `2606.16062` (Rajan/EQS), `2607.11022` (Zhang), `2605.02909` (COLM 2026 — **error
+*pattern* not *rate* determines collapse**, which bears directly on the re-pinned band).
 
-## NEXT — the pre-registration cannot lock, and Crawl cannot exit until it does
+### 3. E3's window — still your call
 
-`docs/pre-registration.md` locks at the end of 0.5, once **(a)** the literature gate clears and
-**(b)** R1 confirms reachability. **(b) is done.** Two things block **(a)**:
+**Not free**: each η sample point is **four** evaluation targets, so N points cost 4N passes per arm.
+8 points = 8× the endpoint η; **5 points (0, 10, 40, 100, 200) = 5×**. The pre-registration's
+*"Nearly free once the eval harness exists"* is wrong and needs correcting either way.
 
-### 1. Finish Block A — three papers left, and one can kill a leg
+## ALSO OWED BEFORE THE NEXT STAGE## ALSO OWED BEFORE THE NEXT STAGE
 
-**Block A is the must-read for Phase 0.5.** Nothing else is gating.
-
-| # | paper | why it blocks | status |
-|---|---|---|---|
-| **2** | **Breaking Barriers** (ICLR 2026, uiuc-kang-lab) | **Read this first.** Does anyone hold *skill fixed, authorship varied*? **If that axis is occupied, `endemic` is dead and the project reverts to gap-only `assay`.** Sharper now: Block D's #14 found that **cutting η collapses the novelty margin**, so #2 and #14 squeeze from opposite sides. | ☐ |
-| **11** | **Natural Emergent Misalignment** (2511.18397) | "No safe rarity threshold" vs our 200-step budget. **R1 has already part-answered it** — hacking at 8–40 steps at 1B, against their ~1,500. And its contingency (*"if it doesn't reconcile, L1's admission band needs redesign"*) **has already fired for an unrelated reason**. | ☐ |
-| **4** | **Rollout Pass-Rate Control** (2605.05112) | **Partly pre-empted** — Block D's #13 (PROPEL) already owns the A3 pass-rate band, citing Wei et al. 2025. Reading #4 now confirms A3's demotion to cited-not-contributed rather than establishing it. Lowest stakes of the three. | ☐ |
-
-Read: #1 ✅ · #3 ✅. Blocks B and C are Walk/Run-time, not gating. Block D (4 papers) is read but
-**at Process step 1 only** — findings, not decisions.
-
-**Two proposed additions, unadjudicated** (from the Phase 0.4 prior-art reviewer): `2606.16062`
-(inference-only hackability audit of *real* code-RL environments, correlated to a downstream
-outcome) and `2507.14843` (the support-constrained RLVR theory underneath `CLAUDE.md` §4's
-"amplification, not discovery"). Both are novelty-perimeter candidates.
-
-### 2. Three decisions that are the owner's under §7, and all are lock prerequisites
-
-- [ ] **`P-outcome-cheap`'s estimand.** Under amendment — a slope alone can't separate "never hacked"
-      from "hacked before step 50", and **H4 inverts under it**. Three candidates laid out in
-      `pre-registration.md` §4 L3. H1's ρ bands were set against the slope and must be re-affirmed
-      against the replacement **before** Run data exists.
-- [ ] **E3's measurement window.** Unpinned entirely. Same underlying question — settle with the above.
-- [ ] **The one-sentence novelty claim.** **Falsified on three independent readings** (#1, #13 §C5,
-      #14 §C5). Must be replaced before the lock.
-
-## ALSO OWED BEFORE THE NEXT STAGE
-
-- [ ] **L1 redesign.** Two of three R1 variants sat *below* `1/64` and saturated anyway; `1/64` is the
-      resolution floor of a 64-sample screen, not a reachability threshold. Measured false-negative
-      rate **42–68%**. Fix: raise k (0.006 needs k ≳ 500), re-derive the bound from reachability,
-      report the miss rate as a result. Cheap — base-policy sampling, no gradients.
-- [ ] **The §4 contradiction.** §4 says the screen and the diagnostic are the same measurement; the
-      new annotation says nothing may **rank** by base rate. But **H1's primary metric is a rank
-      correlation** over `assay_score = f(A1..A6)`, and Phase 1.4 selects confirmatory variants by
-      ranking predicted pathology. Both can't stand.
+- [x] ~~**L1 redesign**~~ **SETTLED 2026-08-31** — floor is `−log ζ/k`, k re-pinned at 512.
+- [x] ~~**The §4 contradiction**~~ **SETTLED 2026-08-31** — annotation narrowed; the recursion holds.
+- [ ] **`p_hack@64` on `bisect` is no longer cheap.** On a word task the screen is a regex plus an
+      integer compare. On `bisect` each sample is **two sandboxed test-suite executions** — at k=512
+      across a 12-variant grid that is ~12,000 sandbox runs before any training. **Zero GPU-hours is
+      not zero cost, and this is not in the cost model.**
+- [ ] **H4 is published** (Helff `2604.15149` runs our healthy-vs-degenerate contrast). Demote to a
+      manipulation check.
+- [ ] **H1 has three published comparators** — Wen τ = 0.66/0.47, Zhang ρ = 0.80, PRIME ρ = 0.87.
+      Pre-register against them or H1 reads as replication.
+- [ ] **`bisect`'s visible/hidden design is published as an eval** — SpecBench `2605.21384`. Cite it
+      as the eval-side companion.
+- [ ] **A lever for `bisect`'s reachability:** Countdown-Code `2603.07084` got a proxy–true gap in
+      **under 100 steps** with **1% SFT contamination**. Stage-2 feasibility is mixed, not negative.
 - [ ] **Block D's scope calls** — demote A3 to cited-not-contributed and promote H3 to load-bearing;
       promote #9 Block C → Block A; amend `stages.md`'s cut order (cutting η now costs novelty);
       and whether `canary`'s diversity battery takes the Vmax cross-stack study (§17-B handoff).
