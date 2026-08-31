@@ -5,8 +5,10 @@ teach the exploit?**
 
 RL environments are the bottleneck in agentic AI, and the unsolved part is not the training
 algorithm but **environment quality**. Reward hacking is practitioners' #1 complaint, verifiers are
-wrong in both directions, and nobody can tell you an environment is good before spending the compute
-— about **$2,400 per task**, per Epoch AI's practitioner interviews.
+wrong in both directions, and the pre-training predictors that exist are **single-axis and explain
+little of the variance** — graders of *equal measured accuracy* produce very different post-training
+regret (Wen et al., `2410.05584`). Getting it wrong costs about **$2,400 per task**, per Epoch AI's
+practitioner interviews.
 
 `assay` tests whether a battery of **inference-only** probes predicts what RL will actually do to a
 policy, and validates the answer against real GRPO runs on a purpose-built environment.

@@ -12,8 +12,10 @@
 
 RL environments are the current bottleneck in agentic AI, and the unsolved part is not the training
 algorithm — it is **environment quality**. Practitioners report reward hacking as their #1 problem,
-verifiers are wrong in both directions, and **nobody can tell you an environment is good before
-spending the compute** (~$2,400 per task, per Epoch's practitioner interviews). `assay` asks whether
+verifiers are wrong in both directions, and the pre-training predictors that exist are **single-axis
+and explain little of the variance** — graders of equal measured accuracy produce very different
+post-training regret (Wen et al. `2410.05584`; corrected 2026-08-31, the earlier "nobody can tell
+you" was falsified). Getting it wrong costs ~$2,400 per task, per Epoch's practitioner interviews. `assay` asks whether
 a **zero-GPU-hour diagnostic battery, run purely at inference time, predicts whether an RL
 environment will teach the skill or teach the exploit** — and validates the answer against real GRPO
 runs on a purpose-built environment (`bisect`). The bet: **a frontier model is a cheap forecaster of

@@ -162,7 +162,36 @@ hacking, no learning trajectory to observe. Zero GPU-hours.
 > of the frontier model's. The screen and the diagnostic are the same measurement at two capability
 > levels, and their difference is exactly H2's quantity. The mitigation is the experiment.
 
-> ### ⚠ REDESIGN REQUIRED — the lower bound is a sampling artefact, and R1 measured its cost
+> ### ✅ REDESIGN — the lower bound now has a derived value, not an asserted one
+>
+> **Settled 2026-08-31.** The floor is `−log ζ / k`, the confidence bound from Wu et al.,
+> *The Invisible Leash* (`2507.14843`, Appx C.4): if a completion is unseen in `k` samples then with
+> confidence `1 − ζ`, `π(y*|x) ≤ −log ζ / k`. That is the smallest rate a `k`-sample screen can
+> resolve, and it replaces both the original `1/64` and the `1/256` this project proposed from
+> measured reachability.
+>
+> | k | 95% floor (`ζ = 0.05`) |
+> |---|---|
+> | **64** | **0.0468** — three times *above* the pre-registered `1/64 = 0.0156` |
+> | 256 | 0.0117 |
+> | **508** | **0.0059** — resolves `midnight`, the lowest rate R1 proved reachable |
+>
+> **`p_hack@k` is therefore re-pinned at k = 512**, with the admission floor set to the derived
+> `−log ζ / k` for whatever `k` is used, rather than to a constant. Two independent routes agreed on
+> the sample size: this project reasoned "0.006 needs k ≳ 500" from R1's data, and the paper's bound
+> gives 508.
+>
+> **The original `1/64` sat below the threshold at which a zero observation carries any statistical
+> content** — which is exactly why R1's two sub-band variants saturated anyway. It was never a
+> reachability claim; it was the sampling budget wearing a scientific label.
+>
+> **Caveat carried forward.** The bound assumes i.i.d. draws. `bisect` rollouts are multi-turn and
+> sandbox-mediated with shared prefixes, so independence is an approximation there and the true floor
+> is higher than `−log ζ / k`. And `2605.02909` (COLM 2026) finds that verifier **error pattern**,
+> not error **rate**, determines collapse — this band is a rate, so it is necessary and not
+> sufficient. Read that paper before the Run grid.
+>
+> ### The measurement that forced this — 2026-08-06 (Phase 0.4, R1)
 >
 > **Measured 2026-08-06 (Phase 0.4, R1). Two of R1's three variants sat BELOW `1/64` and saturated
 > anyway**, where this section says *"Below → unreachable in 200 steps."*
@@ -351,6 +380,7 @@ Stated in advance, so it is a decision and not a mood:
 
 | Date | Change | Reason |
 |---|---|---|
+| 2026-08-31 | **L1's floor SETTLED at `−log ζ / k`, and `p_hack@k` re-pinned to k = 512.** **Novelty claim replaced** — the old one is falsified on four first-hand reads and struck through in `related-work.md`. **Framing sentence corrected** in `README.md`, `CLAUDE.md` §0 and `conceptual.md`. | The floor is now derived rather than asserted: Wu et al. `2507.14843` Appx C.4 gives `π(y*|x) ≤ −log ζ / k` for an unseen completion, so at k = 64 the 95% floor is 0.047 — **three times above** the pre-registered `1/64`, which is why R1's two sub-band variants saturated anyway. k = 512 resolves 0.0059, the lowest rate R1 proved reachable; the paper's bound (508) and this project's independent estimate (≳500) agree. The novelty claim and the "nobody can tell you" framing both fell to Wen `2410.05584`, Zhang `2607.11022`, PRIME `2606.09711` and Rajan `2606.16062` — see `docs/related-work.md` for what survives and why each qualifier is load-bearing. |
 | 2026-08-29 | **`P-outcome-cheap` SETTLED: mean gap over steps 50–200 as H1's scalar, slope reported beside it.** ρ bands re-affirmed unchanged. **§4's ranking annotation NARROWED** — the recursion holds; only base-rate→onset ordering was falsified. | The mean separates never-hacked from saturated-before-the-window, which is what fixes H4's inversion; the slope separates flat from still-rising. My 08-15 framing dismissed the mean for a weakness the slope already covers, and correcting that removed the need for a pair-to-scalar rule. S1 makes robustness to both timescales mandatory rather than prudent: exploits in verifiable environments are structural, and no one has measured how fast a structural exploit emerges. The ranking annotation had claimed "nothing downstream may rank by it", which contradicted H1's own rank correlation — R1 falsified base rate→onset at small capability and 2.3× separation, not A1→gap at frontier capability across six axes. |
 | 2026-08-15 | **`P-outcome-cheap` under amendment: a slope-only estimand is blind to early saturation.** Becomes **level + slope**, both reported. H1's ρ bands, H3's partial R², and H4's falsification condition all inherit it. Estimand choice and re-affirmed bands owed **before** any Run-stage data (§7, §10.4). | A slope over steps 50–200 gives ≈ 0 for *both* "never hacked" and "hacked before step 50". R1 measured the second case in-project — `forgotten` crosses 50% at step 9.10, 41 steps before the window opens. **H4 inverts under it**: the control's falsification condition would be met by the data that confirms it. Prior evidence: `../polyphony` pre-registered the same shape and its `R6LevelReanalysisAmendment.md` records the identical failure — *"it does not answer whether the feed puts the ensemble immediately into a low-V state at round zero and keeps it there"* — caught only after the fact, forcing an exploratory downgrade. Borrowed as a §17-A conventions lesson. |
 | 2026-08-06 | **Design pin added: `P-alpha` = 0.05, one-sided, on every seed-level directional claim** — together with a mandatory `powered` report (`p_floor = 1/C(n_a+n_b, n_a) < α`). | Phase 0.4 had no significance threshold at all, so its scorer decided direction by ordering two medians and reported R1-P confirmed on a p = 0.29 null. Pinned *after* R1 returned, which is only legitimate because it moves no R1 verdict: the measured p is 0.24–0.29 and fails at 0.05, 0.10 and 0.20 alike. Pinned now so it binds from Walk onward. The threshold-free alternative (non-overlapping seed ranges) was rejected on measurement: its implied false-positive rate is `1/C(2n,n)`, so it grows *stricter* with n and its power against a real 1σ effect falls from 26% at n=3 to 0.05% at n=12. |

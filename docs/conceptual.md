@@ -15,7 +15,7 @@ economically-meaningful tasks, and more precisely the *quality* of that supply:
   incorrect by Prime Verifier were correct. Plausibly-buggy verifiers show 55–87% false-positive
   rates, with black-box search finding the exploit in 2–4 queries, 94–100% of trials.
 - **Difficulty must land in a band.** 0% or 100% pass rate is zero gradient.
-- **And nobody can tell you an environment is good before spending the compute** — ~$2,400 per task.
+- **And the pre-training predictors that exist are single-axis and explain little of the variance** — graders of equal measured accuracy produce very different post-training regret (Wen et al. `2410.05584`). *Corrected 2026-08-31: the earlier "nobody can tell you" was falsified by Wen, Zhang `2607.11022` and PRIME `2606.09711`.* Getting it wrong costs ~$2,400 per task.
 
 **That last line is the whole project.**
 

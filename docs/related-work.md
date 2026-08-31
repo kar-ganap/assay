@@ -10,9 +10,53 @@
 
 ## The one-sentence novelty claim (to be defended or amended at the gate)
 
-> *Nobody has asked whether an environment's post-training outcome is predictable from inference-only
+> **⚠️ SUPERSEDED 2026-08-31 — falsified on four independent first-hand reads.** Kept struck through
+> because the change log is the record of what was believed when.
+>
+> ~~*Nobody has asked whether an environment's post-training outcome is predictable from inference-only
 > probes run before training — and nobody has held the skill fixed while varying the environment's
-> authorship.*
+> authorship.*~~
+>
+> **Both halves are occupied.** *Asking* the question: #1 (`2606.01066`) recommends pre-training
+> verifier stress-testing outright. *Answering* it: Wen et al. (`2410.05584`) rank-correlate grader
+> accuracy against a post-RL gap at Kendall τ = 0.66 (BoN) / 0.47 (PPO); Zhang (`2607.11022`) runs a
+> **pre-registered** static leakiness audit **computed before training** at Spearman ρ = 0.80; PRIME
+> (`2606.09711`) forecasts hack onset and severity at ρ = 0.87. And Rajan (`2606.16062`) ships a
+> four-dimensional **Environment Quality Score** — a scored inference-only battery, predecessor to
+> `assay_score`.
+
+### The claim as it now stands — 2026-08-31
+
+> *Grader pathology has been varied under RL, and cheap pre-training audits have been rank-correlated
+> against post-training reward pathology. Two things remain open.*
+>
+> ***First**, no one has crossed **structural harness properties** — test visibility × reward shape ×
+> timeout × sandbox writability, rather than synthetic label-noise rates or a single corruption dial —
+> over one fixed **multi-turn, tool-using** task set, scored by a battery run **at step 0 on the
+> environment** before any gradient update, and validated by the **rank order across environment
+> variants** against the post-GRPO proxy–true gap.*
+>
+> ***Second**, where graders have been swapped, the decomposition has been into **kinds of grader
+> failure** (Mahmoud `2605.12474`: "verifier failure" vs "rubric-design limitations"). No one has
+> separated **grader idiom from environment idiom**, which requires the eval-side swap on fixed tasks
+> plus an independently authored environment for the same skill. Existing work swaps the **training**
+> reward and holds the eval grader fixed.*
+
+**Why each qualifier is load-bearing** — every one was added because something occupies the claim
+without it:
+
+| qualifier | what it excludes |
+|---|---|
+| **structural**, not synthetic | Mitsuhashi `2605.25252` crosses 108 configurations of Bernoulli label-flip rates |
+| **step 0 on the environment** | PRIME probes the *policy* at intermediate checkpoints; Sources A/B are black-box, so "black-box" alone does not distinguish us |
+| **rank order across variants** | PRIME's 7 branches fork from one shared checkpoint; Zhang is two arms |
+| **eval-side** swap | everyone varies the training reward and holds the eval grader fixed |
+| **grader vs environment** idiom | Mahmoud decomposes two kinds of *grader* failure, with no independently authored task set |
+
+**Not novelty, but worth knowing:** η = G_skill / G_total has **no equivalent named ratio** in the
+literature — a targeted sweep found none. And `2606.16062` names our contribution as its own open
+problem: *"We do not claim that fixing the broken tasks improves training outcomes; a direct causal
+test (training on fixed-versus-untouched broken tasks at fixed compute) is the natural next step."*
 
 ## Differentiation
 
