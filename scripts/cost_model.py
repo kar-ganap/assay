@@ -88,6 +88,16 @@ ASSUMPTIONS = [
         "not a formality.",
     ),
     Assumption(
+        "grader_seconds_per_episode", 0.0004, 0.05, 1.92,
+        "MEASURED 2026-08-31 (S2). The model had no execution term at all, and todo.md carried a "
+        "feared 2s-30s span (1,365 -> 20,480 core-hours for the grid). Both ends were wrong for a "
+        "pure-function grader: honest sandboxed execution of a five-assertion suite is 0.1-0.4 ms, "
+        "3-4 orders of magnitude under the old low end. What actually sets the cost is "
+        "`p_nonterminating x timeout_budget` -- sx-collatz's 1.92 s mean is 0.383 x 5 s almost "
+        "exactly, and that is the HIGH end here. MID allows bisect's suites to be ~100x heavier than "
+        "three assertions. Both factors are knobs, not unknowns.",
+    ),
+    Assumption(
         "frontier_api_total", 25.0, 60.0, 140.0,
         "Battery axes A1/A2 (exploit-finding) across 8-12 variants, plus A4 judge probes and the "
         "Gallop field report over ~15 Hub environments. Haiku 4.5 bulk with caching on, Sonnet spot "
@@ -98,7 +108,8 @@ ASSUMPTIONS = [
 A = {a.name: a for a in ASSUMPTIONS}
 
 
-def run_cost(params_b: float, tokens: float, vllm_speedup: float, *, hourly: float) -> float:
+def run_cost(params_b: float, tokens: float, vllm_speedup: float, *, hourly: float,
+             grader_s: float = 0.0, group_size: int = 8) -> float:
     """Cost of one 200-step GRPO run, scaled from the measured 1B/64-token anchor.
 
     Two scaling factors, both roughly linear and both stated rather than hidden:
@@ -125,6 +136,13 @@ def run_cost(params_b: float, tokens: float, vllm_speedup: float, *, hourly: flo
     """
     scale = (params_b / LADDER_PARAMS_B) * (tokens / LADDER_TOKENS_PER_COMPLETION)
     hours = HOURS_PER_200_STEP_RUN_1B * scale / vllm_speedup
+
+    # Grading holds the GPU idle: a step generates `group_size` rollouts, then every one is graded
+    # before advantages exist. Billed at the same hourly rate because the device is rented, not used.
+    # `grader_s` is MEASURED (S2) rather than assumed -- see the assumption's note. It is added
+    # rather than multiplied, which is why it barely moves the total at the low end and dominates a
+    # cheap run at the high end.
+    hours += (STEPS_PER_RUN * group_size * grader_s) / 3600.0
     return hours * hourly
 
 
@@ -136,11 +154,16 @@ class Line:
     note: str = ""
 
 
+#: Steps per run, matching the 200-step anchor `run_cost` scales from.
+STEPS_PER_RUN = 200
+
 #: `stages.md`'s own lines for the work that remains: Walk $20 + Run $32 + Gallop $29 + R1 $2.
 PLAN_REMAINING = 83.0
 
-#: Confirmed by the user 2026-08-04 as the current Modal balance.
-BALANCE = 17.0
+#: Modal balance. Updated 2026-09-01: August's unspent $15.72 did NOT expire -- it rolled into
+#: September's $30. The number that matters for planning is not this balance but the ~$30/month
+#: RATE behind it; see `tasks/spend.md`.
+BALANCE = 45.0
 
 
 def build(pick) -> list[Line]:  # type: ignore[no-untyped-def]
@@ -156,11 +179,12 @@ def build(pick) -> list[Line]:  # type: ignore[no-untyped-def]
     speed = pick("vllm_speedup_on_total_step")
     paid_grid = pick("exploratory_grid_free")
     api = pick("frontier_api_total")
+    grader_s = pick("grader_seconds_per_episode")
 
     # Long sequences at ~1.7B will not fit an L4 the way 1B/64-tok did. Step up with the episode
     # rather than pretending the cheap tier holds.
     hourly = L4_PER_HOUR if tok <= 600 else A100_40_PER_HOUR
-    per_run = run_cost(params, tok, speed, hourly=hourly)
+    per_run = run_cost(params, tok, speed, hourly=hourly, grader_s=grader_s)
     screen = 8.0 * (tok / 600.0)  # screening scales with episode length too
 
     return [
@@ -224,7 +248,7 @@ def main() -> None:
     for name in A:
         d = {}
         for which in ("low", "high"):
-            pick = lambda n, _n=name, _w=which: getattr(A[n], _w if n == _n else "mid")  # noqa: E731
+            pick = lambda n, _n=name, _w=which: getattr(A[n], _w if n == _n else "mid")
             d[which] = sum(x.value for x in build(pick)) - base
         print(f"  {name:<34} low {d['low']:>+8.0f}   high {d['high']:>+8.0f}   "
               f"span ${abs(d['high'] - d['low']):>6.0f}")
