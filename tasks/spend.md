@@ -290,8 +290,18 @@ grader bug was the obvious call rather than a budget decision. **That is the pro
 applied to itself**: diagnostics that cost 1% of the training run can be re-run whenever a doubt
 appears, and the doubt gets resolved instead of caveated.
 
-**Against budget.** Stage 0 is ~$17; ~$2.04 on screens leaves the Crawl line intact. Modal balance
-was **$15.72** at the start of 2026-08-31 with credits expiring that day.
+**Against budget.** Stage 0 is ~$17; ~$2.89 on screens (S1 + S2 + the capability ladder) leaves the
+Crawl line intact.
+
+**Correction, 2026-09-01 — the credits did not expire.** The $15.72 carried over and was *added* to
+September's $30, leaving **$45**. The "expiring today" note that shaped 2026-08-31's pacing was
+wrong, and it is worth naming what it cost: nothing, because everything it rushed was under $1 —
+but it was the reason for a same-day sequence rather than a planned one.
+
+**The planning consequence is larger than the $45.** A monthly grant that *rolls over* is not a
+one-time balance; it is a **rate**. At ~$30/month the cost model's LOW line ($147) is about five
+months of doing nothing else, and the binding constraint stops being money and becomes §15's closing
+window. Pacing, not price, is now the thing to decide.
 
 ## Replan triggers
 
