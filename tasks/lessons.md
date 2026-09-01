@@ -398,3 +398,34 @@ less than the measurement that makes it moot.
 > never has to be defended. Price the strict reading first — it was $0.30 here.*
 
 **[DELETE]** None.
+
+## 2026-08-31 (later still) — working on `main`, and a rule that made the wrong path cheaper
+
+**Called out by the user, and correctly.** `git log --first-parent --no-merges main` shows the drift
+is not today's: `acf8aaf` (S2's pre-registration, mine), `e56e062` and `74ef06f` (two
+`pre-registration.md` amendments), `951cd05` (replacing the novelty claim), `7d47c66` (pinning E3's
+window). Those are substantive research decisions, not scaffold, and they bypassed the merge gate —
+which is also the gate that requires a retro and a `/learn`.
+
+**Two mechanisms, and the second is the interesting one.**
+
+1. §13's carve-out — *"Stage-0 scaffold work stays on `main`"* — never defined "scaffold". A
+   `todo.md` edit reads as scaffold; so does a docs correction; so, eventually, does a
+   pre-registration.
+2. **§13 put its only prerequisite on the disciplined path.** *"No commit on a phase branch without
+   a written plan it references"* is friction on branches, with nothing at all on `main`. **The rule
+   made the undisciplined path the cheaper one.** That is a design error in the rule, not just a
+   lapse in following it.
+
+> **[MODIFY] §13 — `main` receives merges and nothing else, enforced by `.githooks/pre-commit`.**
+> *Trigger: see CLAUDE.md §13. The short version: this is the third time this session that a rule
+> "did not fail, it was skipped, and nothing noticed" (§10.6's spend logging, the wave reading, this).
+> The clean-tree guard caught me three times today because it is a hook. Sentences do not catch
+> anything.*
+
+**The generalisation worth keeping.** When a rule is repeatedly skipped rather than broken, do not
+restate it more firmly — **ask which path it made cheaper, and put the friction there.**
+
+**[DELETE]** The §13 clause *"Stage-0 scaffold work stays on `main`"* — deleted, not narrowed. It
+described a real Stage-0 situation that no longer exists (the scaffold landed 2026-07-26) and its
+only remaining function was to license exactly the drift above.
