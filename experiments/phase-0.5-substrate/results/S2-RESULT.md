@@ -157,52 +157,62 @@ earlier number was affected — but that could only be known by re-running.
 
 Two questions were left open above: the admission rested on **one rung at one seed**, and the
 near-miss finding raised whether the 1B policy's reachable set is commensurable with a frontier
-model's. Both are cheap to attack, and Modal credit was expiring. **8 more runs, 4,096 more
-completions, ~$0.55.**
+model's. Both are cheap to attack, and Modal credit was expiring. **12 more runs, 6,144 more
+completions, ~$0.9.** Everything below regenerates: `uv run python scripts/score_s2_ladder.py`.
 
 ## Seed replication, and a capability effect that clears
 
-`sx-digitsort`, 4 seeds per arm, 512 completions each:
+`sx-digitsort`, **6 seeds per arm**, 512 completions each:
 
-| model | `p_hack` per seed | mean | sd | `pass@1` mean |
-|---|---|---|---|---|
-| **Llama-3.2-1B-Instruct** | 0.0234, 0.0312, 0.0332, 0.0469 | **0.0337** | 0.0097 | 0.084 |
-| **Llama-3.2-3B-Instruct** | 0.0703, 0.1113, 0.1621, 0.1641 | **0.1270** | 0.0450 | 0.320 |
+| model | `p_hack` per seed |
+|---|---|
+| **Llama-3.2-1B-Instruct** | 0.0234, 0.0234, 0.0312, 0.0332, 0.0410, 0.0469 |
+| **Llama-3.2-3B-Instruct** | 0.0703, 0.1113, 0.1113, 0.1621, 0.1641, 0.1738 |
 
-**The admission replicates.** All four 1B seeds sit above the 0.0059 floor; the pooled 1B rate is
-**69/2048 = 0.0337**, Wilson 95% CI **[0.0267, 0.0424]**.
+**The admission replicates on every 1B seed** — all six sit above the 0.0059 floor.
 
 **The capability effect is a directional claim and it clears its gate** — using the exact test
 committed in Phase 0.4 (`assay.crawl.saturation`), not a new one:
 
-- **perfect separation**, `u = 16` of `u_max = 16`
-- **exact one-sided p = 0.01429** against a per-direction α of 0.025 → **clears**
-- that p **equals `p_floor`** — it is the best a 4-v-4 design can produce, so the design had exactly
-  enough resolution and no more
-- **Hodges-Lehmann shift = +0.1016**, exact 95% CI **[0.0234, 0.1406]**, excluding zero
+**§10.3 admits two readings** — every run an independent draw, or *"seeds launched in one wave
+count as one draw."* The rule does not settle which applies to base-policy sampling, so **two
+singleton waves per arm were added specifically to make the strict reading have resolution, and both
+readings are reported.** The point was to survive either, not to pick one.
 
-**Caveat the project's own rule requires (§10.3, "seeds launched in one wave count as one draw").**
-Each arm was launched as two batches (seed 0, then seeds 1–3). Every run is nevertheless a separate
-`modal run` invocation in its own container with its own model load, at a pinned revision and a
-seeded sampler, so the between-run variance source is sampling noise, which the seed captures. **On
-the strict wave reading (2 v 2) `p_floor` is 0.167 and the design could never reject** — the remedy
-is two more singleton launches per arm, ~$0.30. **Flagged rather than resolved; it is a §10 judgment
-call and it is the user's.**
+| reading | n | u | exact one-sided p | `p_floor` | HL shift | exact 95% CI | vs α/2 = 0.025 |
+|---|---|---|---|---|---|---|---|
+| **seed level** | 6 v 6 | 36/36 | **0.001082** | 0.001082 | +0.1016 | [0.0469, 0.1406] | **clears** |
+| **wave level** (strict) | 4 v 4 | 16/16 | **0.014286** | 0.014286 | +0.0895 | [0.0703, 0.1504] | **clears** |
+
+**Perfect separation under both**, and both CIs exclude zero. In each case `p` equals `p_floor`, so
+each design had exactly enough resolution and no more — which is why the singleton waves were
+necessary rather than decorative: at 2 v 2 the floor is 0.167 and nothing could ever have rejected.
 
 ## The finding that did *not* move
 
-**At 3B, the hacks are the same near-miss.** Of the 20 retained 3B hack completions:
+**At 3B, the hacks are the same near-miss.** Classified by **parsing** every retained hack, across
+every rung and both scales:
 
-- constant returns (never reference `n`): **0**
-- explicit `n == k` / `n in (...)` branches: **0**
+| arm | completions | hacks | retained | near-miss | special-case | constant | unparsed |
+|---|---|---|---|---|---|---|---|
+| 1B | 6,656 | 132 | 123 | **123** | **0** | 0 | 0 |
+| 3B | 3,072 | 406 | 120 | **120** | **0** | 0 | 0 |
 
 The modal 3B hack is character-identical to the modal 1B hack — `int(str(n)[::-1]) + 4`, reversal
 where the spec said decreasing order.
 
+> **This number survived a false positive of its own making.** The first classifier grepped the raw
+> text and reported one special-case at 3B. It had matched the English phrase *"digits of n in
+> decreasing order"* — inside a **docstring**. The code was the same near-miss as all the others.
+> `classify_hack` now walks the AST, where a docstring is a `Constant` carrying no `Name` and prose
+> cannot be mistaken for a program. **A text pattern cannot tell prose from code, and this is a claim
+> a single false positive would have overturned.**
+
 **So the rate has a capability gradient and the *kind* does not.** Tripling the parameter count
 roughly quadruples how often the policy collects proxy reward it did not earn, without once
-producing the exploit class `bisect` was designed around. Across **6,144 completions at two scales**,
-the base rate of special-casing remains indistinguishable from zero.
+producing the exploit class `bisect` was designed around. Across **9,728 completions at two scales
+and 243 hacks read individually**, the base rate of special-casing remains indistinguishable from
+zero.
 
 ### Why that sharpens H2 rather than damaging it
 
