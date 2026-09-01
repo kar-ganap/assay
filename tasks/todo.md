@@ -55,7 +55,47 @@ hypotheses in a row and ended somewhere better:
   README already names, so the design is sound. Only *lexical* exploits were screened; structural
   reachability remains untested and is `bisect`'s premise.
 
-## NEXT — four things, in this order
+## THE COURSE, replanned 2026-09-01 (budget: $45, and it is a rate)
+
+**The credits did not expire** — August's $15.72 rolled into September's $30. **Decided: exhaust the
+grant as fast as useful**, because grant applications are pending and may refill it; do not pace to
+the monthly rate.
+
+**What $45 is enough for.** `stages.md` puts Walk at **$20**, and Run's exploratory grid is now
+**$0** (see below). So the grant plausibly covers **all of Walk plus Run's grid**, leaving the
+confirmatory arms (cost-model LOW ≈ $100) as the piece that waits on external funding. That is the
+funding story: *the grant buys the environment and the diagnosis; a grant buys the validation.*
+
+**Two decisions taken today, both recorded at their point of use:**
+
+| decision | where | worth |
+|---|---|---|
+| **Publish `bisect` publicly** → Prime's proven-$0 queue | `CLAUDE.md` §15 | `exploratory_grid_free`, span **$425** |
+| **Screen the confirmatory scale on `bisect` at 1B *and* 3B**, pin the smallest in band | `docs/pre-registration.md` | `confirmatory_params_b` $135 — *and* `bisect_tokens_per_episode`, span **$876** |
+
+**Why the second is the highest-leverage ~$6 in the project.** `bisect`'s admission screen returns
+`p_hack`, `pass@1` **and** `tokens_per_episode` from one sampling pass. The last is the single
+largest term in the cost model. **One screen settles the scale and collapses the biggest cost
+uncertainty**, before a single training step is bought. This is the S2 rig reused unchanged.
+
+**Already banked, 2026-08-31:** `grader_seconds_per_episode` entered the model **measured**. The
+feared 2s–30s span (quoted here as 1,365 → 20,480 core-hours) is **wrong by 3–4 orders of magnitude**
+for a pure-function grader; the real span is **$23**. A $0.31 screen deleted a line item that had
+been carried as a project-scale risk.
+
+### Order of work — the free things first, because they do not touch the grant
+
+**A · Close Stage 0 (no GPU, $0).** Nothing here spends the grant, so it does not compete with
+"exhaust it fast." Items 1–3 below, then the 0.5 retro + `/learn`, then **the three-reviewer
+Crawl→Walk pass (§12.6 — a critical boundary, and it is the R1 reachability gate)**.
+
+**B · Phase 1.1 — build `bisect`, Hub-public from the first commit.** Licence, card and reproducible
+task generation are 1.1 requirements now, not a later port.
+
+**C · `bisect`'s admission screen at both scales (~$6).** The moment it can run one episode.
+Then **re-cost and gate Run on real numbers**, per §10.6.
+
+## STILL OPEN — four things, in this order
 
 ### 0. Decide what S2's mechanism finding does to H2 and to `bisect`'s taxonomy ⚠️ NEW, user's call
 

@@ -294,7 +294,12 @@ mandatory to consider) · conceptual-doc cleanup proposed · tool/permission all
 - **The window is narrow and closing.** Prime Sprints' reward-hacking track **closed ~2026-06-20**
   (verified 2026-08-01; no successor announced). Its free compute is still live —
   `sprints/Llama-3.2-1B-Instruct` at $0/$0/$0 — but **requires a PUBLIC environment**, so the price
-  of it is publishing `bisect` before the paper. Decide at Phase 0.2. The
+  of it is publishing `bisect` before the paper. **DECIDED 2026-09-01: publish.** The exploratory
+  grid is the largest paid line after the episode-length unknown (`exploratory_grid_free`, span
+  **$425**), publishing an environment is itself Walk's ship-if-you-stop artifact, and being scooped
+  on a substrate matters far less than being scooped on the zero-step prediction claim. **`bisect` is
+  therefore designed Hub-public from its first commit** — licence, card, and reproducible task
+  generation are 1.1 requirements, not a later port. The
   fuzzing-verifiers paper landed June 2026; Apollo's Science-of-Scheming stream starts Sept 2026 and
   targets adjacent territory. **Speed is a design constraint, not a preference.** Concretely: do not
   let the literature gate expand past the five Block-A papers, and do not let Walk expand past the

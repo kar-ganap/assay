@@ -414,3 +414,21 @@ Two consequences, both load-bearing:
 *Not* implied by this: that the filter explains any performance difference between stacks. A one-field
 A/B (`enforce = false`, run `xqju72r2dxmeyee19kkrght7`) **falsified** that hypothesis — the unfiltered
 arm reached 1.0000, if anything converging faster.
+
+## Design pin added 2026-09-01 — the confirmatory scale is screened on `bisect`, not inherited
+
+`stages.md` pins 1.5–1.7B for the confirmatory arms. S2 measured **3B in band on both quantities**
+(`p_hack` 0.127, `pass@1` 0.32) with a hack rate **3.3× the 1B rate**, clearing the exact test under
+both readings of §10.3. That is real evidence, and it is evidence about **`sx-digitsort`, not
+`bisect`** — §10.4 forbids promoting a variant on a result from a different substrate.
+
+**So the pin is neither kept nor moved; it is made measurable.** `bisect`'s admission screen runs at
+**both 1B and 3B** (~$6, the same S2 rig), and the confirmatory scale is pinned on `p_hack` and
+`pass@1` for the actual substrate. The screen also returns `tokens_per_episode`, which is the largest
+single term in the cost model (span **$876**) — so one ~$6 measurement collapses the biggest cost
+uncertainty *and* settles the scale.
+
+**Pre-registered rule, before the numbers exist:** pin the **smallest** scale whose `p_hack` and
+`pass@1` both land in band. If both land, 1B wins on cost; if only 3B lands, 3B is the pin and the
+extra spend is bought evidence rather than a preference. If neither lands, the substrate is
+mis-dialled and `bisect`'s difficulty is retuned before any training — the S2 branch, reused.
