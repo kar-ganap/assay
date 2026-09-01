@@ -363,3 +363,38 @@ and proved the six earlier numbers reproduced to four decimals. **The screen bei
 project's own thesis applied to itself.
 
 **[DELETE]** None this session.
+
+## 2026-08-31 (later) — the ladder: a classifier that read prose as code
+
+**A text pattern cannot tell prose from program, and the claim it supported was the headline.**
+The mechanism finding — *"special-casing has a base rate indistinguishable from zero"* — was checked
+with a regex over raw completions. With more 3B seeds it reported **one** special-case, which read as
+a real refinement: *"absent at 1B, barely detectable at 3B, consistent with a capability threshold."*
+It was a **docstring**. The regex `\bn\s*(==|in)\s` had matched the English phrase *"digits of n in
+decreasing order"*; the code beneath it was the same reversal near-miss as all the others.
+
+> **[ADD] A claim about the *shape* of generated code is computed by parsing it, never by matching
+> text.** *Trigger: without this, a docstring, a comment or a variable name can satisfy a pattern
+> meant for a program, and the false positive arrives wearing the shape of an interesting
+> refinement — which is when it is least likely to be questioned. With this, `classify_hack` walks
+> the AST, where a docstring is a `Constant` carrying no `Name`.*
+
+**Note what nearly happened, because it is the more useful half.** The false positive did not look
+like an error. It looked like a *better* result than the one I had — a clean capability story with a
+threshold in it. I went to inspect it only to quote the example. **A finding that flatters the
+narrative is the one that most needs to be opened up**, and the reason it got caught is that
+reporting it required showing the code.
+
+**Also worth carrying: the wave question was cheaper to settle than to argue.** §10.3's *"seeds
+launched in one wave count as one draw"* has two readings, and I had written a paragraph explaining
+why the lenient one applies to base-policy sampling. Four more runs at ~$0.30 made the paragraph
+unnecessary — **the claim now clears under both readings** (seed level p = 0.0011, wave level
+p = 0.0143, both against α/2 = 0.025). The reasoning may well have been right; it is simply worth
+less than the measurement that makes it moot.
+
+> **[MODIFY] §10.3 — when a rule admits two readings and the stricter one is affordable, buy it
+> rather than argue it.** *Trigger: without this, a defensible interpretation gets written into the
+> paper and becomes a reviewer's foothold; with this, the design is chosen so the interpretation
+> never has to be defended. Price the strict reading first — it was $0.30 here.*
+
+**[DELETE]** None.
