@@ -1,0 +1,28 @@
+#!/bin/sh
+# Refuse non-merge commits on main. §13 says phase work goes on a phase branch and the user merges
+# manually; that rule was followed by convention and drifted, because nothing enforced it while the
+# disciplined path (a phase branch needs a written plan it references) carried the only friction.
+#
+# Escape hatch, deliberate and visible in the shell history:
+#     ASSAY_ALLOW_MAIN=1 git commit ...
+#
+# Merges are allowed: MERGE_HEAD exists only during one.
+branch=$(git symbolic-ref --short -q HEAD || echo detached)
+case "$branch" in
+  main|master) ;;
+  *) exit 0 ;;
+esac
+[ -n "$ASSAY_ALLOW_MAIN" ] && exit 0
+[ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ] && exit 0
+
+cat >&2 <<'MSG'
+refusing a non-merge commit on main (CLAUDE.md §13).
+
+  Phase work belongs on a phase branch; main receives merges. This guard exists because the rule
+  drifted: S2's pre-registration, two pre-registration amendments and the novelty-claim replacement
+  all landed directly on main before anyone noticed.
+
+  git switch -c phase-X.Y-<2-3-word-desc>     # then commit there
+  ASSAY_ALLOW_MAIN=1 git commit ...           # if this really is scaffold
+MSG
+exit 1

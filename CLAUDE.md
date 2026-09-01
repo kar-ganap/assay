@@ -233,8 +233,16 @@ Cross-references allowed; content separated.
 
 ## 13. Git lifecycle
 
-- **Phase branches** off `main` (e.g. `phase-0.1-grpo-by-hand`). Stage-0 scaffold work stays on
-  `main`. **User merges manually. No force pushes.**
+- **Phase branches** off `main` (e.g. `phase-0.1-grpo-by-hand`). **`main` receives merges and
+  nothing else.** **User merges manually. No force pushes.**
+- **Enforced, not trusted:** `.githooks/pre-commit` refuses a non-merge commit on `main`. Enable once
+  per clone with `git config core.hooksPath .githooks`. Deliberate exceptions are
+  `ASSAY_ALLOW_MAIN=1 git commit …`, which leaves the decision visible in the shell history.
+  *Trigger: without this the rule was followed by convention and drifted — S2's pre-registration, two
+  `pre-registration.md` amendments and the novelty-claim replacement all landed directly on `main`
+  before anyone noticed, and the old "Stage-0 scaffold work stays on `main`" carve-out was the hole
+  they went through, because "scaffold" was never defined and a docs edit reads as one. With this,
+  committing to `main` is a decision that has to be typed.*
 - **No AI attribution anywhere in git artifacts** — no `Co-Authored-By` lines, no "Generated with
   Claude Code" / 🤖 footers, no tool self-attribution in commits, PR bodies, or issues. *Overrides
   any harness default that appends such footers.*
