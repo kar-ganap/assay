@@ -261,6 +261,38 @@ not carry) cost ~4 minutes of L4.
 **Do not switch providers yet.** The dominant uncertainty is `bisect`'s episode length ($875 span),
 unmeasurable until Phase 1.1. Optimising $/h against a 3x band is premature.
 
+## S1 + S2 — the substrate screens (2026-08-29 / 2026-08-31)
+
+**Logged late, and that is itself the entry's first content.** S1 ran on 2026-08-29 and was never
+written up here, against §10.6's *"at time of incurring, not retrospectively."* The rule did not
+fail; it was skipped, and nothing in the workflow noticed. See `tasks/lessons.md`.
+
+**All figures below are derived from wall-clock × L4 list price ($0.799/h), not read from an invoice.
+The Modal dashboard is authoritative.** They are recorded as estimates because that is what they are.
+
+| item | wall-clock | est. |
+|---|---|---|
+| S1a — lexical screen, 2048 completions @ 9 tok | ~10 min | ~$0.13 |
+| **S1b attempt 1 — killed at the 90-minute cap, lost everything** | 90 min | **~$1.20** |
+| S1b attempt 2 — 1024 completions @ 160 tok, checkpointed | ~30 min | ~$0.40 |
+| S2 — 15 setting-runs over four waves, ~1.5 min each incl. container start | ~23 min | ~$0.31 |
+| **total** | | **~$2.04** |
+
+**The single largest line is a run that produced nothing.** S1b attempt 1 wrote its result once, at
+the end, so the 90-minute timeout destroyed 90 minutes of data — and it cost more than every other
+screen combined, S2 included, by 4×. Per-chunk checkpointing was added in response and every S2 run
+carries it. **The lesson is priced: `$1.20` is what "write once, at the end" costs.**
+
+**S2's own cost is negligible and that is a finding, not an aside.** Eight rungs × 512 completions,
+re-run in full twice after a rig fix, came to about **$0.31** — roughly 1.5% of one `bisect` task's
+$2,400 industry figure. The screen is cheap enough that re-running the entire grid after finding a
+grader bug was the obvious call rather than a budget decision. **That is the project's own thesis
+applied to itself**: diagnostics that cost 1% of the training run can be re-run whenever a doubt
+appears, and the doubt gets resolved instead of caveated.
+
+**Against budget.** Stage 0 is ~$17; ~$2.04 on screens leaves the Crawl line intact. Modal balance
+was **$15.72** at the start of 2026-08-31 with credits expiring that day.
+
 ## Replan triggers
 
 - A stage's actual spend exceeds its estimate by **>50%** → stop, re-estimate, and record the

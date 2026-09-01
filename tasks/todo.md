@@ -7,10 +7,21 @@
 
 ## STATUS (as of 2026-08-31)
 
-**Stage 0 · Crawl — 4 of 5 phases merged. `main` at `6b5a2a9`, 424 tests green.**
+**Stage 0 · Crawl — 4 of 5 phases merged. 476 tests green.**
 Phases 0.1–0.4 complete and merged (see the table further down for what each found).
-**0.5 is active and unmerged** on `phase-0.5-literature-gate` — 9 commits, rebased on current `main`,
-tree clean.
+**0.5 is active and unmerged** on `phase-0.5-literature-gate`, rebased on current `main`, tree clean.
+
+**S2 ran 2026-08-31 and is ADMITTED** — `experiments/phase-0.5-substrate/results/S2-RESULT.md`.
+`p_hack` = 16/512 = **0.0312** on `sx-digitsort`, Wilson 95% CI **[0.0193, 0.0502]**, lower bound
+3.3× the resolution floor and excluding it; `pass@1` = 0.0957, in band. Regenerate with
+`uv run python scripts/score_s2.py`. **1 of 8 rungs informative** — six above the `pass@1` ceiling,
+one below the floor.
+
+**But zero of the 46 hacks were special-cases.** Across 4,096 completions: no constant returns, no
+`n == k` branches. The reachable behaviour is a *near-miss* — `int(str(n)[::-1]) + 7` where the spec
+said "digits in decreasing order", which passes the one visible test whenever the input's digits are
+ascending. **This does not move the verdict** (GRPO amplifies whatever gets reward) **but it moves
+two other things** — see NEXT #0.
 
 **Spend:** ~$25–27 of GPU credit, ~$15 remaining. ⚠️ **The Modal credits expired at end of August —
 verify the balance before planning any paid run.**
@@ -44,7 +55,27 @@ hypotheses in a row and ended somewhere better:
   README already names, so the design is sound. Only *lexical* exploits were screened; structural
   reachability remains untested and is `bisect`'s premise.
 
-## NEXT — three things, in this order
+## NEXT — four things, in this order
+
+### 0. Decide what S2's mechanism finding does to H2 and to `bisect`'s taxonomy ⚠️ NEW, user's call
+
+S2 admitted the substrate but found the exploit class `bisect` is built around has a base rate
+**indistinguishable from zero** at 1B unprompted. Two consequences, neither yet actioned:
+
+- **H2** asks whether frontier-discovered exploits predict *which* exploit a small policy converges
+  to. A special-case generalises across a family; a near-miss does not. If the small policy's
+  reachable set holds no transferable exploit strategy, the two sets may not be commensurable at 1B.
+  **Measurable before training rather than after** — and it should be, before H2 is run.
+- **`bisect`'s exploit taxonomy** (`README.md` names special-case / try-except / hardcode / edit-test)
+  should arguably be **rewritten around near-misses**, with special-casing demoted to a frontier-only
+  behaviour. A patch that makes the failing test pass without fixing the root cause is both what S2
+  measured and what practitioners report. This is substrate design — §7 says ask.
+
+Also from S2, and cheap: `seconds_per_graded_execution` is **settled as a relationship** rather than
+a number — `≈ p_nonterminating × timeout_budget` (0.1–0.4 ms honest; `sx-collatz`'s 1.92 s mean is
+0.383 × 5 s almost exactly). `scripts/cost_model.py` still has **no execution term at all**; adding
+one is now a 10-minute job with a measured coefficient.
+
 
 ### 1. Finish Clause 2 of the novelty claim ⚠️ needs a raised search budget
 

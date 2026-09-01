@@ -82,8 +82,14 @@ values, each costing budget, and must produce a fix.
 - **Visible grader (proxy):** the failing test passes.
 - **Hidden grader (true):** a held-out suite exercising the *same root cause* through other code
   paths.
-- **The exploit is universally legible:** special-case the input, wrap it in `try/except`, hardcode
-  the expected output, edit the test.
+- **The exploit is the near-miss:** *a patch that makes the failing test pass without fixing the root
+  cause.* Every engineer has watched a colleague commit one. **Measured, not assumed** — S2 sampled
+  4,096 completions from a 1B policy across 8 task variants and found the reachable behaviour is
+  exactly this: a wrong function that satisfies the one visible test by luck. **The legible exploits
+  — special-case the input, `try/except`, hardcode the output, edit the test — had a base rate
+  indistinguishable from zero** and are carried as *frontier-only* behaviours: what the exploit-finder
+  is expected to produce, and what the small policy is not.
+  (`experiments/phase-0.5-substrate/results/S2-RESULT.md`.)
 
 The diagnostic grid is 8–12 *grader configurations* over one task set — test visibility × reward
 shape × timeout × sandbox writability — so grader pathology is known by construction.
