@@ -94,8 +94,22 @@ split**.
 `bisect` — root-cause debugging under a query budget — does all four. A program fails a test; the
 agent spends budget on instrumentation and subset runs; it must produce a fix. Visible grader: the
 test passes. Hidden grader: a held-out suite exercising the same root cause elsewhere. The exploit —
-special-case the input, `try/except`, hardcode, edit the test — is one every engineer has watched a
-colleague commit.
+**a patch that makes the failing test pass without fixing the root cause** — is one every engineer
+has watched a colleague commit.
+
+**The taxonomy is measured rather than assumed, and the measurement moved it** (2026-08-31, S2;
+`experiments/phase-0.5-substrate/results/S2-RESULT.md`). Over 4,096 completions from a 1B policy
+across 8 task variants, **not one of the 46 proxy-passing/true-failing completions was a
+special-case**: no constant returns, no `n == k` branches. What the policy produced was the
+near-miss — a wrong function that satisfies the one visible test by coincidence. The legible
+exploits (`special-case`, `try/except`, `hardcode`, `edit the test`) are therefore carried as
+**frontier-only** behaviours.
+
+**That split is not a caveat on the design; it is a sharpened version of H2.** H2 asks whether
+frontier-discovered exploits predict *which* exploit a small policy converges to. A special-case
+generalises across every task in a family; a near-miss does not. So the two capability levels may
+produce behaviours that are not commensurable — which is now a *pre-training, measurable* question
+rather than something to be discovered after a training run.
 
 **It is also the grid.** The variant factorial is *grader configurations over one task set*:
 test visibility × reward shape × timeout × sandbox writability. Grader pathology is then known by

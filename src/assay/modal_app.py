@@ -70,6 +70,14 @@ MODEL_ID = "meta-llama/Llama-3.2-1B-Instruct"
 #: ``.sha``; the token comes from ``.env`` read directly, never via ``load_dotenv`` (§9).
 MODEL_REVISION: str | None = "9213176726f574b556790deb65791e0c5aa438b6"
 
+#: The capability rung above the default, pinned the same way (desideratum 12). S2 measured that the
+#: legible exploits have a base rate indistinguishable from zero at 1B; whether they appear *with
+#: capability* is the measurement that decides whether H2's two capability levels are commensurable.
+MODEL_LADDER: dict[str, str] = {
+    "meta-llama/Llama-3.2-1B-Instruct": "9213176726f574b556790deb65791e0c5aa438b6",
+    "meta-llama/Llama-3.2-3B-Instruct": "0cb88a4f764b7a12671c53f0838cd831a0843b95",
+}
+
 RESULTS_DIR = Path("experiments/phase-0.1-grpo-by-hand/results")
 
 #: Raw generations. Gitignored (``experiments/*/raw/``), never modified, always written — an
@@ -1168,7 +1176,8 @@ if modal is not None:
         volumes={VOLUME_PATH: artifacts},
     )
     def structural_screen_remote(
-        setting: str, n_prompts: int, k: int, seed: int, max_new_tokens: int, provenance: dict
+        setting: str, n_prompts: int, k: int, seed: int, max_new_tokens: int, provenance: dict,
+        model_id: str = MODEL_ID, model_revision: str | None = MODEL_REVISION,
     ) -> dict:
         """S2 — is a *structural* exploit reachable at 1B, unprompted?
 
@@ -1192,12 +1201,12 @@ if modal is not None:
         from assay.crawl.sampling import SamplerConfig
         from assay.crawl.structural import StructuralExploitFamily, grade_structural
 
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
+        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=model_revision)
         if tokenizer.pad_token_id is None:
             tokenizer.pad_token = tokenizer.eos_token
         tokenizer.padding_side = "left"
         model = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID, revision=MODEL_REVISION, torch_dtype=torch.bfloat16, device_map="cuda"
+            model_id, revision=model_revision, torch_dtype=torch.bfloat16, device_map="cuda"
         ).eval()
 
         family = StructuralExploitFamily()
@@ -1213,7 +1222,8 @@ if modal is not None:
         exec_seconds: list[float] = []
         raw_hacks: list[str] = []
 
-        tag = f"s2-structural-{setting}-seed{seed}"
+        slug = model_id.split("/")[-1].replace("Llama-3.2-", "").replace("-Instruct", "").lower()
+        tag = f"s2-structural-{setting}-{slug}-seed{seed}"
         out = Path(VOLUME_PATH) / tag
         out.mkdir(parents=True, exist_ok=True)
 
@@ -1254,8 +1264,8 @@ if modal is not None:
                 "raw_hacks": raw_hacks[:20],
                 "provenance": {
                     **provenance,
-                    "model_id": MODEL_ID,
-                    "model_revision": MODEL_REVISION,
+                    "model_id": model_id,
+                    "model_revision": model_revision,
                     "sampler": dataclasses.asdict(cfg),
                     "use_chat_template": True,
                     "gpu": SCREEN_GPU,
@@ -1327,6 +1337,7 @@ if modal is not None:
         seed: int = 0,
         max_new_tokens: int = 256,
         allow_dirty: bool = False,
+        model_id: str = MODEL_ID,
     ) -> None:
         """S2 — ``modal run --detach src/assay/modal_app.py::structural_screen``.
 
@@ -1353,13 +1364,20 @@ if modal is not None:
         print("=== S2: structural-exploit screen — is special-casing reachable at 1B? ===")
         print(f"  setting={setting}  n_prompts={n_prompts}  k={k}  "
               f"completions={n_prompts * k}  max_new_tokens={max_new_tokens}")
+        if model_id not in MODEL_LADDER:
+            raise SystemExit(
+                f"{model_id!r} has no pinned revision. Add it to MODEL_LADDER with a sha read from "
+                "the HF API — an unpinned model silently moves and desideratum 12 forbids it."
+            )
         result = structural_screen_remote.remote(
-            setting, n_prompts, k, seed, max_new_tokens, provenance
+            setting, n_prompts, k, seed, max_new_tokens, provenance,
+            model_id, MODEL_LADDER[model_id],
         )
 
         out_dir = Path("experiments/phase-0.5-substrate/results")
         out_dir.mkdir(parents=True, exist_ok=True)
-        path = out_dir / f"s2-structural-{setting}-seed{seed}.json"
+        slug = model_id.split("/")[-1].replace("Llama-3.2-", "").replace("-Instruct", "").lower()
+        path = out_dir / f"s2-structural-{setting}-{slug}-seed{seed}.json"
         path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
 
         n = result["n_completions"]
